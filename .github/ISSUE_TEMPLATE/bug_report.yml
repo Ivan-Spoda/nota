@@ -72,4 +72,6 @@ body:
     id: extra
     attributes:
       label: Anything else?
-      description: Screenshots, screen recordings, audio examples.
+      description: >-
+        Screenshots, screen recordings, audio examples. A reproducing project is
+        the single most useful thing a bug report can include.

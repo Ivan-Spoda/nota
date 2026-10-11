@@ -8,7 +8,7 @@ namespace Nota.Infrastructure;
 
 /// <summary>Drives an offline track freeze (M7): stops the audio backend for exclusive
 /// engine access, bounces the track's pre-fader chain into its freeze buffer, then
-/// restarts the backend. Mirrors <see cref="WavAudioExporter"/>'s stop/render/restore
+/// restarts the backend. Mirrors <see cref="AudioExporter"/>'s stop/render/restore
 /// shape; the caller suspends the UI clock first.</summary>
 public sealed class TrackFreezer
 {

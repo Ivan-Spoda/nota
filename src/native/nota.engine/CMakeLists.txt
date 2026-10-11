@@ -65,6 +65,7 @@ set(NOTA_ENGINE_SOURCES
     src/SampleAnalysis.cpp
     src/AudioFile.cpp
     src/AudioImport.cpp
+    src/nota_encoder.cpp
     src/nota_engine_import.cpp
     src/nota_engine_audition.cpp
     src/Audition.cpp
@@ -141,6 +142,26 @@ elseif(UNIX AND NOT APPLE)
     target_compile_definitions(nota_engine PRIVATE __LINUX_ALSA__)
     target_link_libraries(nota_engine PRIVATE asound pthread dl m)
 endif()
+
+# --- Audio codecs for export (FLAC encode, MP3 encode) ----------------------
+# libFLAC 1.5 (BSD-3-Clause): git submodule, built by its own upstream CMake as
+# a static library — CMake is FLAC's preferred MSVC path since 1.5.0. Programs,
+# tests, examples, docs, C++ bindings and Ogg container support are all off;
+# we write native FLAC only. See LICENSES/third-party.md.
+set(WITH_OGG OFF CACHE BOOL "" FORCE)
+set(BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(BUILD_CXXLIBS OFF CACHE BOOL "" FORCE)
+set(INSTALL_MANPAGES OFF CACHE BOOL "" FORCE)
+add_subdirectory(vendor/flac)
+
+# LAME 3.100 (LGPL-2.0-or-later, note 7): encoder-only checked-in snapshot with
+# our thin CMakeLists (upstream ships none). Pure C, no nasm/SSE.
+add_subdirectory(vendor/lame)
+
+target_link_libraries(nota_engine PRIVATE FLAC lame)
 
 # --- Plugin hosting (M3) via JUCE -------------------------------------------
 # JUCE lives ONLY in the pluginhost module; the core engine above stays

@@ -856,16 +856,18 @@ and user presets, automation, persistence and cloning.
 
 ## Export
 
-- **Export the master** to WAV: range, sample rate, bit depth
-  (**pcm16 / pcm24 / float32**).
-- **Export stems** (individual tracks).
+- **Export the master** to WAV, FLAC or MP3: range, sample rate and, per format,
+  bit depth (**pcm16 / pcm24 / float32** WAV; **16/24-bit** FLAC) or MP3 quality
+  (**CBR 128/192/256/320 kbps**, 320 default). MP3 tops out at 48 kHz, so 96 kHz is
+  not selectable for it; the footer size estimate follows the format.
+- **Export stems** (individual tracks) in the selected format.
 - **Normalize −1 dBTP** — against the true (inter-sample) peak, estimated with 4×
   oversampling: one render to a temporary file, peak measurement, then a rewrite with the
   exact make-up gain, so there is no risk of overshooting the ceiling because a second
   render differed. Stems share a single gain (taken from the full mix peak), so they still
   sum to −1 dBTP and keep their balance.
-- **Dither** — TPDF dithering before quantizing to 16 bit (offered only for 16 bit; 24 bit
-  and float do not need it).
+- **Dither** — TPDF dithering before quantizing to 16 bit (offered only for 16-bit WAV
+  and FLAC targets; 24 bit, float and MP3 do not need it).
 - **Add 1-bar release tail** — a decay tail after the end of the project.
 - **Bit-identical** chunked rendering (caches rebuilt once when the rate changes) — no
   clicks at block boundaries, and warped clips keep their length at any export rate.
@@ -995,7 +997,8 @@ Coverage:
   save).
 - **Audio Effect Rack**: snapshot, Parallel/Series/Select mode, dry/wet, volume,
   chain-select, add and remove chains, parameters, 8 macros.
-- **Export** the master or stems to WAV (pcm16/pcm24/float32).
+- **Export** the master or stems to WAV (pcm16/pcm24/float32), FLAC (pcm16/pcm24) or
+  MP3 (CBR 128–320 kbps) — `format` picks it, `bitrateKbps` tunes MP3.
 - **AI models**: `list_ai_models` (installed or not), `separate_stems` (a clip → a group of
   Drums / Bass / Other / Vocals tracks), `convert_audio_to_midi` (melody or harmony with
   basic-pitch → a new MIDI track). Installing models stays with the user.
