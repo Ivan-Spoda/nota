@@ -9,10 +9,14 @@ anything — the rules there are binding (AGPL headers, dependency policy, audio
 restrictions).
 
 - The project constitution for agents lives at `.specify/memory/constitution.md`.
-- Non-trivial work is spec-driven: `/speckit-specify` → `/speckit-clarify` →
-  `/speckit-plan` → `/speckit-tasks` → `/speckit-implement` → `/speckit-converge`.
+- Non-trivial work is spec-driven. **When the user asks for a feature or behaviour
+  change, do not start implementing: open with `/speckit-specify <the request>` and
+  follow the phases** — `/speckit-specify` → `/speckit-clarify` → `/speckit-plan` →
+  `/speckit-tasks` → `/speckit-implement` → `/speckit-converge`.
   Artifacts land in `specs/<slug>/`; see [`CONTRIBUTING.md`](CONTRIBUTING.md) §
   Spec-driven workflow. `specs/000-example/` shows a completed run.
+  Trivial work — typos, small fixes, doc edits — skips the spec and goes straight to
+  the change.
 - Bug reports go through `/speckit-bug-assess` → `/speckit-bug-fix` → `/speckit-bug-test`.
 - The `nota-*` skills in `.claude/skills/` (design, docs, features, instrument,
   shortcuts, release) encode project-specific workflows — prefer them over improvising.
