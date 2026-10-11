@@ -421,14 +421,18 @@ public sealed partial class BrowserViewModel : ObservableObject
     }
 
     // The device tab (0 Instr / 1 FX / 2 MIDI) a preset category folder belongs to, or -1.
+    // Folders nest (Nota Mosaic → Packs → a pack), so the whole subtree is searched.
     private int DeviceTabOf(BrowserItem item)
     {
         if (item.Kind != BrowserItemKind.Folder) return -1;
-        if (_instrTree.Any(d => d.Children.Contains(item))) return 0;
-        if (_fxTree.Any(d => d.Children.Contains(item))) return 1;
-        if (_midiTree.Any(d => d.Children.Contains(item))) return 2;
+        if (_instrTree.Any(d => Holds(d, item))) return 0;
+        if (_fxTree.Any(d => Holds(d, item))) return 1;
+        if (_midiTree.Any(d => Holds(d, item))) return 2;
         return -1;
     }
+
+    private static bool Holds(BrowserItem node, BrowserItem item)
+        => node.Children.Any(c => c == item || Holds(c, item));
 
     /// <summary>Sets the live search query for a tree tab (0 = Instruments, 1 = FX,
     /// 2 = MIDI, 3 = Files, 4 = Presets) and refreshes its visible list.</summary>

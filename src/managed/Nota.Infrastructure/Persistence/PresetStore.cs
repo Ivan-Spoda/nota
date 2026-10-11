@@ -12,6 +12,36 @@ public sealed class PresetStore : IPresetStore
         return PresetService.Apply(doc, engine, targetTrackId);
     }
 
+    public string? ApplyInstrumentInPlace(IAudioEngine engine, string path, int trackId, out bool swapped)
+    {
+        swapped = false;
+        PresetDocument doc;
+        try { doc = PresetService.Load(path); }
+        catch { return null; }   // ApplyFromFile reports it
+        switch (doc.Type)
+        {
+            case "builtin-instrument":
+                if (engine.TrackInstrumentKind(trackId) != doc.BuiltinKind || engine.TrackInstrumentPluginId(trackId).Length > 0)
+                {
+                    if (!engine.SetTrackBuiltinInstrument(trackId, doc.BuiltinKind)) return $"Couldn't load {doc.DisplayName}.";
+                    swapped = true;
+                }
+                break;
+            case "plugin-instrument":
+                if (engine.TrackInstrumentPluginId(trackId) != doc.PluginId)
+                {
+                    int idx = NotaEngine.PluginIndexOfId(doc.PluginId);
+                    if (idx < 0) return $"Plugin not installed: {doc.PluginId}";
+                    engine.SetTrackInstrumentPlugin(trackId, idx);
+                    swapped = true;
+                }
+                break;
+            default:
+                return null;
+        }
+        return PresetService.ApplyInPlace(doc, engine, trackId, -1);
+    }
+
     public bool Save(IAudioEngine engine, int trackId, int deviceIndex, string displayName, string folder)
     {
         var doc = PresetService.Capture(engine, trackId, deviceIndex, displayName);

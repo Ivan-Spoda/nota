@@ -18,6 +18,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- **Sample-pack presets open in the browser:** under Nota Mosaic → Packs, a pack wouldn't
+  expand, so its presets couldn't be seen or dragged. Packs now expand to their presets like
+  any other preset folder.
+- **A preset dropped on an instrument track loads there:** dragging a second instrument
+  preset onto a track in the Arrangement used to add another track. It now loads into that
+  track's instrument and switches the instrument if the preset is for a different one. This
+  works for factory presets, your own presets and sample-pack presets, and the track's effects
+  stay. A preset dropped on empty space still starts a new track.
+
 ## [0.51.2] — 2026-10-11
 
 ### Highlights

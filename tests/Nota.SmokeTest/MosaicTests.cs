@@ -97,6 +97,33 @@ internal static class MosaicTests
         Directory.CreateDirectory(dir);
         try { foreach (var r in RunIn(dir)) yield return r; }
         finally { try { Directory.Delete(dir, true); } catch { } }
+        foreach (var r in BrowserPacks()) yield return r;
+    }
+
+    // The browser's Nota Mosaic → Packs → a pack: three folder levels deep, and a pack must
+    // expand to its presets on the Instruments tab (bug mosaic-packs-expand).
+    private static IEnumerable<(bool, string)> BrowserPacks()
+    {
+        var packs = new FakeMosaicPacks(
+            new MosaicPackPreset("/p/Osiris/Grand.notapreset", "Grand", "Osiris", "sfz"),
+            new MosaicPackPreset("/p/Osiris/Upright.notapreset", "Upright", "Osiris", "files"));
+        var vm = new Nota.Presentation.BrowserViewModel(new EmptyPluginCatalog(), new EmptyPresetLibrary(),
+            new FactoryPresetCatalog(), mosaic: packs);
+        var rows = vm.Instruments;
+        var mosaic = rows.FirstOrDefault(r => r.BuiltinKind == MosaicModel.Kind && r.Depth == 0);
+        if (mosaic is null) { yield return (false, "browser lists Nota Mosaic"); yield break; }
+        vm.ToggleExpand(mosaic);
+        var packsRow = rows.FirstOrDefault(r => r.Name == "Packs" && r.Kind == Nota.Presentation.BrowserItemKind.Folder);
+        if (packsRow is null) { yield return (false, "Nota Mosaic → Packs is listed"); yield break; }
+        vm.ToggleExpand(packsRow);
+        var pack = rows.FirstOrDefault(r => r.Name == "Osiris" && r.Kind == Nota.Presentation.BrowserItemKind.Folder);
+        if (pack is null) { yield return (false, "Packs lists the pack"); yield break; }
+        vm.ToggleExpand(pack);
+        yield return (rows.Any(r => r.Path == "/p/Osiris/Grand.notapreset") && rows.Any(r => r.Path == "/p/Osiris/Upright.notapreset"),
+            "a Mosaic pack expands to its presets in the browser");
+        vm.ToggleExpand(pack);
+        yield return (!rows.Any(r => r.Path.StartsWith("/p/Osiris/", StringComparison.Ordinal)),
+            "a Mosaic pack collapses again");
     }
 
     private static IEnumerable<(bool, string)> RunIn(string dir)

@@ -11,6 +11,11 @@ public interface IPresetStore
     /// string ("" = clean).</summary>
     string ApplyFromFile(IAudioEngine engine, string path, int targetTrackId);
 
+    /// <summary>Loads an instrument preset file into a track's instrument in place, swapping
+    /// the instrument first when the preset is for another one (<paramref name="swapped"/>).
+    /// Null — nothing done — when the file isn't an instrument preset; else a warning ("" = clean).</summary>
+    string? ApplyInstrumentInPlace(IAudioEngine engine, string path, int trackId, out bool swapped);
+
     /// <summary>Captures a track's device/instrument as a preset and saves it to
     /// <paramref name="folder"/>. Returns false if there was nothing to capture
     /// (e.g. the built-in synth has no state).</summary>

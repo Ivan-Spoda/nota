@@ -25,3 +25,18 @@ internal sealed class EmptyPresetLibrary : IPresetLibrary
 {
     public IReadOnlyList<PresetInfo> List(string folder) => Array.Empty<PresetInfo>();
 }
+
+/// <summary>A fixed list of Mosaic pack presets, for the browser's Nota Mosaic → Packs tree.</summary>
+internal sealed class FakeMosaicPacks(params MosaicPackPreset[] presets) : IMosaicPacks
+{
+    public string Root => "";
+    public IReadOnlyList<MosaicPackPreset> Presets() => presets;
+    public event Action? Changed { add { } remove { } }
+    public Task<int> ScanAsync(CancellationToken ct = default) => Task.FromResult(0);
+    public string Save(Nota.Application.Mosaic.MosaicProgram program, string name, string folder, IReadOnlyDictionary<string, float>? param = null) => "";
+    public string ApplyInPlace(IAudioEngine engine, string path, int trackId) => "";
+    public Nota.Application.Mosaic.MosaicProgram? Read(string path) => null;
+    public string ToRef(string path) => path;
+    public string? Resolve(string reference) => null;
+    public double? DetectNote(string path) => null;
+}
