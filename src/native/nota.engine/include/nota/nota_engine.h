@@ -1540,6 +1540,53 @@ NOTA_API NotaResult nota_engine_render_offline(NotaEngine* engine, float* out, i
 NOTA_API NotaResult nota_engine_render_offline_at(NotaEngine* engine, float* out,
                                                   int32_t frames, double sampleRate);
 
+/* ---- Audio file encoders (export) -----------------------------------------
+ * Streaming FLAC / MP3 writers behind the same ABI as the offline render above:
+ * the managed exporter pulls render chunks and streams them through one of
+ * these handles instead of the WAV writer. Encoding is offline-only — it never
+ * touches the audio thread (AR-6); call from the export background thread with
+ * the audio backend stopped, like render_offline_at.
+ *
+ * Lifecycle: open (null on failure) → any number of writes → close (flush,
+ * finish, free) on success, or discard (free without finishing) on failure —
+ * the caller then deletes the partial file. One handle per output file,
+ * single-threaded use; close/discard exactly once. */
+
+/* Opaque encoder handle. */
+typedef struct NotaEncoder NotaEncoder;
+
+/* Opens a FLAC file for streaming stereo encode (bits = 16 or 24). dither != 0
+ * adds ±1-LSB TPDF dither on the float→int conversion, 16-bit only — the same
+ * rule as the WAV writer. Compression level is the library default (5).
+ * Returns NULL on failure (bad path, unsupported bits). */
+NOTA_API NotaEncoder* nota_encoder_open_flac(const char* path, int32_t sampleRate,
+                                             int32_t bitsPerSample, int32_t dither);
+
+/* Opens an MP3 file for streaming stereo encode at a constant bitrate
+ * (bitrateKbps = 128 / 192 / 256 / 320). The format carries 44100 or 48000
+ * only — other rates are rejected with NULL. Encoder delay/padding (~50 ms)
+ * is inherent to MP3; the LAME gapless tag is written so capable players
+ * compensate. Returns NULL on failure. */
+NOTA_API NotaEncoder* nota_encoder_open_mp3(const char* path, int32_t sampleRate,
+                                            int32_t bitrateKbps);
+
+/* Encodes `frames` of interleaved stereo floats (samples length >= 2*frames,
+ * nominally in [-1, 1]). Chunk size is the caller's choice; the encoder
+ * buffers internally. On failure the encoder latches the error: further
+ * writes are no-ops and close reports it. */
+NOTA_API NotaResult nota_encoder_write(NotaEncoder* enc, const float* samples,
+                                       int32_t frames);
+
+/* Flushes and finishes the stream (FLAC seektable/MD5 finalization, LAME
+ * flush + gapless tag), closes the file and frees the handle. Returns the
+ * final status; the handle is gone either way. */
+NOTA_API NotaResult nota_encoder_close(NotaEncoder* enc);
+
+/* Frees an errored or abandoned encoder WITHOUT finishing the stream. The
+ * partial output file is left on disk — the caller owns the path and removes
+ * it. NULL is a no-op. */
+NOTA_API void nota_encoder_discard(NotaEncoder* enc);
+
 /* ---- Plugin hosting spike (M3-0) ----------------------------------------- */
 /* Initialises JUCE's GUI subsystem on the calling thread and opens a small test
  * window. Purpose: verify a JUCE message loop coexists with the host app's run

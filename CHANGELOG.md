@@ -18,6 +18,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+
+- **Export to FLAC and MP3.** The export dialog now offers three formats alongside WAV:
+  **FLAC** for lossless archives at roughly half the WAV size (16/24-bit), and **MP3**
+  for shareable files at a constant bitrate of your choice (128–320 kbps, 320 default).
+  The option rows adapt to the format — MP3 swaps bit depth for a bitrate list and
+  caps the sample rate at 48 kHz (the format's limit), dither stays a 16-bit-target
+  option — and the size estimate follows the chosen format. Normalize (−1 dBTP), the
+  release tail and stems export work in every format, and the MCP `export_master` /
+  `export_stems` tools accept `format` (`wav` default | `flac` | `mp3`) and
+  `bitrateKbps`.
+
 ## [0.51.1] — 2026-10-09
 
 ### Highlights
