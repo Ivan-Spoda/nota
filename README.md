@@ -164,6 +164,10 @@ Nota is young and moving fast — new releases come out every week or so (see th
 Found a bug or missing something? [Open an issue](https://github.com/nota-daw/nota/issues/new/choose) —
 every report gets read. Want to help with code? Start with a
 [good first issue](https://github.com/nota-daw/nota/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+Development here is spec-driven: non-trivial changes start as a written spec in
+[`specs/`](specs/) — requirements, plan and tasks before any code — following the
+[Spec Kit](https://github.com/github/spec-kit)
+[workflow](CONTRIBUTING.md#spec-driven-workflow) in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 Questions, ideas or music to share? Join the [Discord server](https://discord.gg/apf4Q2JKWk).
 
 ## For plugin developers

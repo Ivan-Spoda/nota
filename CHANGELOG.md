@@ -18,6 +18,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.51.2] — 2026-10-11
+
+### Highlights
+- **Export to FLAC and MP3:** the export dialog writes three formats now — WAV, lossless
+  FLAC at roughly half the size, and shareable MP3 at a constant bitrate of your choice
+  (128–320 kbps, 320 default).
+- The option rows adapt to the format — MP3 swaps bit depth for a bitrate list and caps the
+  sample rate at 48 kHz — and the size estimate follows the chosen format.
+- Normalize (−1 dBTP), the release tail and stems export work in every format; the MCP
+  `export_master` / `export_stems` tools accept `format` and `bitrateKbps`.
+
 ### Added
 
 - **Export to FLAC and MP3.** The export dialog now offers three formats alongside WAV:
