@@ -40,6 +40,24 @@ and runs the smoke test.
 dotnet run --project src/managed/Nota.App
 ```
 
+## Stress test
+
+`scripts/stress-test.py` measures how much DSP headroom the engine has as a project
+grows: it ramps from 1 to 80 tracks — each with the Volt instrument plus EQ-8,
+Compressor and Auto Filter — recording DSP load and process CPU at every step while
+the transport plays. Results accumulate in `scripts/stress-test-results.csv`.
+
+It drives the app through MCP, so Nota must be running first with the MCP server
+enabled (Preferences → Appearance → AI control; `127.0.0.1:3900`):
+
+```bash
+dotnet run --project src/managed/Nota.App
+python3 scripts/stress-test.py
+```
+
+The script uses only the Python standard library. Each step settles for a few seconds
+before measuring, so a full run takes several minutes.
+
 ## Layout
 
 ```

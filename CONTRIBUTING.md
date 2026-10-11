@@ -60,6 +60,33 @@ The short version:
   architectural and a licensing constraint.
 - **`Transport` is the only source of musical time** (AR-9).
 
+## Spec-driven workflow
+
+For anything non-trivial — a feature, a behaviour change, a hard bug — don't start with
+code. Start with a spec. This repository runs [Spec Kit](https://github.com/github/spec-kit),
+and the AI agents it supports (Claude Code, Copilot, Cursor, Gemini, Codex) already have
+the commands installed. The workflow:
+
+1. `/speckit-specify` — write `spec.md`: what and why, user stories, requirements.
+2. `/speckit-clarify` *(optional)* — tighten underspecified areas.
+3. `/speckit-plan` — write `plan.md`: technical approach, audio-thread impact.
+4. `/speckit-tasks` — break it into dependency-ordered `tasks.md`.
+5. `/speckit-implement` — execute the tasks.
+6. `/speckit-converge` — verify nothing was missed; repeat until it reports
+   **Converged**.
+
+Artifacts live in `specs/<slug>/` and are committed alongside the code. A completed
+example is kept at [`specs/000-example/`](specs/000-example/) — read it before your
+first run. Bug reports can take the analogous `/speckit-bug-assess` → `/speckit-bug-fix`
+→ `/speckit-bug-test` path; the report directory lands in `.specify/bugs/<slug>/`.
+
+Two things govern agents working here: the project constitution at
+`.specify/memory/constitution.md` (principles distilled from this document and
+[`ARCHITECTURE.md`](ARCHITECTURE.md)), and this document — which remains canonical for
+humans. You don't need an AI agent to contribute: writing `spec.md` and `plan.md` by
+hand from the templates in `.specify/templates/` is equally welcome. Typos, small fixes
+and doc edits don't need a spec — just open the pull request.
+
 ## Building
 
 See [`README.md`](README.md) for prerequisites and per-platform build commands, and

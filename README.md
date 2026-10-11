@@ -193,6 +193,9 @@ dotnet run --project src/managed/Nota.App
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — how the engine, the C ABI and the app fit together.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributing, licensing your work, and the
   real-time rules.
+- [`specs/`](specs/) — the spec-driven development workflow for non-trivial changes;
+  see [`CONTRIBUTING.md`](CONTRIBUTING.md#spec-driven-workflow) and the worked example
+  in [`specs/000-example/`](specs/000-example/).
 
 ## About
 
