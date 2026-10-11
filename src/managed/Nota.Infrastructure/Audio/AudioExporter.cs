@@ -8,9 +8,10 @@ using System.IO;
 namespace Nota.Infrastructure;
 
 /// <summary>IAudioExporter: renders the master bus (M6-4) or per-track stems (M6-5)
-/// offline to WAV. Runs with the audio backend stopped (exclusive engine access)
-/// and restarts it afterwards; the caller suspends the UI clock first.</summary>
-public sealed class WavAudioExporter : IAudioExporter
+/// offline to WAV / FLAC / MP3 (the format rides on the request). Runs with the
+/// audio backend stopped (exclusive engine access) and restarts it afterwards;
+/// the caller suspends the UI clock first.</summary>
+public sealed class AudioExporter : IAudioExporter
 {
     private const int Chunk = 8192; // must stay <= engine kMaxBlock
 
@@ -39,14 +40,14 @@ public sealed class WavAudioExporter : IAudioExporter
             try
             {
                 float peak = RenderToTemp(engine, tmp, totalFrames, sr, ref firstOverall, progress, 0.0, 0.7);
-                Transcode(tmp, r.Path, sr, r.Depth, GainFor(peak), r.Dither, progress, 0.7, 0.3);
+                Transcode(tmp, r.Path, sr, r, GainFor(peak), progress, 0.7, 0.3);
             }
             finally { if (File.Exists(tmp)) File.Delete(tmp); }
         }
         else
         {
-            RenderTrackRange(engine, r.Path, totalFrames, sr, r.Depth, ref firstOverall, progress,
-                             0.0, 1.0, 1f, r.Dither);
+            RenderTrackRange(engine, r.Path, totalFrames, sr, r, ref firstOverall, progress,
+                             0.0, 1.0);
         }
 
         Restore(engine, r);
@@ -91,10 +92,10 @@ public sealed class WavAudioExporter : IAudioExporter
         {
             for (int j = 0; j < count; j++) engine.SetTrackMute(tracks[j].Id, j != k); // isolate track k
             string label = tracks[k].IsInstrument ? "Inst" : "Audio";
-            string file = Path.Combine(r.Path, $"{k + 1:00} {label} {tracks[k].Id}.wav");
+            string file = Path.Combine(r.Path, $"{k + 1:00} {label} {tracks[k].Id}{ExtensionFor(r)}");
             // Each stem occupies an equal slice of the stems progress span.
-            RenderTrackRange(engine, file, totalFrames, sr, r.Depth, ref firstOverall,
-                             progress, stemsBase + stemsSpan * k / count, stemsSpan / count, gain, r.Dither);
+            RenderTrackRange(engine, file, totalFrames, sr, r, ref firstOverall,
+                             progress, stemsBase + stemsSpan * k / count, stemsSpan / count, gain);
             written++;
         }
 
@@ -104,37 +105,52 @@ public sealed class WavAudioExporter : IAudioExporter
         return written;
     }
 
-    // Renders `totalFrames` of the current graph to one WAV. Seeks to 0 and plays
-    // (audio clips only render while playing). The first render overall sets the
-    // export sample rate; later ones inherit it. Reports progress into [baseFrac,
-    // baseFrac+spanFrac] as the render advances (throttled to whole-percent changes).
+    // Renders `totalFrames` of the current graph to one output file (WAV / FLAC /
+    // MP3 per the request). Seeks to 0 and plays (audio clips only render while
+    // playing). The first render overall sets the export sample rate; later ones
+    // inherit it. Reports progress into [baseFrac, baseFrac+spanFrac] as the render
+    // advances (throttled to whole-percent changes).
     private static void RenderTrackRange(IAudioEngine engine, string path, long totalFrames,
-                                         int sr, WavBitDepth depth, ref bool firstOverall,
+                                         int sr, in ExportRequest r, ref bool firstOverall,
                                          IProgress<double>? progress, double baseFrac, double spanFrac,
-                                         float gain = 1f, bool dither = false)
+                                         float gain = 1f)
     {
         engine.StopTransport();
         engine.Seek(0);
         engine.Play();
 
         var buf = new float[Chunk * 2];
-        using var wav = new WavWriter(path, sr, 2, depth, gain, dither);
-        long remaining = totalFrames;
-        long done = 0;
-        int lastPct = -1;
-        while (remaining > 0)
+        ISink? sink = null;
+        try
         {
-            int m = (int)System.Math.Min(Chunk, remaining);
-            if (firstOverall) { engine.RenderOffline(buf, m, sr); firstOverall = false; } // sets export SR
-            else engine.RenderOffline(buf, m);
-            wav.WriteFrames(buf, m);
-            remaining -= m;
-            done += m;
-            if (progress is not null && totalFrames > 0)
+            sink = OpenSink(path, sr, in r, gain);
+            long remaining = totalFrames;
+            long done = 0;
+            int lastPct = -1;
+            while (remaining > 0)
             {
-                int pct = (int)(100.0 * done / totalFrames);
-                if (pct != lastPct) { lastPct = pct; progress.Report(baseFrac + spanFrac * done / totalFrames); }
+                int m = (int)System.Math.Min(Chunk, remaining);
+                if (firstOverall) { engine.RenderOffline(buf, m, sr); firstOverall = false; } // sets export SR
+                else engine.RenderOffline(buf, m);
+                sink.Write(buf, m);
+                remaining -= m;
+                done += m;
+                if (progress is not null && totalFrames > 0)
+                {
+                    int pct = (int)(100.0 * done / totalFrames);
+                    if (pct != lastPct) { lastPct = pct; progress.Report(baseFrac + spanFrac * done / totalFrames); }
+                }
             }
+            sink.Dispose();
+        }
+        catch
+        {
+            // Never leave a half-written FLAC/MP3 behind: release the errored encoder
+            // without finishing (WAV keeps its historic partial-file behaviour).
+            sink?.Fail();
+            if (r.Format != ExportFormat.Wav && File.Exists(path))
+                try { File.Delete(path); } catch { /* best effort */ }
+            throw;
         }
         engine.StopTransport();
     }
@@ -175,9 +191,10 @@ public sealed class WavAudioExporter : IAudioExporter
     }
 
     // Reads a temp float32 WAV (written by RenderToTemp, canonical 44-byte header) and
-    // writes the final WAV applying `gain` (+ optional dither). Pure I/O — no engine.
-    private static void Transcode(string tmpPath, string outPath, int sr, WavBitDepth depth,
-                                  float gain, bool dither, IProgress<double>? progress,
+    // writes the final file in the request's format, applying `gain`. Pure I/O — no
+    // engine.
+    private static void Transcode(string tmpPath, string outPath, int sr, in ExportRequest r,
+                                  float gain, IProgress<double>? progress,
                                   double baseFrac, double spanFrac)
     {
         const int Header = 44;
@@ -187,24 +204,36 @@ public sealed class WavAudioExporter : IAudioExporter
 
         var bytes = new byte[Chunk * 2 * sizeof(float)];
         var buf = new float[Chunk * 2];
-        using var wav = new WavWriter(outPath, sr, 2, depth, gain, dither);
-        long done = 0;
-        int lastPct = -1;
-        while (done < totalFrames)
+        ISink? sink = null;
+        try
         {
-            int m = (int)System.Math.Min(Chunk, totalFrames - done);
-            int want = m * 2 * sizeof(float);
-            int got = fs.Read(bytes, 0, want);
-            if (got < want) m = got / (2 * sizeof(float));
-            System.Buffer.BlockCopy(bytes, 0, buf, 0, m * 2 * sizeof(float));
-            wav.WriteFrames(buf, m);
-            done += m;
-            if (progress is not null && totalFrames > 0)
+            sink = OpenSink(outPath, sr, in r, gain);
+            long done = 0;
+            int lastPct = -1;
+            while (done < totalFrames)
             {
-                int pct = (int)(100.0 * done / totalFrames);
-                if (pct != lastPct) { lastPct = pct; progress.Report(baseFrac + spanFrac * done / totalFrames); }
+                int m = (int)System.Math.Min(Chunk, totalFrames - done);
+                int want = m * 2 * sizeof(float);
+                int got = fs.Read(bytes, 0, want);
+                if (got < want) m = got / (2 * sizeof(float));
+                System.Buffer.BlockCopy(bytes, 0, buf, 0, m * 2 * sizeof(float));
+                sink.Write(buf, m);
+                done += m;
+                if (progress is not null && totalFrames > 0)
+                {
+                    int pct = (int)(100.0 * done / totalFrames);
+                    if (pct != lastPct) { lastPct = pct; progress.Report(baseFrac + spanFrac * done / totalFrames); }
+                }
+                if (m == 0) break;
             }
-            if (m == 0) break;
+            sink.Dispose();
+        }
+        catch
+        {
+            sink?.Fail();
+            if (r.Format != ExportFormat.Wav && File.Exists(outPath))
+                try { File.Delete(outPath); } catch { /* best effort */ }
+            throw;
         }
     }
 
@@ -243,6 +272,60 @@ public sealed class WavAudioExporter : IAudioExporter
     // Make-up gain that lifts (or lowers) `peak` to the −1 dBTP target. Silence → unity.
     private static float GainFor(float peak)
         => peak > 1e-6f ? NormalizeTarget / peak : 1f;
+
+    private static string ExtensionFor(in ExportRequest r)
+        => r.Format switch { ExportFormat.Flac => ".flac", ExportFormat.Mp3 => ".mp3", _ => ".wav" };
+
+    // --- Output sinks ----------------------------------------------------------
+    // One output file, two implementations: WavWriter (gain/dither applied inside
+    // it, unchanged M6-4 path) and the native FLAC/MP3 encoder (gain applied to
+    // the float buffer here — the ABI takes a plain stream). Dither rides only on
+    // 16-bit targets, WAV or FLAC; MP3 has no integer stage.
+
+    private interface ISink : IDisposable
+    {
+        void Write(float[] interleaved, int frames);
+        void Fail();   // failure-path release: no finish, no success semantics
+    }
+
+    private sealed class WavSink : ISink
+    {
+        private readonly WavWriter _w;
+        public WavSink(string path, int sr, WavBitDepth depth, float gain, bool dither)
+            => _w = new WavWriter(path, sr, 2, depth, gain, dither);
+        public void Write(float[] interleaved, int frames) => _w.WriteFrames(interleaved, frames);
+        public void Dispose() => _w.Dispose();
+        public void Fail() => _w.Dispose();   // historic WAV behaviour: partial file stays
+    }
+
+    private sealed class NativeSink : ISink
+    {
+        private readonly NativeEncoder _e;
+        private readonly float _gain;
+        public NativeSink(NativeEncoder e, float gain) { _e = e; _gain = gain; }
+        public void Write(float[] interleaved, int frames)
+        {
+            if (_gain != 1f)
+                for (int i = 0; i < frames * 2; i++) interleaved[i] *= _gain;
+            _e.WriteFrames(interleaved, frames);
+        }
+        public void Dispose() => _e.Dispose();   // close: flush + finish
+        public void Fail() => _e.Discard();      // free without finishing
+    }
+
+    private static ISink OpenSink(string path, int sr, in ExportRequest r, float gain)
+    {
+        switch (r.Format)
+        {
+            case ExportFormat.Flac:
+                return new NativeSink(new NativeEncoder(path, sr, 2, r.Depth,
+                                        dither: r.Dither && r.Depth == WavBitDepth.Pcm16), gain);
+            case ExportFormat.Mp3:
+                return new NativeSink(new NativeEncoder(path, sr, 2, r.Mp3BitrateKbps), gain);
+            default:
+                return new WavSink(path, sr, r.Depth, gain, r.Dither);
+        }
+    }
 
     private static long FramesFor(ExportRequest r)
         => (long)System.Math.Ceiling(r.TotalBeats * (r.SampleRate * 60.0 / r.Bpm));

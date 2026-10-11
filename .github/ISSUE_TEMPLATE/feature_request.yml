@@ -36,4 +36,6 @@ body:
     id: extra
     attributes:
       label: Anything else?
-      description: Sketches, screenshots, links.
+      description: >-
+        Sketches, screenshots, links. Accepted ideas get a short specification in
+        specs/ before implementation begins.

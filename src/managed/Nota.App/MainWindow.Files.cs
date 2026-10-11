@@ -65,7 +65,9 @@ public partial class MainWindow
         if (opts is null) return;
 
         Activate(); // keep the native panel focused (see DoImportAsync)
-        // Stems bounce one WAV per track into a folder; the master bounce writes one file.
+        // Stems bounce one file per track into a folder; the master bounce writes
+        // one file. The picker follows the chosen format.
+        string ext = opts.Format switch { ExportFormat.Flac => "flac", ExportFormat.Mp3 => "mp3", _ => "wav" };
         string? path;
         if (opts.Stems)
         {
@@ -79,12 +81,12 @@ public partial class MainWindow
         {
             var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
-                Title = "Export master to WAV",
-                DefaultExtension = "wav",
-                SuggestedFileName = "Nota Export.wav",
+                Title = $"Export master to {ext.ToUpperInvariant()}",
+                DefaultExtension = ext,
+                SuggestedFileName = $"Nota Export.{ext}",
                 FileTypeChoices = new[]
                 {
-                    new FilePickerFileType("WAV audio") { Patterns = new[] { "*.wav" } }
+                    new FilePickerFileType($"{ext.ToUpperInvariant()} audio") { Patterns = new[] { $"*.{ext}" } }
                 },
             });
             path = file?.TryGetLocalPath();
@@ -101,7 +103,8 @@ public partial class MainWindow
             var request = new ExportRequest(
                 path, opts.RangeBeats + opts.TailBeats, bpm, opts.SampleRate, opts.Depth,
                 RestoreLoop: _vm.Transport.LoopOn, RestoreMetronome: _vm.Transport.MetronomeOn,
-                Normalize: opts.Normalize, Dither: opts.Dither);
+                Normalize: opts.Normalize, Dither: opts.Dither,
+                Format: opts.Format, Mp3BitrateKbps: opts.BitrateKbps);
             await RunBlockingAsync("Export", opts.Stems ? "Exporting stems…" : "Exporting…", async prog =>
             {
                 var frac = new Progress<double>(f =>

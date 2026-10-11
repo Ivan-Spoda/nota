@@ -17,6 +17,8 @@ public domain, or AGPL-compatible copyleft.
 | miniaudio | 0.11.25 | Audio device I/O (WASAPI / PulseAudio / ALSA) | Unlicense **or** MIT-0 | ✅ in use |
 | RtMidi | vendored | MIDI I/O (WinMM / ALSA) | MIT-like (RtMidi) | ✅ in use |
 | dr_libs (dr_wav / dr_flac / dr_mp3) | vendored | WAV / FLAC / MP3 decoding | Unlicense **or** MIT-0 | ✅ in use — see note 3 |
+| libFLAC (xiph) | 1.5.x | FLAC encoding (export) | BSD-3-Clause | ✅ in use — git submodule `vendor/flac` |
+| LAME | 3.100 | MP3 encoding (export) | **LGPL-2.0-or-later** | ⚠️ cleared with a condition — see note 7 |
 | signalsmith-stretch | vendored | Time-stretch / pitch-shift (clip warping) | MIT | ✅ in use |
 | signalsmith-linear | vendored | FFT / linear DSP primitives | MIT | ✅ in use |
 | HIIR (Laurent de Soras) | 1.40 | Oversampling (polyphase halfband IIR) | WTFPL | ✅ in use — see note 4 |
@@ -46,8 +48,9 @@ copyleft. Separately, Steinberg's **VST trademark guidelines** govern use of the
 name and logo in marketing and UI — review them before using the mark.
 
 **3 — MP3 patents.**
-The core MP3 patents expired in 2017, so `dr_mp3` decoding is generally considered
-patent-free. Re-confirm if targeting a jurisdiction with unusual patent terms.
+The core MP3 patents expired in 2017, so MP3 decoding (`dr_mp3`) and encoding (LAME,
+note 7) are generally considered patent-free. Re-confirm if targeting a jurisdiction
+with unusual patent terms.
 
 **4 — WTFPL is not accepted everywhere.**
 HIIR is released under the WTFPL, which some corporate legal reviews reject (it carries
@@ -69,6 +72,16 @@ from Spotify's repository) are fetched by Settings → Downloads → AI Models i
 folder, each pinned to a size and sha256 in `ModelCatalog.cs`. All three licenses permit
 use and redistribution with AGPL software. Nota's STFT, segmenting and note-decoding code
 around the models are its own ports of the reference Python (`src/managed/Nota.Infrastructure/Ai`).
+
+**7 — LAME is LGPL-2.0-or-later, statically compiled into the engine.**
+LAME 3.100 (`vendor/lame`, encoder-only source snapshot) is the MP3 encoder for export.
+LGPL-2.0+ is one-way compatible with AGPL-3.0-only via the "or later" upgrade clause, so it
+qualifies as AGPL-compatible copyleft under this register's rule — the maintainer accepted
+it as an *accounted* copyleft dependency (specs/001-mp3-flac-export). Conditions: the
+complete corresponding source ships in-tree (`vendor/lame` carries LAME's own `COPYING*`
+files verbatim, unmodified sources), the register carries this row and note, and the
+combined work stays AGPL-3.0-only. No LAME symbol leaves the dylib (the `nota_*` export
+lists hide it, same as JUCE in note 1).
 
 ## Not shipped
 
