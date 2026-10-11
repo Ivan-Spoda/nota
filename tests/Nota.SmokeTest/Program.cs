@@ -21,6 +21,14 @@ static float Rms(float[] buf, int frames)
     return (float)Math.Sqrt(sum / (frames * 2));
 }
 
+// RMS over a mono buffer (e.g. DecodeMono output) — no stereo pairing.
+static float MonoRms(float[] buf)
+{
+    double sum = 0;
+    for (int i = 0; i < buf.Length; i++) sum += buf[i] * (double)buf[i];
+    return (float)Math.Sqrt(sum / buf.Length);
+}
+
 Console.WriteLine($"engine v{NotaEngine.Version}");
 
 // --- architecture boundary checks (Phase 0.7) --------------------------------
@@ -8410,7 +8418,7 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
     File.Delete(dOff); File.Delete(dOn);
 }
 
-// -- export normalize (−1 dBTP true peak) via WavAudioExporter ---------------
+// -- export normalize (−1 dBTP true peak) via AudioExporter ---------------
 // Own engine: ExportMaster start()s the backend on Restore, so keep it off the
 // shared `engine` (a later test asserts its backend was never started).
 {
@@ -8420,7 +8428,7 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
     int nClip = ne.AddMidiClip(nTrk, 0.0, 2.0);
     ne.SetClipNotes(nTrk, nClip, new[] { new NotaNote(60, 0.0, 2.0, 0.5f) });
 
-    var exporter = new Nota.Infrastructure.WavAudioExporter();
+    var exporter = new Nota.Infrastructure.AudioExporter();
     string nPath = Path.Combine(Path.GetTempPath(), "nota_normalize_test.wav");
     var req = new ExportRequest(nPath, 2.0, 120.0, 48000, WavBitDepth.Float32,
         RestoreLoop: false, RestoreMetronome: false, Normalize: true, Dither: false);
@@ -8437,7 +8445,7 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
 }
 
 // -- M6-5: stem isolation (mute-others → distinct per-track bounces) ---------
-// Device-free: mirrors WavAudioExporter.ExportStems' core (the real exporter also
+// Device-free: mirrors AudioExporter.ExportStems' core (the real exporter also
 // stops/starts the backend, verified by --audiocheck / M6-4). Two instrument tracks
 // with different pitches must bounce to distinct, audible, isolated stems.
 {
@@ -8465,6 +8473,154 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
     se.Seek(0); se.RenderOffline(bufA, 4096);
     Check(Rms(bufA, 4096) < 1e-4f, "muting all tracks silences the bounce");
     se.StopTransport();
+}
+
+// -- M7: export encoders (FLAC/MP3) — ABI level ------------------------------
+// NativeEncoder is the managed face of the nota_encoder_* C ABI. Here we only
+// prove the lifecycle contract: a bad path fails open, discard leaves a deletable
+// file. End-to-end (render → encode → decode round-trip) lands with US1/US2 below.
+{
+    bool badPathThrew = false;
+    try { _ = new NativeEncoder(Path.Combine(Path.GetTempPath(), "no-such-dir", "x.flac"), 48000, 2, WavBitDepth.Pcm24); }
+    catch (IOException) { badPathThrew = true; }
+    Check(badPathThrew, "FLAC encoder open on a bad path throws");
+
+    string encTmp = Path.Combine(Path.GetTempPath(), $"nota-enc-{Guid.NewGuid():N}.mp3");
+    try
+    {
+        using (var enc = new NativeEncoder(encTmp, 48000, 2, 320))
+        {
+            var tone = new float[4800 * 2];
+            for (int i = 0; i < 4800; i++) { tone[i * 2] = 0.5f; tone[i * 2 + 1] = 0.5f; }
+            enc.WriteFrames(tone, 4800);
+            enc.Discard(); // failure-path release: no finish, file stays deletable
+        }
+        Check(File.Exists(encTmp), "discarded encoder leaves its partial file");
+        File.Delete(encTmp);
+        Check(!File.Exists(encTmp), "partial file is deletable after discard");
+    }
+    finally { if (File.Exists(encTmp)) File.Delete(encTmp); }
+}
+
+// -- M7: FLAC master export — lossless vs WAV (deterministic audio clip) -----
+// A sine clip (not a synth note — synth levels drift between renders) exports
+// twice: 24-bit WAV and 24-bit FLAC. The engine's own decoders (dr_wav / dr_flac)
+// must read the same audio back: FLAC's lossless guarantee, end to end through
+// the real AudioExporter.
+{
+    using var fe = new NotaEngine();
+    fe.SetBpm(120); fe.SetTimeSignature(4, 4);
+    string sine = Path.Combine(Path.GetTempPath(), $"nota-sine-{Guid.NewGuid():N}.wav");
+    Nota.SmokeTest.WavWriter.WriteSine(sine, 2.0, 440.0, 48000);
+    int fTrk = fe.AddAudioTrack();
+    fe.AddAudioClip(fTrk, sine, 0.0);
+    fe.SetMetronome(false); fe.SetLoop(false, 0, 0);
+
+    string fWav = Path.Combine(Path.GetTempPath(), $"nota-flac-ref-{Guid.NewGuid():N}.wav");
+    string fFlac = fWav.Replace(".wav", ".flac");
+    try
+    {
+        new AudioExporter().ExportMaster(fe, new ExportRequest(fWav, 4.0, 120, 48000, WavBitDepth.Pcm24, false, false));
+        new AudioExporter().ExportMaster(fe, new ExportRequest(fFlac, 4.0, 120, 48000, WavBitDepth.Pcm24, false, false,
+                                                               Format: ExportFormat.Flac));
+
+        byte[] magic = File.ReadAllBytes(fFlac);
+        Check(magic.Length > 4 && magic[0] == (byte)'f' && magic[1] == (byte)'L' && magic[2] == (byte)'a' && magic[3] == (byte)'C',
+              "FLAC export carries the fLaC magic");
+
+        var wavMono = NotaEngine.DecodeMono(fWav, 10.0, out double wavSr);
+        var flacMono = NotaEngine.DecodeMono(fFlac, 10.0, out double flacSr);
+        Check(wavMono is not null && flacMono is not null && wavSr == 48000 && flacSr == 48000,
+              $"both exports decode via the engine (wav {wavSr} Hz, flac {flacSr} Hz)");
+        if (wavMono is not null && flacMono is not null)
+        {
+            long n = Math.Min(wavMono.Length, flacMono.Length);
+            Check(Math.Abs(wavMono.Length - flacMono.Length) <= 8, $"FLAC is sample-accurate (wav {wavMono.Length}, flac {flacMono.Length})");
+            float maxDiff = 0;
+            for (int i = 0; i < n; i++) maxDiff = Math.Max(maxDiff, Math.Abs(wavMono[i] - flacMono[i]));
+            Check(maxDiff < 1e-5f, $"FLAC decode matches WAV within 24-bit quantization (max diff {maxDiff:E2})");
+            Check(MonoRms(wavMono) > 0.01f, "exported FLAC is audible");
+        }
+
+        // Normalize to −1 dBTP through the FLAC path: decoded peak must respect the ceiling.
+        string fNorm = fWav.Replace(".wav", ".norm.flac");
+        new AudioExporter().ExportMaster(fe, new ExportRequest(fNorm, 4.0, 120, 48000, WavBitDepth.Pcm24, false, false,
+                                                               Normalize: true, Format: ExportFormat.Flac));
+        var normMono = NotaEngine.DecodeMono(fNorm, 10.0, out _);
+        float normPeak = normMono is null ? 1f : normMono.Max();
+        Check(normMono is not null && normPeak > 0.7f && normPeak <= 0.8912509f + 1e-4f,
+              $"normalized FLAC peak lands at −1 dBTP (peak {normPeak:F4})");
+        try { File.Delete(fNorm); } catch { }
+    }
+    finally
+    {
+        try { File.Delete(sine); File.Delete(fWav); File.Delete(fFlac); } catch { }
+    }
+}
+
+// -- M7: MP3 master export — CBR size, duration, decodes audible --------------
+{
+    using var me = new NotaEngine();
+    me.SetBpm(120); me.SetTimeSignature(4, 4);
+    int mTrk = me.AddInstrumentTrack(); int mClip = me.AddMidiClip(mTrk, 0.0, 4.0);
+    me.SetClipNotes(mTrk, mClip, new[] { new NotaNote(60, 0.0, 4.0, 0.9f) });
+    me.SetMetronome(false); me.SetLoop(false, 0, 0);
+
+    string mMp3 = Path.Combine(Path.GetTempPath(), $"nota-mp3-{Guid.NewGuid():N}.mp3");
+    try
+    {
+        new AudioExporter().ExportMaster(me, new ExportRequest(mMp3, 4.0, 120, 48000, WavBitDepth.Pcm24, false, false,
+                                                               Format: ExportFormat.Mp3, Mp3BitrateKbps: 320));
+        Check(File.Exists(mMp3), "MP3 export wrote its file");
+        byte[] mp3 = File.ReadAllBytes(mMp3);
+        // 320 kbps CBR, 2 s of audio: 320*125 B/s * 2 s = 80 kB (±10 % covers tag/header slack).
+        double expected = 320 * 125.0 * 2.0;
+        Check(mp3.Length > 0.9 * expected && mp3.Length < 1.1 * expected,
+              $"MP3 size tracks its CBR bitrate ({mp3.Length} B vs ~{expected:F0} B)");
+        bool sync = mp3[0] == (byte)'I' /* ID3 */ || (mp3[0] == 0xFF && (mp3[1] & 0xE0) == 0xE0);
+        Check(sync, "MP3 starts with a frame sync or ID3 tag");
+
+        var mono = NotaEngine.DecodeMono(mMp3, 10.0, out double mSr);
+        Check(mono is not null && mSr == 48000, $"MP3 decodes via the engine at 48 kHz (got {mSr})");
+        if (mono is not null)
+        {
+            // Encoder delay/padding shifts length by a few ms; ±100 ms is generous.
+            Check(Math.Abs(mono.Length - 2.0 * 48000) <= 4800,
+                  $"MP3 duration within codec padding ({mono.Length} samples vs {2.0 * 48000})");
+            Check(MonoRms(mono) > 0.01f, "exported MP3 is audible");
+        }
+    }
+    finally { try { File.Delete(mMp3); } catch { } }
+}
+
+// -- M7: FLAC stems — one decodable file per track, in format ----------------
+{
+    using var se = new NotaEngine();
+    se.SetBpm(120); se.SetTimeSignature(4, 4);
+    int tA = se.AddInstrumentTrack(); int cA = se.AddMidiClip(tA, 0.0, 4.0);
+    se.SetClipNotes(tA, cA, new[] { new NotaNote(60, 0.0, 4.0, 0.9f) });
+    int tB = se.AddInstrumentTrack(); int cB = se.AddMidiClip(tB, 0.0, 4.0);
+    se.SetClipNotes(tB, cB, new[] { new NotaNote(72, 0.0, 4.0, 0.9f) });
+    se.SetMetronome(false); se.SetLoop(false, 0, 0);
+
+    string dir = Path.Combine(Path.GetTempPath(), $"nota-stems-{Guid.NewGuid():N}");
+    try
+    {
+        int n = new AudioExporter().ExportStems(se, new ExportRequest(dir, 4.0, 120, 48000, WavBitDepth.Pcm24, false, false,
+                                                                     Format: ExportFormat.Flac));
+        var files = Directory.GetFiles(dir, "*.flac");
+        Check(n == 2 && files.Length == 2, $"FLAC stems wrote one file per track ({n} reported, {files.Length} found)");
+        var decoded = files.Select(f => NotaEngine.DecodeMono(f, 10.0, out _)).ToList();
+        Check(decoded.All(d => d is not null && d.Length > 48000), "every FLAC stem decodes to full length");
+        if (decoded.All(d => d is not null))
+        {
+            Check(decoded.All(d => MonoRms(d!) > 0.001f), "every FLAC stem is audible");
+            long m = Math.Min(decoded[0]!.Length, decoded[1]!.Length);
+            double diff = 0; for (int i = 0; i < m; i++) { double d = decoded[0]![i] - decoded[1]![i]; diff += d * d; }
+            Check(Math.Sqrt(diff / m) > 0.005, "FLAC stems are per-track (A ≠ B)");
+        }
+    }
+    finally { try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { } }
 }
 
 // -- M6-2: level meters (post-fader peak/RMS, master + per-track) --
@@ -13480,7 +13636,7 @@ Console.WriteLine("-- MCP tools --");
     var mcpPresetLib = new Nota.Infrastructure.PresetLibrary();
     var mcpSettings = new Nota.Infrastructure.SettingsService();
     var mcpCatalog = new Nota.Infrastructure.PluginCatalog();
-    var mcpExporter = new Nota.Infrastructure.WavAudioExporter();
+    var mcpExporter = new Nota.Infrastructure.AudioExporter();
     var mcpPresets = new Nota.Mcp.Tools.PresetTools(mcpEng, mcpDisp, mcpRefr, mcpFactory, mcpPresetStore, mcpPresetLib, mcpSettings);
     var mcpEffRack = new Nota.Mcp.Tools.EffectRackTools(mcpEng, mcpDisp, mcpRefr);
     var mcpPlugins = new Nota.Mcp.Tools.PluginTools(mcpEng, mcpDisp, mcpRefr, mcpCatalog);
@@ -13513,6 +13669,27 @@ Console.WriteLine("-- MCP tools --");
     bool mcpWrote = System.IO.File.Exists(mcpWav) && new System.IO.FileInfo(mcpWav).Length > 44;
     Check(mcpOut == mcpWav && mcpWrote, "MCP export_master writes a WAV");
     try { System.IO.File.Delete(mcpWav); } catch { }
+
+    // The format parameter rides the same exporter (FR-011 parity with the dialog).
+    // Expected length comes from the engine's own rate/bpm (set_tempo moved it to 128).
+    string mcpFlac = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"nota-mcp-{Guid.NewGuid():N}.flac");
+    try
+    {
+        string flacOut = mcpExport.ExportMaster(mcpFlac, 2, "pcm24", format: "flac").Result;
+        byte[] flacHead = new byte[4];
+        using (var fs = System.IO.File.OpenRead(mcpFlac)) fs.Read(flacHead, 0, 4);
+        var flacMono = NotaEngine.DecodeMono(mcpFlac, 10.0, out _);
+        bool magic = flacHead[0] == (byte)'f' && flacHead[1] == (byte)'L' && flacHead[2] == (byte)'a' && flacHead[3] == (byte)'C';
+        double srUsed = mcpEng.SampleRate > 0 ? mcpEng.SampleRate : 48000;
+        long expect = (long)Math.Ceiling(2 * 60.0 / mcpEng.Bpm * srUsed);
+        long got = flacMono?.Length ?? -1;
+        Check(flacOut == $"{mcpFlac} (flac)",
+              $"MCP export_master(format: flac) return string (got '{flacOut}')");
+        Check(magic, "MCP export_master(format: flac) writes the fLaC magic");
+        Check(got >= expect - 1000 && got <= expect + 1000,
+              $"MCP FLAC decodes to the rendered length (got {got}, expect ~{expect}, sr {srUsed}, bpm {mcpEng.Bpm})");
+    }
+    finally { try { System.IO.File.Delete(mcpFlac); } catch { } }
 
     // ---- Nota Rhythm (drum machine, kind 12) over MCP ----
     var mcpRhythm = new Nota.Mcp.Tools.RhythmTools(mcpEng, mcpDisp, mcpRefr);
