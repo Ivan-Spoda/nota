@@ -49,7 +49,14 @@ public sealed class Commands : AvaloniaObject
         return key == Key.None ? null : new KeyGesture(key, mods);
     }
 
-    /// <summary>True for a shortcut with a modifier — the only kind a menu item may carry (a
-    /// bare Space or 0 as a menu key equivalent would swallow typing).</summary>
+    /// <summary>True for a shortcut with a modifier (⌘S, ⌥⌘S). Bare letter/digit keys stay
+    /// out of menus — a bare Space or 0 as a menu key equivalent would swallow typing.</summary>
     public static bool IsChord(string glyphs) => glyphs.IndexOfAny(['⌘', '⌃', '⌥']) >= 0;
+
+    /// <summary>True for a shortcut a menu item may carry: a chord, or a bare function key
+    /// (F11) — function keys type nothing, so unlike a bare letter/digit they can't
+    /// swallow text input.</summary>
+    public static bool CanMenuGesture(string glyphs) =>
+        IsChord(glyphs) || (glyphs.Length > 1 && glyphs[0] == 'F'
+            && int.TryParse(glyphs[1..], out int n) && n is >= 1 and <= 12);
 }

@@ -119,6 +119,19 @@ public partial class MainWindow : Window
         }
     }
 
+    // Fullscreen hides the custom bar: the 36-px band and its separator vanish and the
+    // workspace fills the top edge; leaving fullscreen restores them. A pure function
+    // of the current state — never of transitions — so rapid toggles converge. Maximized
+    // keeps the bar (the app launches maximized); Linux never shows it (native frame).
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        // XAML sets WindowState before the named controls exist (InitializeComponent),
+        // hence the null guard; the default bar visibility already matches non-fullscreen.
+        if (change.Property == WindowStateProperty && TitleBar is { } bar)
+            bar.IsVisible = !OperatingSystem.IsLinux() && WindowState != WindowState.FullScreen;
+    }
+
     // Custom frameless title bar (Phase 2): drag the window by its top bar; a
     // The factory drum kits ship as recipes, not audio: synthesize whatever is missing
     // (first run, or after an update changed a kit) off the UI thread, then refresh the

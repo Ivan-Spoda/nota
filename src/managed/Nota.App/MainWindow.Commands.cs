@@ -8,6 +8,7 @@
 
 using System;
 using System.Linq;
+using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
@@ -81,6 +82,7 @@ public partial class MainWindow
         });
         B("view.history", () => Browser.ShowHistory());
         B("view.midiLearn", ToggleMidiLearn);
+        B("view.fullscreen", ToggleFullscreen);
         r.Bind(CommandCatalog.Palette, (c, _) => TogglePalette(c.Window as Avalonia.Controls.Window));
 
         // ---- Transport
@@ -142,6 +144,25 @@ public partial class MainWindow
         var win = new PreferencesWindow(new SettingsViewModel(settings), _vm);
         win.ShowPage(page);
         win.Show(this);
+    }
+
+    // View ▸ Toggle Full Screen. The state to return to is remembered on the way in —
+    // the app usually runs maximized, so leaving fullscreen must not un-maximize.
+    // macOS-native entry (the green button) restores natively and never reads this.
+    private WindowState? _stateBeforeFullscreen;
+
+    private void ToggleFullscreen()
+    {
+        if (WindowState == WindowState.FullScreen)
+        {
+            WindowState = _stateBeforeFullscreen ?? WindowState.Maximized;
+            _stateBeforeFullscreen = null;
+        }
+        else
+        {
+            _stateBeforeFullscreen = WindowState == WindowState.Normal ? WindowState.Normal : WindowState.Maximized;
+            WindowState = WindowState.FullScreen;
+        }
     }
 
     // Edit ▸ Lock Envelopes: the engine flag and the menu checkmark move together.

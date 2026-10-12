@@ -996,6 +996,10 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘⇧E", "Export audio"),
             ("⌘,", "Settings"),
         }),
+        ("WINDOW", new[]
+        {
+            ("F11", "Enter / leave full screen — the title bar hides in full screen"),
+        }),
         ("COMMAND PALETTE", new[]
         {
             ("⌘⇧P", "Open / close the command palette — from any window, even while typing"),

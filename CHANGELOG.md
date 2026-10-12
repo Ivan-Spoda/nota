@@ -18,6 +18,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Full screen without the title bar:** switching the window to full screen hides the
+  title bar and its separator — the workspace fills the screen edge to edge, and the bar
+  comes back when you leave full screen. The window stays as it was in normal and
+  maximized states. On Windows and Linux a new **View → Toggle Full Screen** command
+  (shortcut **F11**) enters and leaves full screen; on macOS the green button does it.
+
 ### Fixed
 - **Sample-pack presets open in the browser:** under Nota Mosaic → Packs, a pack wouldn't
   expand, so its presets couldn't be seen or dragged. Packs now expand to their presets like

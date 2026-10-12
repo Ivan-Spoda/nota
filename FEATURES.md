@@ -903,7 +903,9 @@ and user presets, automation, persistence and cloning.
   window — including the custom-drawn arrangement, piano roll, mixer and device cards.
 - **A single frameless window style**: centred title, drag by the header, the macOS
   traffic lights in a left inset (Windows gets its own title bar; Linux uses the system
-  frame).
+  frame). **Full screen** — the macOS green button, or View → Toggle Full Screen (F11)
+  on Windows and Linux — hides the title bar and its separator so the workspace fills the
+  screen edge to edge; leaving full screen brings the bar back. Maximized keeps the bar.
 - **What's New** — a window showing changelog entries newer than `LastSeenVersion`, once
   after the first launch on a new version.
 - **Self-update** — the start screen's banner announces a newer GitHub release. **Update**

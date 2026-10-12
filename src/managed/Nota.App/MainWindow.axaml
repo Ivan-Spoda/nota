@@ -70,6 +70,7 @@
             <NativeMenuItem Header="Toggle detail panel" app:Commands.Id="view.toggleDetail"/>
             <NativeMenuItem Header="Toggle overview" app:Commands.Id="view.toggleOverview"/>
             <NativeMenuItem Header="Toggle sections" app:Commands.Id="view.toggleSections"/>
+            <NativeMenuItem Header="Toggle Full Screen" app:Commands.Id="view.fullscreen"/>
             <NativeMenuItemSeparator/>
             <!-- Header text is matched from code to keep this checkmark in step with the
                  transport bar's Follow button — see MainWindow.SetFollowPlayhead. -->

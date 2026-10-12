@@ -62,6 +62,7 @@ public static class CommandCatalog
         C("view.automation", "Toggle Automation Mode", "View", "⌘⇧A", "envelopes lanes", view: "Arrangement"),
         C("view.history", "Show Version History", "View", "", "undo history versions snapshots"),
         C("view.midiLearn", "MIDI Learn", "View", "", "map controller"),
+        C("view.fullscreen", "Toggle Full Screen", "View", "F11", "maximize immersive hide chrome"),
         C(Palette, "Command Palette", "View", "⌘⇧P", "search", hide: true),
 
         // ---- Transport --------------------------------------------------------------------

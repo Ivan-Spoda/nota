@@ -301,8 +301,9 @@ public partial class MainWindow
             return;
         }
 
-        // Nothing above took it: the menu's shortcuts (Ctrl+S, Ctrl+Z…) on Windows / Linux.
-        if (mod && TryMenuShortcut(e))
+        // Nothing above took it: the menu's shortcuts (Ctrl+S, Ctrl+Z…) on Windows / Linux —
+        // plus bare function keys (F11 = full screen), the one modifier-less menu gesture.
+        if ((mod || e.Key is >= Key.F1 and <= Key.F12) && TryMenuShortcut(e))
         {
             e.Handled = true;
             return;
