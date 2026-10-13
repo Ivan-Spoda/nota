@@ -45,6 +45,10 @@ JUCE module; the engine core is JUCE-free.
 
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
   operation.
+- **New project template**: a new project (and the workspace Nota opens with) starts with an
+  instrument track (Nota Synth), an audio track and two returns — **Reverb** (Nota Reverb)
+  and **Delay** (Nota Delay), both Wet Only — ready to send to; it opens unmodified, with
+  nothing to undo.
 - **Version history**: every save records a version inside the project. The browser's
   **History** tab draws them as a branching tree (the current one has a brass dot), each
   described by what it changed ("Added Bass · Tempo 120.00 → 124.00"); switch

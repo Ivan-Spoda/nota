@@ -999,6 +999,9 @@ public:
     // without a begin is ignored.
     void beginUndoGroup();
     void endUndoGroup();
+    // Forget the undo/redo history: the current state becomes the baseline (a freshly
+    // built default project). Message thread only.
+    void clearUndoHistory();
 
     // --- offline render (tests / export) ---
     void renderOffline(float* out, int32_t frames);

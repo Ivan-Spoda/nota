@@ -796,6 +796,10 @@ NOTA_API int32_t    nota_engine_can_redo(const NotaEngine* engine);
  * device in place = add + move + remove). Nests; pair every begin with an end. */
 NOTA_API void       nota_engine_undo_group_begin(NotaEngine* engine);
 NOTA_API void       nota_engine_undo_group_end(NotaEngine* engine);
+/* Drop the undo and redo history without touching the session: the current state
+ * becomes the baseline (e.g. a freshly built default project). Open undo groups are
+ * closed. Message thread only. No-op for a null engine. */
+NOTA_API void       nota_engine_clear_undo_history(NotaEngine* engine);
 
 /* ---- Project load (M7-6) ------------------------------------------------- */
 /* Clear the session to an empty project: stop transport, drop all tracks,

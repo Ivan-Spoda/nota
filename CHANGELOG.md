@@ -44,6 +44,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   used to stick to whole beats.
 
 ### Changed
+- **New projects come ready to play:** a new project — and the workspace Nota opens with —
+  now starts with an instrument track, an audio track and two return tracks: **Reverb**
+  (Nota Reverb) and **Delay** (Nota Delay), both set to Wet Only, so turning up a send
+  adds space or echoes straight away. The new project is unmodified and has nothing to
+  undo; the tracks are ordinary tracks you can edit or delete.
 - **Grid controls:** clicking the toolbar's GRID cell (and the new grid chip in the piano
   roll's header) opens a menu with every grid option instead of cycling through five
   values. The arrangement now draws sub-beat lines when zoomed in. The audio clip editor's

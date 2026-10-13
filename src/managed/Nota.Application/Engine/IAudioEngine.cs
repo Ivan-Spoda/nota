@@ -821,6 +821,8 @@ public interface IAudioEngine : IDisposable
     /// <see cref="EndUndoGroup"/> undo as one step. Nests.</summary>
     void BeginUndoGroup();
     void EndUndoGroup();
+    /// <summary>Forget the undo/redo history; the current state becomes the baseline.</summary>
+    void ClearUndoHistory();
 
     // --- Project load (M7-6) -----------------------------------------------
     void Reset();

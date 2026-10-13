@@ -242,6 +242,7 @@ int32_t nota_engine_can_redo(const NotaEngine* e) {
 }
 void nota_engine_undo_group_begin(NotaEngine* e) { if (e) ENG(e)->beginUndoGroup(); }
 void nota_engine_undo_group_end(NotaEngine* e) { if (e) ENG(e)->endUndoGroup(); }
+void nota_engine_clear_undo_history(NotaEngine* e) { if (e) ENG(e)->clearUndoHistory(); }
 
 // ---- Project reset (M7-6) -------------------------------------------------
 

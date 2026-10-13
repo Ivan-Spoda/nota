@@ -183,6 +183,7 @@ public partial class MainWindow
         _projectPath = null;
         _learn?.Clear();   // start with a clean MIDI-map for the new project
         Timeline.ClearSections();   // …and a clean song structure
+        Nota.Infrastructure.ProjectTemplate.ApplyDefault(Engine);   // instrument, audio, Reverb + Delay returns
         RefreshAfterLoad();
         UpdateWindowTitle();
         MarkProjectClean();

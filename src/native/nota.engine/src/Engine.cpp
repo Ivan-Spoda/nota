@@ -571,6 +571,13 @@ void Engine::reset() {
     empty->masterTrack = std::make_shared<Track>(kMasterTrackId, TrackType::Audio);
     publishRaw(std::move(empty));
     nextTrackId_ = 1;
+    clearUndoHistory();
+}
+
+void Engine::clearUndoHistory() {
+    // The stacks hold old authoring graphs only — never the live one — and every published
+    // graph also sits in retired_ until the audio thread has moved past it, so dropping
+    // them here frees nothing the audio thread can still be reading.
     undoStack_.clear();
     redoStack_.clear();
     undoGroupDepth_ = 0; undoGroupBase_ = 0;
