@@ -102,14 +102,15 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
     and the name prints only at the head of each run so a repeated pattern reads as one
     block. View ▸ Clip names cycles every clip / first of a run / none; a clip named by
     hand always shows its name.
-- **Snap grid** (arrangement and piano roll, each with its own setting, remembered
-  app-wide): **Auto** follows the zoom so you snap to the lines you see — finer as you zoom
-  in, whole bars zoomed out — in **Narrow / Medium / Wide** density; or a fixed step from
-  1/32 to 4 bars (its label dims when it is finer than the drawn lines). **Triplets** in
-  both modes. The toolbar's GRID cell and the piano roll's header chip open a menu with
-  every option; ⌘1 / ⌘2 narrow / widen (in Auto, the density), ⌘3 triplets, ⌘4 snap
-  on / off, ⌘5 Auto ↔ fixed (also Edit → Grid), acting on the editor used last. Hold ⌥ to
-  drag freely; clip edges still attract a dragged clip.
+- **Snap grid** (the arrangement, and the clip editors — piano roll and audio — which
+  share one setting; remembered app-wide): **Auto** follows the zoom so you snap to the
+  lines you see — finer as you zoom in, whole bars zoomed out — in **Narrow / Medium /
+  Wide** density; or a fixed step from 1/32 to 4 bars (its label dims when it is finer
+  than the drawn lines). **Triplets** in both modes. The toolbar's GRID cell and the piano
+  roll's header chip open a menu with every option, as does the audio clip editor's header
+  (trim brackets, warp markers and envelope points snap); ⌘1 / ⌘2 narrow / widen (in Auto,
+  the density), ⌘3 triplets, ⌘4 snap on / off, ⌘5 Auto ↔ fixed (also Edit → Grid), acting
+  on the editor used last. Hold ⌥ to drag freely; clip edges still attract a dragged clip.
 - **Session View** — a clip grid (tracks × scenes) with an inspector: named, coloured clips
   with note / waveform previews and a progress pie on the clip's own clock; selection apart
   from launching, keyboard editing (arrows, Return, ⌘C/X/V, ⌘D, ⌘I, F2, Delete) and drag
@@ -316,7 +317,8 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   The first use offers to download the model.
 - **Warp / time-stretch**: **Complex** and **Complex Pro** modes (the latter with formant
   preservation, correct even when the sample rate and the device rate differ), plus
-  transient detection. A grid-snap toggle governs trimming a warped clip.
+  transient detection. Trim brackets, warp markers and envelope points snap to the clip
+  editors' snap grid.
 - **Changing the sample rate** does not break third-party plugins or warped clips — the
   caches are rebuilt once when the rate changes.
 

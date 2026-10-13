@@ -147,9 +147,28 @@ Assumptions or the plan's Technical Context.
   together preserves current behaviour.
 - **Alternatives considered**: The snap step in effect (zoom-dependent output).
 
+## R13 — The audio clip editor (US4, Clarifications Q6–Q7)
+
+- **Decision**: `AudioClipEditorView` reads the piano roll's setting
+  (`EditorKind.PianoRoll`, used for "the clip editor") and gets the same `SnapChip` in
+  place of its Snap switch. It has two beat axes:
+  - **warp beats** (`BeatToX`, mirrored when reversed) for the grid lines, the trim
+    brackets and the warp markers, at `ppb = zoom · width / TotalBeats`;
+  - **played clip beats** (`EnvBeatToX`, never mirrored) for the envelope, at
+    `ppb = zoom · width / clipBeats`.
+  Each axis resolves its own `ResolvedGrid`. In Envelope mode the lines are drawn on the
+  envelope axis, otherwise on the warp axis. The header chip shows the axis that is
+  drawn. Bars are 4 beats, as everywhere in the app (the editor's `BeatsPerBar` constant).
+- **Rationale**: Lines and snapping must agree (FR-005) on whichever timeline the user is
+  editing. A trimmed clip's played beats are offset from its warp beats, so one shared
+  axis would put envelope points between the lines.
+- **Alternatives considered**: Warp axis for everything (envelope points off the drawn
+  lines on trimmed clips). A third, separate setting (rejected in Q6).
+- **Shortcut target**: `GridTarget()` returns the clip editor when the detail area was used
+  last and either a MIDI or an audio clip editor is open. The status line reads "Clip
+  editor grid: …" for both, since they share the setting.
+
 ## R12 — Out-of-scope neighbours noted during research
 
-- The audio clip editor (`AudioClipEditorView`) has its own "snap trim to whole beats"
-  switch. It is not part of either editor's grid and stays as is.
 - Song sections keep `SnapBar` (whole bars), per the spec.
 - MCP tools and Nota Remote do not expose the snap grid; unchanged.

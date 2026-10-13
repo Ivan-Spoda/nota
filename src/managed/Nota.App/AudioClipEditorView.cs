@@ -3,7 +3,7 @@
 //
 // Detail · Clip for AUDIO clips (nota-design "Nota Clip Editor" 1b): the same frame as the
 // MIDI editor — a 38px header (clip cell, Sample | Envelope, the envelope target while
-// editing one, the Snap switch, the file's format) over the 232px inspector (CLIP,
+// editing one, the snap-grid chip, the file's format) over the 232px inspector (CLIP,
 // PLAYBACK, WARP) and the waveform canvas: a beat ruler, a 22px warp-marker strip, and
 // the wave in the track colour, everything past the clip's played region darkened rather
 // than hidden. Envelope and ADSR are modes of the canvas, not checkboxes. ADSR edits the
@@ -20,6 +20,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
+using Nota.Application.Editing;
 using static Nota.App.ClipEditorKit;
 
 namespace Nota.App;
@@ -42,7 +43,7 @@ public sealed class AudioClipEditorView : UserControl
     private readonly TextBlock _envTargetText = new() { Text = "Volume", FontSize = NotaType.Body, Foreground = NotaPalette.TextPrimary };
     private readonly TextBlock _hint = Hint("");
     private readonly Border _envTargetDrop;
-    private Action _syncGain = () => { }, _syncReverse = () => { }, _syncWarp = () => { }, _syncSnap = () => { };
+    private Action _syncGain = () => { }, _syncReverse = () => { }, _syncWarp = () => { };
     private Action _syncAttack = () => { }, _syncDecay = () => { }, _syncSustain = () => { }, _syncRelease = () => { };
     private ClipAdsr _adsr = ClipAdsr.Identity;
     private int _mode;   // 0 = Sample, 1 = Envelope, 2 = ADSR
@@ -56,7 +57,6 @@ public sealed class AudioClipEditorView : UserControl
     private bool _reversed;
     private bool _warpEnabled;
     private int _warpMode = 3;   // Complex
-    private bool _snapToGrid = true;                  // trim brackets snap to whole beats (default on)
     private double _detectedBpm;
     private long _srcFrames;   // the whole sample's frames (unwarped detail peaks)
     private bool _envMode;
@@ -194,7 +194,6 @@ public sealed class AudioClipEditorView : UserControl
         var col1 = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), Background = NotaPalette.BgSunken };
         col1.Children.Add(waveHost);
         Grid.SetRow(_hScroll, 1); col1.Children.Add(_hScroll);
-        _wave.SetSnapToGrid(_snapToGrid);
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         grid.Children.Add(inspector);
@@ -205,8 +204,10 @@ public sealed class AudioClipEditorView : UserControl
         var tabs = Segments(new[] { "Sample", "Envelope", "ADSR" }, 0, SetMode, out _);
         _envTargetDrop = Dropdown(_envTargetText, a => ShowMenu(a, EnvTargets, _envTarget, SetEnvTarget));
         _envTargetDrop.IsVisible = false;
-        var snap = SwitchRow("Snap", () => _snapToGrid, ToggleSnap, out _syncSnap);
-        ToolTip.SetTip(snap, "Trim brackets land on the beat grid");
+        // The clip editors' snap grid (shared with the piano roll): trim brackets, warp markers
+        // and envelope points land on the lines drawn in the wave.
+        var (snap, chip) = SnapChip.Create(EditorKind.PianoRoll, () => _wave.DrawnGrid);
+        _wave.GridChanged += chip.Refresh;
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { snap, HeaderDivider(), _fileText } };
         var name = engine.GetClipName(trackId, clipIndex);
         var header = Header(clipColor, string.IsNullOrWhiteSpace(name) ? $"Audio {trackId}" : name, "AUDIO", tabs, _envTargetDrop, right);
@@ -216,6 +217,9 @@ public sealed class AudioClipEditorView : UserControl
         PaintHint();
         Reload();
     }
+
+    /// <summary>The snap grid of the axis the wave draws (for the status line of ⌘1–⌘5).</summary>
+    internal ResolvedGrid SnapGridState => _wave.DrawnGrid;
 
     private readonly TextBox _bpmBox;
     private readonly Canvas _overlay;
@@ -397,12 +401,6 @@ public sealed class AudioClipEditorView : UserControl
 
     private string GainText() => _gain <= 0.0011 ? "−∞\u2009dB" : string.Format(NotaNum.Culture, "{0:+0.0;−0.0;0.0}\u2009dB", AudioMath.LinToDb(_gain));
 
-    private void ToggleSnap()
-    {
-        _snapToGrid = !_snapToGrid;
-        _wave.SetSnapToGrid(_snapToGrid);
-    }
-
     private void ToggleReverse()
     {
         _engine.SetClipReverse(TrackId, ClipIndex, !_reversed);
@@ -583,7 +581,35 @@ public sealed class AudioClipEditorView : UserControl
         private double _trimStart, _trimEnd, _trimTotal;
         private bool _trimMode;
         private int _trimDrag = -1;         // 0 = start, 1 = end
-        private bool _snapGrid = true;      // trim brackets snap to whole beats (toggle above the wave)
+        // Snap grid (specs/003-adaptive-snap-grid, US4): the clip editors' shared setting,
+        // resolved per axis — warp beats for brackets / markers / the wave grid, the
+        // envelope's played beats in Envelope mode. Alt held during a drag moves freely.
+        private bool _free;
+        private ResolvedGrid _lastDrawn;
+        private static GridSetting GridSetting => EditorGrids.Shared.Get(EditorKind.PianoRoll);
+        private ResolvedGrid WarpGrid => SnapGrid.Resolve(GridSetting, _zoom * Math.Max(1, Bounds.Width) / TotalBeats, BeatsPerBar);
+        private ResolvedGrid EnvGrid => SnapGrid.Resolve(GridSetting, _zoom * Math.Max(1, Bounds.Width) / _clipBeats, BeatsPerBar);
+        /// <summary>The grid of the axis being drawn (and edited) — what the header chip shows.
+        /// An unwarped clip has no beat grid of its own, so its only snapping is the envelope's.</summary>
+        public ResolvedGrid DrawnGrid => _envMode || _mk.Count < 2 ? EnvGrid : WarpGrid;
+        /// <summary>The drawn step changed (zoom, mode, the setting) — the header chip relabels.</summary>
+        public event Action? GridChanged;
+        private double SnapOn(double beat, ResolvedGrid g)
+            => _free || !g.SnapOn ? beat : SnapGrid.SnapBeat(beat, g.Snap.Beats(BeatsPerBar), BeatsPerBar);
+        private double SnapWarp(double beat) => SnapOn(beat, WarpGrid);
+        private double SnapEnv(double beat) => SnapOn(beat, EnvGrid);
+
+        private void OnGrid(EditorKind k) { if (k == EditorKind.PianoRoll) InvalidateVisual(); }
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            EditorGrids.Shared.Changed += OnGrid;
+        }
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnDetachedFromVisualTree(e);
+            EditorGrids.Shared.Changed -= OnGrid;
+        }
         private const double MinSrcFrames = 256;
         private static readonly Cursor ArrowCur = new(StandardCursorType.Arrow);
         private static readonly Cursor ResizeCur = new(StandardCursorType.SizeWestEast);
@@ -683,7 +709,6 @@ public sealed class AudioClipEditorView : UserControl
         }
         public void SetSegmentBpm(int seg, double bpm) => ApplySegmentBpm(seg, bpm, commit: true);
 
-        public void SetSnapToGrid(bool on) { _snapGrid = on; }
         public void SetSourceRate(double sr) { _srcSR = sr; }
         // Whole-sample source-region view (unwarped). totalFrames &lt;= 0 disables the brackets.
         public void SetSourceRegion(double offsetFrames, double lengthFrames, double totalFrames)
@@ -802,8 +827,6 @@ public sealed class AudioClipEditorView : UserControl
         private double TotalBeats => _mk.Count > 1 ? Math.Max(1e-6, _mk[^1].beat) : 1;
         private double BeatToX(double beat, double w) => FracToX(beat / TotalBeats, w);
         private double XToBeat(double x, double w) => Math.Clamp(XToFrac(x, w), 0, 1) * TotalBeats;
-        // Snap a beat to the nearest whole-beat grid line (the 1.1, 1.2 … grid).
-        private static double SnapBeat(double beat) => Math.Round(beat);
 
         private int HitMarker(double x, double w)
         {
@@ -815,6 +838,7 @@ public sealed class AudioClipEditorView : UserControl
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             double W = Bounds.Width, H = Bounds.Height;
+            _free = (e.KeyModifiers & KeyModifiers.Alt) != 0;
 
             // ADSR mode takes over the pointer: grab a handle (double-click resets its stage).
             if (_adsrMode)
@@ -882,7 +906,7 @@ public sealed class AudioClipEditorView : UserControl
                     return;
                 }
                 if (right) return;
-                var np = new EnvPt { beat = EnvXToBeat(p.X, W), val = EnvYToVal(p.Y, H) };   // add + grab
+                var np = new EnvPt { beat = SnapEnv(EnvXToBeat(p.X, W)), val = EnvYToVal(p.Y, H) };   // add + grab
                 _env.Add(np);
                 _envDrag = _env.IndexOf(np);
                 e.Pointer.Capture(this);
@@ -921,7 +945,7 @@ public sealed class AudioClipEditorView : UserControl
             {
                 int hit = HitMarker(x, w);
                 if (hit > 0 && hit < _mk.Count - 1) { _mk.RemoveAt(hit); Commit(); }   // delete interior
-                else AddMarker(SnapBeat(XToBeat(x, w)));                                // add on the grid
+                else AddMarker(SnapWarp(XToBeat(x, w)));                                // add on the grid
                 e.Handled = true;
                 return;
             }
@@ -957,6 +981,7 @@ public sealed class AudioClipEditorView : UserControl
 
         protected override void OnPointerMoved(PointerEventArgs e)
         {
+            _free = (e.KeyModifiers & KeyModifiers.Alt) != 0;   // live, so Alt can toggle mid-drag
             if (_adsrDrag != AdsrHandle.None)
             {
                 var p = e.GetPosition(this);
@@ -994,7 +1019,7 @@ public sealed class AudioClipEditorView : UserControl
             if (_envDrag >= 0)
             {
                 var p = e.GetPosition(this);
-                _env[_envDrag].beat = EnvXToBeat(p.X, Bounds.Width);
+                _env[_envDrag].beat = SnapEnv(EnvXToBeat(p.X, Bounds.Width));
                 _env[_envDrag].val = EnvYToVal(p.Y, Bounds.Height);
                 InvalidateVisual();
                 return;
@@ -1031,7 +1056,7 @@ public sealed class AudioClipEditorView : UserControl
             {
                 const double minBeat = 0.05;
                 double bt = XToBeat(e.GetPosition(this).X, Bounds.Width);
-                if (_snapGrid) bt = SnapBeat(bt);   // land the edge exactly on the beat grid
+                bt = SnapWarp(bt);   // land the edge exactly on the grid (Alt / snap off: free)
                 if (_trimDrag == 0) _trimStart = Math.Clamp(bt, 0, _trimEnd - minBeat);
                 else _trimEnd = Math.Clamp(bt, _trimStart + minBeat, _trimTotal);
                 InvalidateVisual();
@@ -1050,7 +1075,7 @@ public sealed class AudioClipEditorView : UserControl
                 return;
             }
             double w = Bounds.Width;
-            double b = SnapBeat(XToBeat(e.GetPosition(this).X, w));   // align to the beat grid
+            double b = SnapWarp(XToBeat(e.GetPosition(this).X, w));   // align to the grid
             double lo = _mk[_drag - 1].beat + 1e-3, hi = _mk[_drag + 1].beat - 1e-3;  // stay between neighbours
             _mk[_drag] = (_mk[_drag].src, Math.Clamp(b, lo, hi));   // source fixed; beat moves (warp)
             InvalidateVisual();
@@ -1249,11 +1274,9 @@ public sealed class AudioClipEditorView : UserControl
         }
 
         // ---- ruler / grid density ----------------------------------------------
-        private const double GridMinPx = 8;     // closest two grid lines may sit
         private const double TickMinPx = 6;     // closest two ruler ticks may sit
         private const double LabelPadPx = 12;   // gap after a ruler label
         // Beat steps the ruler and grid choose from: sub-beats (power-of-two), beats, then bars ×2ⁿ.
-        private const double GridFinest = 1.0 / 16;   // the wave grid stops at 64ths (ruler ticks go finer)
         private static readonly double[] BeatSteps = BuildBeatSteps();
         private static double[] BuildBeatSteps()
         {
@@ -1308,20 +1331,27 @@ public sealed class AudioClipEditorView : UserControl
             ctx.DrawLine(StripEdge, new Point(0, top - 0.5), new Point(w, top - 0.5));
             DrawRuler(ctx, w);
 
-            // Beat grid through the wave (warped: the beats are known), thinned to the zoom so
-            // a long clip doesn't turn into a solid comb; only the visible slice is walked.
-            if (_mk.Count > 1)
+            // The snap grid through the wave: one line per snap position at the drawn step
+            // (SnapGrid.GridLines, the same set the drags land on). Envelope mode draws the
+            // envelope's played timeline; otherwise the warp beats (warped clips only — an
+            // unwarped clip has no beat grid). Only the visible slice is walked.
+            var drawn = DrawnGrid;
+            if (_envMode || _mk.Count > 1)
             {
-                double tb = TotalBeats;
-                double step = Math.Max(GridFinest, BeatStep(_zoom * w / tb, GridMinPx));
-                var (b0, b1) = VisibleBeats(w);
-                for (double b = Math.Max(step, Math.Floor(b0 / step) * step); b <= Math.Min(b1, tb - 1e-6); b += step)
+                double step = drawn.Draw.Beats(BeatsPerBar);
+                double total = _envMode ? _clipBeats : TotalBeats;
+                double b0, b1;
+                if (_envMode) { b0 = EnvXToBeat(0, w); b1 = EnvXToBeat(w, w); }
+                else (b0, b1) = VisibleBeats(w);
+                foreach (double b in SnapGrid.GridLines(b0, Math.Min(b1, total - 1e-6), step, BeatsPerBar))
                 {
-                    double x = BeatToX(b, w);
+                    if (b < 1e-9) continue;   // the clip's own left edge
+                    double x = _envMode ? EnvBeatToX(b, w) : BeatToX(b, w);
                     bool bar = IsMultiple(b, BeatsPerBar);
                     ctx.DrawLine(bar ? GridBarPen : GridBeatPen, new Point(x + 0.5, top), new Point(x + 0.5, h));
                 }
             }
+            if (drawn != _lastDrawn) { _lastDrawn = drawn; Dispatcher.UIThread.Post(() => GridChanged?.Invoke()); }
 
             // Peaks span the whole clip (frac 0..1); route through the zoom/scroll axis so
             // zooming magnifies the waveform and only the visible slice is drawn.

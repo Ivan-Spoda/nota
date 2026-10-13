@@ -314,8 +314,34 @@ Task: "T023 Quantize + MidiToolsView use Grids.Quantize"
 
 ## Phase 7: Convergence
 
-- [ ] T054 Make ⌘1–⌘5 work while the floating detail window is active on macOS: that window has no native menu, so the key equivalents never fire there. In `src/managed/Nota.App/MainWindow.Input.cs` `HandleFloatingKeyDown`, match ⌘/Ctrl + 1–5 (no Alt/Shift) and run `grid.narrower` / `grid.wider` / `grid.triplets` / `grid.snap` / `grid.adaptive` through `_commands.Run`, then mark the key handled. Keep Windows/Linux from running it twice (their `TryMenuShortcut` path). Per FR-013 and plan R9 (partial)
-- [ ] T055 Snap the dragged note edge's absolute position in the piano roll, not only the drag delta. In `src/managed/Nota.App/PianoRollView.cs` (`Mode.Resize` / `Mode.ResizeLeft`, `_resizeAnchor`), the end (or start) of the grabbed note should land on `SnapBeat(XToBeat(p.X))`, and the other selected notes should move by the same delta. Today a note whose end is off the grid keeps that offset when you resize it. Per US1/AC3 and FR-008 (partial)
-- [ ] T056 Decide and reconcile the arrangement toolbar label with FR-011, which requires "Auto · <step>" in Adaptive mode. The toolbar cell shows the step plus an "AUTO GRID" caption (`src/managed/Nota.App/SnapChip.cs`, `MainWindow.axaml` SnapChip cell). Either render "Auto · 1/8" in the cell, or amend FR-011 in spec.md to allow the two-line toolbar variant that is already documented in contracts/grid-ui.md. Per FR-011 (contradicts)
-- [ ] T057 Ignore grid shortcuts while a text field has keyboard focus: on macOS the native menu fires ⌘1–⌘5 even in a TextBox. Add a guard at the top of `StepGrid` in `src/managed/Nota.App/MainWindow.Commands.cs`: return if the focused element is inside a `TextBox` or `NumericUpDown`. Per spec Edge Cases "Text entry" (partial)
-- [ ] T058 Fix the snap controls' width to their widest label so they never shift while zooming. The toolbar value `MinWidth="46"` (`src/managed/Nota.App/MainWindow.axaml`) fits "1/16T" but not "2 bars" / "4 bars". The piano-roll chip's `MinWidth = 82` (`src/managed/Nota.App/SnapChip.cs`) is narrower than "Auto · 4 bars". Measure the widest label in the mono font, or raise the minimums. Per plan Risks (toolbar width) (partial)
+- [X] T054 Make ⌘1–⌘5 work while the floating detail window is active on macOS: that window has no native menu, so the key equivalents never fire there. In `src/managed/Nota.App/MainWindow.Input.cs` `HandleFloatingKeyDown`, match ⌘/Ctrl + 1–5 (no Alt/Shift) and run `grid.narrower` / `grid.wider` / `grid.triplets` / `grid.snap` / `grid.adaptive` through `_commands.Run`, then mark the key handled. Keep Windows/Linux from running it twice (their `TryMenuShortcut` path). Per FR-013 and plan R9 (partial)
+- [X] T055 Snap the dragged note edge's absolute position in the piano roll, not only the drag delta. In `src/managed/Nota.App/PianoRollView.cs` (`Mode.Resize` / `Mode.ResizeLeft`, `_resizeAnchor`), the end (or start) of the grabbed note should land on `SnapBeat(XToBeat(p.X))`, and the other selected notes should move by the same delta. Today a note whose end is off the grid keeps that offset when you resize it. Per US1/AC3 and FR-008 (partial)
+- [X] T056 Decide and reconcile the arrangement toolbar label with FR-011, which requires "Auto · <step>" in Adaptive mode. The toolbar cell shows the step plus an "AUTO GRID" caption (`src/managed/Nota.App/SnapChip.cs`, `MainWindow.axaml` SnapChip cell). Either render "Auto · 1/8" in the cell, or amend FR-011 in spec.md to allow the two-line toolbar variant that is already documented in contracts/grid-ui.md. Per FR-011 (contradicts)
+- [X] T057 Ignore grid shortcuts while a text field has keyboard focus: on macOS the native menu fires ⌘1–⌘5 even in a TextBox. Add a guard at the top of `StepGrid` in `src/managed/Nota.App/MainWindow.Commands.cs`: return if the focused element is inside a `TextBox` or `NumericUpDown`. Per spec Edge Cases "Text entry" (partial)
+- [X] T058 Fix the snap controls' width to their widest label so they never shift while zooming. The toolbar value `MinWidth="46"` (`src/managed/Nota.App/MainWindow.axaml`) fits "1/16T" but not "2 bars" / "4 bars". The piano-roll chip's `MinWidth = 82` (`src/managed/Nota.App/SnapChip.cs`) is narrower than "Auto · 4 bars". Measure the widest label in the mono font, or raise the minimums. Per plan Risks (toolbar width) (partial)
+
+---
+
+## Phase 8: User Story 4 - The same grid in the audio clip editor (Priority: P2)
+
+**Goal**: The audio clip editor snaps its trim brackets, warp markers and envelope points
+to the grid it draws, using the piano roll's setting and the same chip (spec US4,
+FR-018–FR-021, research R13).
+
+**Independent Test**: Open a warped clip; zoom in and out; drag a warp marker, a trim
+bracket and an envelope point; each lands on a drawn line; the chip shows the step;
+⌥ drags freely (US4 acceptance 1–5).
+
+- [X] T059 [US4] In `src/managed/Nota.App/AudioClipEditorView.cs` `WaveformView`:
+  - add `ResolvedGrid WarpGrid` (`SnapGrid.Resolve(EditorGrids.Shared.Get(EditorKind.PianoRoll), _zoom * Bounds.Width / TotalBeats, BeatsPerBar)`) and `ResolvedGrid EnvGrid` (the same at `_zoom * Bounds.Width / _clipBeats`);
+  - add a `GridChanged` event raised from `InvalidateVisual` callers when the drawn axis's grid changes;
+  - subscribe to `EditorGrids.Changed` while attached (redraw on `EditorKind.PianoRoll`).
+- [X] T060 [US4] Replace the static whole-beat `SnapBeat` with an axis-aware snap that honours `SnapOn` and a live Alt flag (set from `e.KeyModifiers` on press and move):
+  - trim brackets (around line 1034, replacing the `_snapGrid` flag);
+  - warp-marker add (double-click, around line 924) and drag (around line 1053);
+  - envelope point add (around line 885) and drag (around line 997), on the envelope axis.
+- [X] T061 [US4] Draw the wave grid with `SnapGrid.GridLines` at the drawn step: warp axis (`BeatToX`) normally, envelope axis (`EnvBeatToX`) in Envelope mode (warped or not). Replace the `BeatStep`/`GridFinest` thinning in the grid loop (around line 1316). Keep the ruler's own label and tick logic.
+- [X] T062 [US4] In the `AudioClipEditorView` header (around line 208), replace the Snap `SwitchRow` and `_snapToGrid` / `ToggleSnap` / `SetSnapToGrid` with `SnapChip.Create(EditorKind.PianoRoll, () => _wave.DrawnGrid)`, wired to `_wave.GridChanged`. Update the file's header comment.
+- [X] T063 [US4] Shortcut target and status line (FR-021): in `src/managed/Nota.App/MainWindow.Commands.cs`, `GridTarget()` returns the clip editor when the detail area was used last and `_clipEditor` or `_audioEditor` is open. `StepGrid` resolves the label from the open editor and names it "Clip editor grid".
+- [X] T064 [US4] Docs: CHANGELOG entry (the audio editor joins the grid; the Snap switch is replaced), FEATURES.md audio-editor bullet, nota-docs `editing/audio-clips` EN + RU (and `basics/transport` snap-grid section: "the clip editors share one setting"), re-shoot `editing/audio-clip-editor`, then `npm run build` and `npm run check`.
+- [X] T065 [US4] Verify with the headless harness (warped clip: marker, trim and envelope drags with and without ⌥; chip label shared with the piano roll) and run `scripts/build.sh`.

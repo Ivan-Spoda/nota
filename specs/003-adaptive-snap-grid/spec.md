@@ -47,6 +47,9 @@ expectations), [`BUILD.md`](../../BUILD.md), [`DESIGN.md`](../../DESIGN.md),
 - Q: What step does piano-roll Quantize use when the grid is adaptive? → A: Its own Quantize value in the GRID panel (default 1/16, triplets available), independent of the grid mode and zoom.
 - Q: Are the arrangement and piano-roll grid settings independent or shared? → A: Independent — each editor has its own mode, density, fixed step, triplets and snap on/off.
 - Q: In Fixed mode, what is drawn when the chosen step's lines would merge at a far zoom? → A: Lines are thinned to the density threshold; snapping still uses the chosen step; the snap control marks that the step is finer than the visible grid.
+- Q: How does the arrangement's two-line toolbar cell show Adaptive mode? → A: Step on top, "AUTO GRID" caption below ("GRID" when Fixed), instead of "Auto · <step>" on one line.
+- Q: Does the audio clip editor get the grid, and with which setting? → A: Yes, as a fourth story. It shares the piano roll's setting: both are the clip editor in the detail panel, one chip and one setting.
+- Q: What snaps in the audio clip editor? → A: The trim brackets, warp markers and envelope points.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -144,6 +147,35 @@ snapped positions fall on triplet divisions at several zoom levels and with a fi
 
 ---
 
+### User Story 4 - The same grid in the audio clip editor (Priority: P2)
+
+A user warps a drum loop and trims it in the audio clip editor. As in the piano roll, they
+zoom in to place a warp marker on a sixteenth, zoom out to trim to whole bars, and draw
+clip-envelope points on the lines they see. The grid control sits in the editor's header,
+where the old on/off Snap switch was.
+
+**Why this priority**: The audio editor draws a grid that subdivides with zoom but snaps
+only to whole beats — the original complaint, in a second editor. Without it the feature
+is half done for audio users.
+
+**Independent Test**: Open a warped audio clip, zoom in and out, and drag a warp marker, a
+trim bracket and an envelope point. Each lands on a drawn line, and the header chip shows
+the step.
+
+**Acceptance Scenarios**:
+
+1. **Given** a warped audio clip zoomed in until sixteenth lines are drawn, **When** the
+   user drags a warp marker, **Then** it lands on the nearest drawn sixteenth line.
+2. **Given** the same clip zoomed out to bar lines, **When** the user drags a trim bracket,
+   **Then** the edge lands on a bar line.
+3. **Given** Envelope mode, **When** the user adds or drags an envelope point, **Then** its
+   time lands on a drawn line of the envelope's own timeline.
+4. **Given** the piano roll was set to Fixed 1/8, **When** the user opens an audio clip,
+   **Then** the audio editor's chip reads "1/8": the two clip editors share one setting.
+5. **Given** any of these drags, **When** the user holds Alt, **Then** the item moves freely.
+
+---
+
 ### Edge Cases
 
 - **Extreme zoom-in**: adaptive never goes finer than 1/32 (1/32T with triplets), even if
@@ -170,6 +202,11 @@ snapped positions fall on triplet divisions at several zoom levels and with a fi
   piano roll). When neither has focus (for example after clicking a toolbar button or a
   device card), they act on the editor the user last worked in.
 - **Text entry**: shortcuts do not fire while the user types in a text field.
+- **Unwarped audio clips**: they have no beat grid, so the trim brackets keep moving by
+  source frames and no beat lines are drawn. The envelope still uses the clip's played
+  timeline, so in Envelope mode lines and snapping work as for a warped clip.
+- **Reversed audio clips**: the grid mirrors with the waveform, as the beat lines do today.
+  The envelope stays in playing order (left to right), and so does its grid.
 
 ## Requirements *(mandatory)*
 
@@ -224,7 +261,9 @@ snapped positions fall on triplet divisions at several zoom levels and with a fi
 
 - **FR-011**: Each editor MUST have a snap control showing the current state: "Auto · <step>"
   in Adaptive mode (the step updates live with zoom), "<step>" in Fixed mode, a triplet
-  suffix "T" when applicable, and a clear off state when Snap is off.
+  suffix "T" when applicable, and a clear off state when Snap is off. The arrangement's
+  toolbar cell MAY split this over its two lines to stay narrow: the step on top and the
+  caption "AUTO GRID" (Adaptive) or "GRID" (Fixed) below.
 - **FR-012**: Clicking the snap control MUST open a menu with: Adaptive Narrow / Medium /
   Wide, each fixed step from FR-002, a Triplets toggle, and Snap on/off, with the current
   choice marked. Choosing an item MUST apply it immediately. This menu MUST replace the
@@ -243,6 +282,22 @@ snapped positions fall on triplet divisions at several zoom levels and with a fi
 - **FR-015**: The new shortcuts MUST appear in Preferences → Shortcuts and in the app menu
   where editing commands are listed.
 
+**Audio clip editor**
+
+- **FR-018**: The audio clip editor MUST use the piano roll's grid setting (one setting
+  for both clip editors) and show it with the same chip and menu in its header. The chip
+  MUST replace the old Snap switch.
+- **FR-019**: For warped clips, the trim brackets and warp markers MUST snap to the step in
+  effect, resolved from the editor's zoom on the warp-beat axis. The drawn beat lines MUST
+  come from the same positions. Warp markers MUST follow snap on/off and Alt (today they
+  always snap to whole beats).
+- **FR-020**: In Envelope mode, envelope points MUST snap in time to the step in effect on
+  the envelope's own timeline (the clip's played beats), and the drawn lines MUST follow
+  that timeline. The value axis is not snapped.
+- **FR-021**: The grid shortcuts MUST act on the audio clip editor when it is the clip
+  editor used last, as they do for the piano roll. The status line names it "Clip editor
+  grid".
+
 **Defaults and persistence**
 
 - **FR-016**: On first launch (no saved preference) both editors MUST start in
@@ -253,7 +308,7 @@ snapped positions fall on triplet divisions at several zoom levels and with a fi
 
 ### Key Entities
 
-- **Grid setting** (one per editor): mode (Adaptive or Fixed), density (Narrow, Medium,
+- **Grid setting** (one for the arrangement, one shared by the two clip editors): mode (Adaptive or Fixed), density (Narrow, Medium,
   Wide; remembered while in Fixed), fixed step (remembered while in Adaptive), triplets
   on/off, snap on/off.
 - **Quantize value** (piano roll only): a straight or triplet step used by Quantize,
@@ -288,8 +343,9 @@ snapped positions fall on triplet divisions at several zoom levels and with a fi
   close to its current default.
 - 1/64 and 1/32T exist today only in the piano roll's fixed list. 1/64 is dropped and the
   ladder stops at 1/32 in both editors. 1/32T stays as the finest triplet step.
-- The two editors share only the rule that computes the step in effect, not the setting
-  itself (FR-001).
+- The arrangement and the clip editors share only the rule that computes the step in
+  effect, not the setting itself (FR-001). The piano roll and the audio clip editor share
+  the setting too (FR-018).
 - ⌘1–⌘5 are currently unused in Nota. If the plan finds a conflict, the binding moves and
   the spec is updated.
 - The MCP and Remote surfaces are out of scope. They do not expose the snap grid today.

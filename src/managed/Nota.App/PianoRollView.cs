@@ -967,7 +967,7 @@ public sealed partial class PianoRollView : UserControl
         private readonly Dictionary<int, (double start, int pitch, double len)> _orig = new();
         private int _primary = -1;
         private double _grabBeat;       // pointer-beat minus primary start, at grab (Move)
-        private double _resizeAnchor;   // snapped pointer-beat at grab (Resize)
+        private double _edgeGrab;       // pointer beat minus the grabbed edge at press (Resize / ResizeLeft)
 
         // Marquee (grid coords) + the selection to union with when additive.
         private Point _marqueeA, _marqueeB;
@@ -1191,7 +1191,13 @@ public sealed partial class PianoRollView : UserControl
                 foreach (int i in _o._selection)
                     if (i >= 0 && i < _o._notes.Count) { var nn = _o._notes[i]; _orig[i] = (nn.StartBeat, nn.Pitch, nn.LengthBeats); }
                 _preDrag.Clear(); _preDrag.AddRange(_o._notes); _liveStarted = false;
-                if (edge != 0) { _drag = edge > 0 ? Mode.Resize : Mode.ResizeLeft; _resizeAnchor = Snap(XToBeat(p.X)); Cursor = ResizeCursor; _cursorKind = 1; }
+                if (edge != 0)
+                {
+                    _drag = edge > 0 ? Mode.Resize : Mode.ResizeLeft;
+                    var g = _orig[hit];
+                    _edgeGrab = XToBeat(p.X) - (edge > 0 ? g.start + g.len : g.start);
+                    Cursor = ResizeCursor; _cursorKind = 1;
+                }
                 else { _drag = Mode.Move; _grabBeat = XToBeat(p.X) - _o._notes[hit].StartBeat; Cursor = MoveCursor; _cursorKind = 2; }
                 _lastGrid = p;
                 _o.Invalidate(); _o.Changed?.Invoke();
@@ -1245,7 +1251,10 @@ public sealed partial class PianoRollView : UserControl
             }
             else if (_drag == Mode.Resize)
             {
-                double dLen = Snap(XToBeat(p.X)) - _resizeAnchor;
+                // The grabbed note's end lands on the grid (not just the drag distance); the
+                // rest of the selection changes by the same amount.
+                var pr = _orig[_primary];
+                double dLen = Snap(XToBeat(p.X) - _edgeGrab) - (pr.start + pr.len);
                 foreach (var kv in _orig)
                 {
                     var n = _o._notes[kv.Key];
@@ -1259,7 +1268,8 @@ public sealed partial class PianoRollView : UserControl
             {
                 // Move the start, keep the end: clamp so no note passes its own end (minus
                 // one grid step) or the clip's start.
-                double dStart = Snap(XToBeat(p.X)) - _resizeAnchor;
+                var pr = _orig[_primary];
+                double dStart = Snap(XToBeat(p.X) - _edgeGrab) - pr.start;
                 foreach (var v in _orig.Values)
                     dStart = Math.Clamp(dStart, -v.start, Math.Max(-v.start, v.len - _o.MinNoteLen));
                 foreach (var kv in _orig)

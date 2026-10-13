@@ -18,13 +18,16 @@ Settings → Shortcuts.
 - Target editor (research R9): the piano roll if the detail area was used last and a
   MIDI clip editor is showing, otherwise the arrangement.
 - Each command sets the status line to `"<Editor> grid: <control label>"`, for example
-  "Arrangement grid: Auto · 1/4" or "Piano roll grid: Snap off" (FR-014).
+  "Arrangement grid: Auto · 1/4" or "Clip editor grid: Snap off" (FR-014). The piano roll
+  and the audio clip editor share one setting and are both "Clip editor".
+- Target editor: the clip editor (MIDI or audio) if the detail area was used last and one
+  is open, otherwise the arrangement.
 - The commands are always available; the palette never greys them out.
 - Menu: Edit → Grid submenu with the five items, in this order.
 
 ## Settings → Shortcuts
 
-A new group `GRID (ARRANGEMENT OR PIANO ROLL — WHICHEVER YOU USED LAST)`:
+A new group `GRID (ARRANGEMENT OR CLIP EDITOR — WHICHEVER YOU USED LAST)`:
 
 | Keys | Description |
 |------|-------------|
@@ -43,6 +46,7 @@ effect.
 |--------|----------|----------|
 | Arrangement | The existing toolbar cell `SnapChip` / `SnapLabel` | Forward-only cycling (`OnCycleSnap`) |
 | Piano roll | A new chip in the clip-editor header's right group, before Scale | The GRID dropdown's role as the snap step |
+| Audio clip editor | The same chip in its header's right group, before the file format | The Snap switch (trim only, whole beats) |
 
 ### Label states
 

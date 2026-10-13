@@ -142,6 +142,15 @@ to `ArrangementGrid.SnapOn` in both directions.
   `TryMenuShortcut` path on Windows and Linux).
 - A GRID group in Settings → Shortcuts. The palette smoke test enforces it.
 
+### 7a. Audio clip editor — `AudioClipEditorView.cs` (US4, research R13)
+
+The header's Snap switch is replaced by a `SnapChip(EditorKind.PianoRoll, …)` that reads
+the drawn axis. `WaveformView` resolves the grid per axis. It replaces the static
+`SnapBeat` (whole beats) and the private `BeatStep` grid thinning with `SnapGrid.SnapBeat`
+and `SnapGrid.GridLines`, honours `SnapOn` and Alt for the trim brackets, the warp markers
+(add and drag) and the envelope points (add and drag), and draws the grid on the envelope
+axis in Envelope mode. `GridTarget()` and the status line cover it (FR-021).
+
 ### 7. Tests — `tests/Nota.SmokeTest/SnapGridTests.cs` (new) + `Program.cs`
 
 A `--grid` flag and an entry in the full run, following the `TapTempoTests` pattern. The
@@ -181,6 +190,7 @@ src/managed/
     ├── ArrangementView.Controls.cs    # ruler/footer grid lines
     ├── PianoRollView.cs               # _resolved, BeatsPerBar, nudges, quantize
     ├── PianoRollView.Expression.cs    # lane grid lines
+    ├── AudioClipEditorView.cs         # US4: chip, grid per axis, snapping (R13)
     ├── MidiToolsView.cs               # MidiToolContext.Grid = Quantize step (R11)
     ├── ClipPropsView.cs               # GRID → QUANTIZE
     ├── ClipEditorView.cs              # header SnapChip

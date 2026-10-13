@@ -36,13 +36,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   shortcuts act on the editor you used last: **⌘1 / ⌘2** narrow / widen the grid (in Auto,
   the density), **⌘3** triplets, **⌘4** snap on / off, **⌘5** Auto ↔ fixed (Ctrl on
   Windows and Linux; also under **Edit → Grid**). The settings are remembered app-wide,
-  separately for each editor. Holding **⌥ / Alt** while dragging now moves notes freely
-  in the piano roll too.
+  one for the arrangement and one shared by the clip editors. Holding **⌥ / Alt** while
+  dragging now moves notes freely in the piano roll too.
+- **Snap grid in the audio clip editor:** the trim brackets, warp markers and clip-envelope
+  points snap to the grid drawn in the waveform, with the same chip, menu and shortcuts as
+  the piano roll (they share one setting). Warp markers follow snap on / off and ⌥ — they
+  used to stick to whole beats.
 
 ### Changed
 - **Grid controls:** clicking the toolbar's GRID cell (and the new grid chip in the piano
   roll's header) opens a menu with every grid option instead of cycling through five
-  values. The arrangement now draws sub-beat lines when zoomed in. The piano roll's GRID
+  values. The arrangement now draws sub-beat lines when zoomed in. The audio clip editor's
+  Snap switch is replaced by the grid chip. The piano roll's GRID
   section is now **QUANTIZE**: Quantize and the clip tools use their own step (1/16 by
   default, triplets available), which no longer changes with the zoom. Press **⌘5** to go
   back to a fixed grid.

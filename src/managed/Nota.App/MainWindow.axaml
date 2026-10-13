@@ -247,11 +247,11 @@
             </StackPanel>
           </Button>
           <!-- Clip snap grid (SnapChip.cs): the step in effect, live with the zoom in Auto;
-               click for the grid menu. MinWidth fits the widest value (1/16T). -->
+               click for the grid menu. SnapChip sizes the value to its widest label. -->
           <Button x:Name="SnapChip" Classes="cell">
             <StackPanel Spacing="2">
               <TextBlock x:Name="SnapLabel" Classes="Mono" Text="1/4" FontSize="14" LineHeight="16"
-                         MinWidth="46" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
+                         MinWidth="36" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
               <TextBlock x:Name="SnapCaption" Classes="CellLabel" Text="GRID" HorizontalAlignment="Center"/>
             </StackPanel>
           </Button>

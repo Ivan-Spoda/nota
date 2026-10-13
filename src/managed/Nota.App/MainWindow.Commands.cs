@@ -8,8 +8,10 @@
 
 using System;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Application.Editing;
@@ -185,22 +187,33 @@ public partial class MainWindow
                                 : "Envelopes follow clips";
     }
 
-    // The grid shortcuts act on the piano roll when the detail area (docked or floating) was
-    // used last and a MIDI clip is open in it; otherwise on the arrangement.
+    // The grid shortcuts act on the clip editor (piano roll or audio — they share one setting)
+    // when the detail area (docked or floating) was used last and one is open in it; otherwise
+    // on the arrangement.
     private EditorKind GridTarget()
     {
-        bool rollOpen = _editorRoll is { } roll && _clipEditor is not null && roll.IsEffectivelyVisible;
+        bool clipOpen = (_editorRoll is { } roll && _clipEditor is not null && roll.IsEffectivelyVisible)
+                        || _audioEditor is { IsEffectivelyVisible: true };
         bool detailLast = _detailWasLastFocused || _detailWindow?.IsActive == true;
-        return rollOpen && detailLast ? EditorKind.PianoRoll : EditorKind.Arrangement;
+        return clipOpen && detailLast ? EditorKind.PianoRoll : EditorKind.Arrangement;
     }
 
     private void StepGrid(Func<GridSetting, GridSetting> step)
     {
+        // Typing in a field: the macOS menu would still fire ⌘1–⌘5 — leave the grid alone.
+        // The command palette's own field is the exception: running the command from there is
+        // the point.
+        var focused = (_detailWindow?.IsActive == true ? _detailWindow.FocusManager : FocusManager)?.GetFocusedElement() as Visual;
+        bool typing = focused?.FindAncestorOfType<TextBox>(includeSelf: true) is not null
+                      || focused?.FindAncestorOfType<NumericUpDown>(includeSelf: true) is not null;
+        if (typing && focused?.FindAncestorOfType<CommandPaletteView>() is null) return;
         var kind = GridTarget();
         var grids = EditorGrids.Shared;
         grids.Set(kind, step(grids.Get(kind)));
-        var r = kind == EditorKind.PianoRoll && _editorRoll is { } roll ? roll.SnapGridState : Timeline.SnapGridState;
+        var r = kind == EditorKind.Arrangement ? Timeline.SnapGridState
+            : _audioEditor is { IsEffectivelyVisible: true } audio ? audio.SnapGridState
+            : _editorRoll?.SnapGridState ?? Timeline.SnapGridState;
         string label = r.SnapOn ? SnapGrid.Label(grids.Get(kind), r) : "Snap off";
-        if (_vm is not null) _vm.StatusText = $"{(kind == EditorKind.PianoRoll ? "Piano roll" : "Arrangement")} grid: {label}";
+        if (_vm is not null) _vm.StatusText = $"{(kind == EditorKind.PianoRoll ? "Clip editor" : "Arrangement")} grid: {label}";
     }
 }

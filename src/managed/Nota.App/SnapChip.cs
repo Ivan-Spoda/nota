@@ -37,7 +37,7 @@ internal sealed class SnapChip
         button.Click += (_, _) => OpenMenu();
         // Subscribed only while on screen: piano-roll chips come and go with every clip.
         void OnChanged(EditorKind k) { if (k == _kind) Refresh(); }
-        button.AttachedToVisualTree += (_, _) => { Grids.Changed += OnChanged; Refresh(); };
+        button.AttachedToVisualTree += (_, _) => { Grids.Changed += OnChanged; FitWidest(); Refresh(); };
         button.DetachedFromVisualTree += (_, _) => Grids.Changed -= OnChanged;
         Refresh();
     }
@@ -52,11 +52,40 @@ internal sealed class SnapChip
         var value = new TextBlock
         {
             FontFamily = NotaFonts.MonoFamily, FontSize = 11, VerticalAlignment = VerticalAlignment.Center,
-            // Fixed to the longest label so the header doesn't shift while zooming.
-            MinWidth = 82, TextAlignment = TextAlignment.Center,
+            TextAlignment = TextAlignment.Center,
         };
-        var b = new Button { Classes = { "chip" }, Padding = new Avalonia.Thickness(10, 0), Content = value };
+        // A grid glyph names the control and a chevron says it opens a menu, like the other
+        // header dropdowns — the value alone read as a static label.
+        var content = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 7,
+            Children =
+            {
+                new Glyph(GlyphKind.Grid, 11) { Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center },
+                value,
+                new Glyph(GlyphKind.ChevronDown, 8) { Foreground = NotaPalette.TextDisabled, VerticalAlignment = VerticalAlignment.Center },
+            },
+        };
+        var b = new Button { Classes = { "chip" }, Padding = new Avalonia.Thickness(10, 0), Content = content };
         return (b, new SnapChip(b, value, null, kind, current));
+    }
+
+    // The value keeps the width of its longest possible label ("Auto · 4 bars", "1/16T"), in
+    // its own font, so the toolbar and the header never shift while zooming.
+    private void FitWidest()
+    {
+        var face = new Typeface(_value.FontFamily, _value.FontStyle, _value.FontWeight);
+        double widest = 0;
+        for (int i = 0; i < GridStep.Count; i++)
+            foreach (bool t in new[] { false, true })
+            {
+                string label = GridStep.Of(i, t).Label;
+                if (_caption is null) label = "Auto · " + label;
+                var ft = new FormattedText(label, NotaNum.Culture,
+                    FlowDirection.LeftToRight, face, _value.FontSize, null);
+                widest = Math.Max(widest, ft.WidthIncludingTrailingWhitespace);
+            }
+        _value.MinWidth = Math.Ceiling(widest) + 2;
     }
 
     /// <summary>Relabels from the live setting and zoom; cheap, and a no-op when nothing changed.</summary>
