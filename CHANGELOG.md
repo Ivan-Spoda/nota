@@ -28,8 +28,24 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   comes back when you leave full screen. The window stays as it was in normal and
   maximized states. On Windows and Linux a new **View → Toggle Full Screen** command
   (shortcut **F11**) enters and leaves full screen; on macOS the green button does it.
+- **Adaptive snap grid:** the arrangement and the piano roll now snap to the grid you see.
+  In **Auto** (the new default) the step follows the zoom — zoom in for eighths and
+  sixteenths, zoom out and clips move by whole bars — with **Narrow / Medium / Wide**
+  density. A fixed step (1/32 … 4 bars) stays put at any zoom; when it is finer than the
+  drawn lines, its label dims. **Triplets** work in both modes and both editors. New
+  shortcuts act on the editor you used last: **⌘1 / ⌘2** narrow / widen the grid (in Auto,
+  the density), **⌘3** triplets, **⌘4** snap on / off, **⌘5** Auto ↔ fixed (Ctrl on
+  Windows and Linux; also under **Edit → Grid**). The settings are remembered app-wide,
+  separately for each editor. Holding **⌥ / Alt** while dragging now moves notes freely
+  in the piano roll too.
 
 ### Changed
+- **Grid controls:** clicking the toolbar's GRID cell (and the new grid chip in the piano
+  roll's header) opens a menu with every grid option instead of cycling through five
+  values. The arrangement now draws sub-beat lines when zoomed in. The piano roll's GRID
+  section is now **QUANTIZE**: Quantize and the clip tools use their own step (1/16 by
+  default, triplets available), which no longer changes with the zoom. Press **⌘5** to go
+  back to a fixed grid.
 - **Drops select their track:** dropping an instrument, effect, preset, sample or MIDI file
   from the browser selects the track it landed on — a newly created track included — in
   both the arrangement and the session view. Moving clips to another track, or dropping a

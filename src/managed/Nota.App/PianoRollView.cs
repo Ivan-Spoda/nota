@@ -21,6 +21,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Application.Midi;
 
 namespace Nota.App;
@@ -69,7 +70,6 @@ public sealed partial class PianoRollView : UserControl
 
     private readonly List<NotaNote> _notes = new();
     private double _lengthBeats = 4;
-    private double _grid = 0.25;
     private readonly HashSet<int> _selection = new();   // indices into _notes
     private ISolidColorBrush _trackBrush = NotaPalette.TrackBrushes[3];   // read .Color at draw time: it follows the theme
     private Color _trackColor => _trackBrush.Color;
@@ -143,7 +143,11 @@ public sealed partial class PianoRollView : UserControl
     internal void EnsurePpb(double viewportW)
     {
         if (_pixelsPerBeat <= 0 && viewportW > 0)
+        {
             _pixelsPerBeat = Math.Clamp(viewportW / _lengthBeats, MinPpb, MaxPpb);
+            // The fit happens mid-render: tell the snap chip after it, not during.
+            Dispatcher.UIThread.Post(NotifyGrid);
+        }
     }
 
     private double MaxScrollBeats
@@ -311,6 +315,12 @@ public sealed partial class PianoRollView : UserControl
             _heldTimer.Start();
         };
         DetachedFromVisualTree += (_, _) => { _heldTimer?.Stop(); if (_held.Count > 0) { _held.Clear(); _keys.InvalidateVisual(); _gridControl.InvalidateVisual(); } };
+
+        // The grid setting (and Quantize step) is app-wide: follow it while on screen only —
+        // a roll is rebuilt for every clip, so a lasting subscription would leak.
+        void OnGrid(EditorKind k) { if (k == EditorKind.PianoRoll) Invalidate(); }
+        AttachedToVisualTree += (_, _) => Grids.Changed += OnGrid;
+        DetachedFromVisualTree += (_, _) => Grids.Changed -= OnGrid;
     }
 
     private void PollHeld()
@@ -345,7 +355,37 @@ public sealed partial class PianoRollView : UserControl
     }
 
     public double LengthBeats => _lengthBeats;
-    public double Grid { get => _grid; set { _grid = Math.Max(1.0 / 32, value); Invalidate(); } }
+
+    /// <summary>Beats per bar from the transport: bar lines, bar-based grid steps and ruler
+    /// numbers follow the time signature.</summary>
+    public int BeatsPerBar { get => _beatsPerBar; set { if (value > 0 && value != _beatsPerBar) { _beatsPerBar = value; Invalidate(); } } }
+    private int _beatsPerBar = 4;
+
+    /// <summary>The app-wide grid state this roll reads (its setting and the Quantize step).</summary>
+    internal EditorGrids Grids => EditorGrids.Shared;
+
+    /// <summary>The snap grid at the current zoom (specs/003-adaptive-snap-grid): the step
+    /// note edits snap to and the finest line drawn. Resolved on demand (allocation-free), so
+    /// zoom and setting changes never leave it stale.</summary>
+    internal ResolvedGrid SnapGridState => SnapGrid.Resolve(Grids.Get(EditorKind.PianoRoll), _pixelsPerBeat, _beatsPerBar);
+
+    /// <summary>The step in effect, in beats: nudges, minimum note length, duplicate shift.</summary>
+    internal double SnapStep => SnapGridState.Snap.Beats(_beatsPerBar);
+
+    /// <summary>The shortest note an edit leaves: one step, or a 1/32 while snap is off.</summary>
+    private double MinNoteLen => SnapGridState.SnapOn ? SnapStep : 0.125;
+
+    /// <summary>A beat on the grid (unchanged while snap is off).</summary>
+    internal double SnapBeat(double b)
+    {
+        var g = SnapGridState;
+        return g.SnapOn ? SnapGrid.SnapBeat(b, g.Snap.Beats(_beatsPerBar), _beatsPerBar) : b;
+    }
+
+    /// <summary>The step in effect changed (zoom, time signature, the setting) — the header
+    /// snap chip relabels.</summary>
+    public event Action? GridChanged;
+    private ResolvedGrid _lastGrid;
 
     public void SetTrackColor(ISolidColorBrush b) { _trackBrush = b; Invalidate(); }
     public ISolidColorBrush TrackBrush => _trackBrush;
@@ -424,8 +464,8 @@ public sealed partial class PianoRollView : UserControl
         if (sel.Count == 0) return false;
         double minStart = double.MaxValue, maxEnd = double.MinValue;
         foreach (int i in sel) { var n = _notes[i]; minStart = Math.Min(minStart, n.StartBeat); maxEnd = Math.Max(maxEnd, n.StartBeat + n.LengthBeats); }
-        double shift = Math.Max(_grid, maxEnd - minStart);
-        double cap = Math.Max(0, _lengthBeats - _grid);
+        double shift = Math.Max(SnapStep, maxEnd - minStart);
+        double cap = Math.Max(0, _lengthBeats - SnapStep);
         var copies = new List<NotaNote>(sel.Count);
         foreach (int i in sel) { var n = _notes[i]; n.StartBeat = Math.Min(n.StartBeat + shift, cap); copies.Add(n); }
         // Like a duplicated clip in the arrangement, the copies overwrite what they land on
@@ -584,12 +624,14 @@ public sealed partial class PianoRollView : UserControl
         Commit?.Invoke(notes ?? _notes);
     }
 
+    /// <summary>Moves note starts toward the Quantize step (its own value, never the zoom's).</summary>
     public void Quantize(double strength)
     {
+        double qStep = Grids.Quantize.Beats(_beatsPerBar);
         for (int i = 0; i < _notes.Count; i++)
         {
             var n = _notes[i];
-            double q = Math.Round(n.StartBeat / _grid) * _grid;
+            double q = SnapGrid.SnapBeat(n.StartBeat, qStep, _beatsPerBar);
             n.StartBeat += (q - n.StartBeat) * Math.Clamp(strength, 0, 1);
             _notes[i] = n;
         }
@@ -643,7 +685,7 @@ public sealed partial class PianoRollView : UserControl
     public bool PasteClipboard()
     {
         if (s_clipboard.Count == 0) return false;
-        double anchor = _playheadBeat >= 0 ? Math.Round(_playheadBeat / _grid) * _grid : s_clipAnchor;
+        double anchor = _playheadBeat >= 0 ? SnapBeat(_playheadBeat) : s_clipAnchor;
         int baseIdx = _notes.Count;
         foreach (var c in s_clipboard)
         {
@@ -651,7 +693,7 @@ public sealed partial class PianoRollView : UserControl
             n.StartBeat = anchor + c.StartBeat;
             if (n.StartBeat >= _lengthBeats) continue;                    // past the clip end → skip
             if (n.StartBeat + n.LengthBeats > _lengthBeats)               // trim a note that overruns
-                n.LengthBeats = Math.Max(_grid, _lengthBeats - n.StartBeat);
+                n.LengthBeats = Math.Max(MinNoteLen, _lengthBeats - n.StartBeat);
             _notes.Add(n);
         }
         if (_notes.Count == baseIdx) return false;
@@ -748,6 +790,13 @@ public sealed partial class PianoRollView : UserControl
         _gridControl.InvalidateVisual();
         _vel.InvalidateVisual();
         _expr.InvalidateVisual();
+        NotifyGrid();
+    }
+
+    private void NotifyGrid()
+    {
+        var g = SnapGridState;
+        if (g != _lastGrid) { _lastGrid = g; GridChanged?.Invoke(); }
     }
 
     private static bool IsBlack(int pitch) { int n = ((pitch % 12) + 12) % 12; return n is 1 or 3 or 6 or 8 or 10; }
@@ -757,17 +806,21 @@ public sealed partial class PianoRollView : UserControl
         return names[((pitch % 12) + 12) % 12] + (pitch / 12 - 1);
     }
 
-    // --- adaptive grid (subdivides as you zoom in) ------------------------
-    private static readonly double[] GridLadder = { 0.0625, 0.125, 0.25, 0.5, 1, 2, 4 };
+    // --- snap grid lines (the same positions SnapBeat lands on) -----------
 
-    // Finest grid step (beats) keeping ≥ ~9px between lines: bars → beats → 1/8 →
-    // 1/16 → 1/32 → 1/64 as the zoom increases.
-    internal double GridStepBeats()
+    /// <summary>The vertical grid of a lane: one line per snap position at the drawn step, in
+    /// the visible part of the clip. Shared by the note grid, the velocity and MPE lanes.</summary>
+    internal void DrawGridLines(DrawingContext ctx, double w, double h)
     {
         double ppb = _pixelsPerBeat;
-        if (ppb <= 0) return 1.0;
-        foreach (var s in GridLadder) if (s * ppb >= 9) return s;
-        return 4.0;
+        if (ppb <= 0) return;
+        double viewEnd = Math.Min(_lengthBeats, ScrollBeats + w / ppb);
+        double step = SnapGridState.Draw.Beats(_beatsPerBar);
+        foreach (double b in SnapGrid.GridLines(ScrollBeats, viewEnd, step, _beatsPerBar))
+        {
+            double x = BeatToX(b) + 0.5;
+            ctx.DrawLine(GridPen(b), new Point(x, 0), new Point(x, h));
+        }
     }
 
     // Coarser step for ruler labels (needs room for text); never finer than a 1/16.
@@ -783,16 +836,16 @@ public sealed partial class PianoRollView : UserControl
     // Line weight for a vertical grid line at beat b: bar > beat > sub-beat.
     internal IPen GridPen(double b)
     {
-        if (Math.Abs(b / 4 - Math.Round(b / 4)) < 1e-6) return BarPen;
+        if (Math.Abs(b / _beatsPerBar - Math.Round(b / _beatsPerBar)) < 1e-6) return BarPen;
         if (Math.Abs(b - Math.Round(b)) < 1e-6) return BeatPen;
         return SubBeatPen;
     }
 
     // Ruler label at beat b: "bar.beat", plus a 1/16 index when mid-beat (e.g. 3.2.3).
-    internal static string GridLabel(double b)
+    internal string GridLabel(double b)
     {
-        int bar = (int)Math.Floor(b / 4) + 1;
-        double inBar = b - Math.Floor(b / 4) * 4;
+        int bar = (int)Math.Floor(b / _beatsPerBar) + 1;
+        double inBar = b - Math.Floor(b / _beatsPerBar) * _beatsPerBar;
         int beat = (int)Math.Floor(inBar) + 1;
         double frac = inBar - Math.Floor(inBar);
         if (frac < 1e-6) return $"{bar}.{beat}";
@@ -818,17 +871,18 @@ public sealed partial class PianoRollView : UserControl
             double loopStart = Math.Max(0, _o.BeatToX(0));
             if (loopEnd > loopStart) ctx.FillRectangle(LoopStrip, new Rect(loopStart, 0, loopEnd - loopStart, 3));
             // Label every beat while there is room for "12.4", else bars only.
-            double step = ppb >= 30 ? 1 : 4;
+            double step = ppb >= 30 ? 1 : _o._beatsPerBar;
             double startB = Math.Max(0, Math.Floor(_o.ScrollBeats / step) * step);
             for (int k = 0; ; k++)
             {
                 double b = startB + k * step;
                 if (b > viewEnd + 1e-9) break;
                 double x = _o.BeatToX(b);
-                bool bar = Math.Abs(b / 4 - Math.Round(b / 4)) < 1e-6;
+                int bpb = _o._beatsPerBar;
+                bool bar = Math.Abs(b / bpb - Math.Round(b / bpb)) < 1e-6;
                 ctx.DrawLine(bar ? BarPen : BeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
                 if (b >= _o._lengthBeats - 1e-9) continue;
-                int barNo = (int)Math.Floor(b / 4) + 1, beatNo = (int)Math.Round(b - Math.Floor(b / 4) * 4) + 1;
+                int barNo = (int)Math.Floor(b / bpb) + 1, beatNo = (int)Math.Round(b - Math.Floor(b / bpb) * bpb) + 1;
                 string label = bar ? barNo.ToString(NotaNum.Culture) : $"{barNo}.{beatNo}";
                 var ft = new FormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, bar ? RulerBarText : LabelText);
                 ctx.DrawText(ft, new Point(x + 4, h - 5 - ft.Height));
@@ -947,7 +1001,9 @@ public sealed partial class PianoRollView : UserControl
         private double XToBeat(double x) => _o.XToBeat(x);
         private static double PitchToY(int p) => (MaxPitch - p) * RowH;
         private int YToPitch(double y) => (int)Math.Clamp(MaxPitch - Math.Floor(y / RowH), MinPitch, MaxPitch);
-        private double Snap(double b) => Math.Round(b / _o._grid) * _o._grid;
+        // Alt held during the gesture positions freely, as in the arrangement (FR-009).
+        private bool _free;
+        private double Snap(double b) => _free ? b : _o.SnapBeat(b);
 
         public override void Render(DrawingContext ctx)
         {
@@ -973,16 +1029,7 @@ public sealed partial class PianoRollView : UserControl
                     if (hp >= MinPitch && hp <= MaxPitch)
                         ctx.FillRectangle(HeldRowTint, new Rect(0, PitchToY(hp), w, RowH));
             double ppb = Ppb;
-            double step = _o.GridStepBeats();
-            double viewEnd = Math.Min(_o._lengthBeats, _o.ScrollBeats + w / Math.Max(1e-6, ppb));
-            double startB = Math.Max(0, Math.Floor(_o.ScrollBeats / step) * step);
-            for (int k = 0; ; k++)
-            {
-                double b = startB + k * step;
-                if (b > viewEnd + 1e-9) break;
-                double x = BeatToX(b);
-                ctx.DrawLine(_o.GridPen(b), new Point(x + 0.5, 0), new Point(x + 0.5, h));
-            }
+            _o.DrawGridLines(ctx, w, h);
             var notes = _o._notes;
             for (int i = 0; i < notes.Count; i++)
             {
@@ -1108,6 +1155,7 @@ public sealed partial class PianoRollView : UserControl
             Focus();
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
             var p = e.GetPosition(this);
+            _free = (e.KeyModifiers & KeyModifiers.Alt) != 0;
             bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
             int hit = HitTest(p, out int edge);
 
@@ -1117,7 +1165,7 @@ public sealed partial class PianoRollView : UserControl
                 if (hit >= 0) { _o._notes.RemoveAt(hit); _o._selection.Clear(); }
                 else
                 {
-                    var nt = new NotaNote(YToPitch(p.Y), Math.Max(0, Snap(XToBeat(p.X))), _o._grid * 4, 0.8f);
+                    var nt = new NotaNote(YToPitch(p.Y), Math.Max(0, Snap(XToBeat(p.X))), _o.MinNoteLen, 0.8f);
                     _o._notes.Add(nt);
                     _o._selection.Clear(); _o._selection.Add(_o._notes.Count - 1);
                 }
@@ -1163,6 +1211,7 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             var p = e.GetPosition(this);
+            _free = (e.KeyModifiers & KeyModifiers.Alt) != 0;   // live, so Alt can toggle mid-drag
             if (_drag == Mode.None) { UpdateHover(p); return; }
             _lastGrid = p;
             DragUpdate(p);
@@ -1181,7 +1230,7 @@ public sealed partial class PianoRollView : UserControl
                 // Clamp the shared delta so the whole group stays in-bounds (keeps shape).
                 double minStart = double.MaxValue; int minP = int.MaxValue, maxP = int.MinValue;
                 foreach (var v in _orig.Values) { minStart = Math.Min(minStart, v.start); minP = Math.Min(minP, v.pitch); maxP = Math.Max(maxP, v.pitch); }
-                double cap = Math.Max(0, _o._lengthBeats - _o._grid);
+                double cap = Math.Max(0, _o._lengthBeats - _o.MinNoteLen);
                 dBeat = Math.Clamp(dBeat, -minStart, Math.Max(0, cap - MaxStart()));
                 dPitch = Math.Clamp(dPitch, MinPitch - minP, MaxPitch - maxP);
                 foreach (var kv in _orig)
@@ -1200,7 +1249,7 @@ public sealed partial class PianoRollView : UserControl
                 foreach (var kv in _orig)
                 {
                     var n = _o._notes[kv.Key];
-                    n.LengthBeats = Math.Max(_o._grid, kv.Value.len + dLen);
+                    n.LengthBeats = Math.Max(_o.MinNoteLen, kv.Value.len + dLen);
                     _o._notes[kv.Key] = n;
                 }
                 _dragMoved = true;
@@ -1212,7 +1261,7 @@ public sealed partial class PianoRollView : UserControl
                 // one grid step) or the clip's start.
                 double dStart = Snap(XToBeat(p.X)) - _resizeAnchor;
                 foreach (var v in _orig.Values)
-                    dStart = Math.Clamp(dStart, -v.start, Math.Max(-v.start, v.len - _o._grid));
+                    dStart = Math.Clamp(dStart, -v.start, Math.Max(-v.start, v.len - _o.MinNoteLen));
                 foreach (var kv in _orig)
                 {
                     var n = _o._notes[kv.Key];
@@ -1370,8 +1419,8 @@ public sealed partial class PianoRollView : UserControl
             {
                 switch (e.Key)
                 {
-                    case Key.Left:  if (_o.MoveSelection(0, -_o._grid)) e.Handled = true; return;
-                    case Key.Right: if (_o.MoveSelection(0, +_o._grid)) e.Handled = true; return;
+                    case Key.Left:  if (_o.MoveSelection(0, -_o.SnapStep)) e.Handled = true; return;
+                    case Key.Right: if (_o.MoveSelection(0, +_o.SnapStep)) e.Handled = true; return;
                     case Key.Up:    if (_o.MoveSelection(shift ? 12 : 1, 0)) e.Handled = true; return;
                     case Key.Down:  if (_o.MoveSelection(shift ? -12 : -1, 0)) e.Handled = true; return;
                 }
@@ -1413,15 +1462,7 @@ public sealed partial class PianoRollView : UserControl
             _o.EnsurePpb(w);
             ctx.FillRectangle(VelBg, new Rect(0, 0, w, h));
             double ppb = Ppb;
-            double step = _o.GridStepBeats();
-            double viewEnd = Math.Min(_o._lengthBeats, _o.ScrollBeats + w / Math.Max(1e-6, ppb));
-            double startB = Math.Max(0, Math.Floor(_o.ScrollBeats / step) * step);
-            for (int k = 0; ; k++)
-            {
-                double b = startB + k * step;
-                if (b > viewEnd + 1e-9) break;
-                ctx.DrawLine(_o.GridPen(b), new Point(_o.BeatToX(b) + 0.5, 0), new Point(_o.BeatToX(b) + 0.5, h));
-            }
+            _o.DrawGridLines(ctx, w, h);
             // A 2px stem per note with a 6×3 cap — the cap is the drag handle.
             var notes = _o._notes;
             for (int i = 0; i < notes.Count; i++)

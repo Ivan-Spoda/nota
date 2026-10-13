@@ -1040,6 +1040,14 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("0", "Deactivate / activate the selected clip(s)"),
             ("Delete", "Delete the selected clip / range"),
         }),
+        ("GRID (ARRANGEMENT OR PIANO ROLL — WHICHEVER YOU USED LAST)", new[]
+        {
+            ("⌘1   ⌘2", "Narrow / widen the grid · in Auto, change the density"),
+            ("⌘3", "Triplet grid on / off"),
+            ("⌘4", "Snap to grid on / off"),
+            ("⌘5", "Switch between the adaptive (Auto) and a fixed grid"),
+            ("⌥ while dragging", "Move freely, ignoring the grid"),
+        }),
         ("TRACKS (AFTER A CLICK IN THE TRACK HEADERS)", new[]
         {
             ("⌘A", "Select all tracks"),

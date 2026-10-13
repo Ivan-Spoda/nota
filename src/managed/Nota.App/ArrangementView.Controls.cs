@@ -186,18 +186,8 @@ public sealed partial class ArrangementView
                 ctx.DrawLine(BeatPen, new Point(0, y + FooterRowH), new Point(w, y + FooterRowH));
             }
 
-            // Vertical grid (bars always; beats when zoomed in).
-            bool showBeats = _o._pixelsPerBeat >= 12;
-            int firstBeat = (int)Math.Floor(_o._scrollBeats);
-            for (int beat = firstBeat; ; beat++)
-            {
-                double x = _o.BeatToX(beat);
-                if (x > w) break;
-                if (x < 0) continue;
-                bool isBar = beat % _o._beatsPerBar == 0;
-                if (isBar) ctx.DrawLine(BarPen, new Point(x, 0), new Point(x, h));
-                else if (showBeats) ctx.DrawLine(BeatPen, new Point(x, 0), new Point(x, h));
-            }
+            // Vertical grid: the snap grid's lines at this zoom — what you see is what you snap to.
+            _o.DrawGrid(ctx, w, h);
 
             // Master row: master-volume automation (M9 follow-up) in automation mode,
             // else a quiet hint. Value axis 0..2 across the row.

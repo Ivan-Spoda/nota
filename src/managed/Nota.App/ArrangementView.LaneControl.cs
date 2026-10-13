@@ -1272,18 +1272,8 @@ public sealed partial class ArrangementView
             if (_o.DropTrackIndex >= 0 && _o.DropTrackIndex < _o._tracks.Count)
                 ctx.FillRectangle(DropWash, new Rect(0, RowTop(_o.DropTrackIndex), w, RowH(_o.DropTrackIndex)));
 
-            // Vertical grid: bars always, beats when zoomed in enough.
-            bool showBeats = _o._pixelsPerBeat >= 12;
-            int firstBeat = (int)Math.Floor(_o._scrollBeats);
-            for (int beat = firstBeat; ; beat++)
-            {
-                double x = _o.BeatToX(beat);
-                if (x > w) break;
-                if (x < 0) continue;
-                bool isBar = beat % _o._beatsPerBar == 0;
-                if (isBar) ctx.DrawLine(BarPen, new Point(x, 0), new Point(x, h));
-                else if (showBeats) ctx.DrawLine(BeatPen, new Point(x, 0), new Point(x, h));
-            }
+            // Vertical grid: the snap grid's lines at this zoom — what you see is what you snap to.
+            _o.DrawGrid(ctx, w, h);
 
             // Clips: a tinted body under a 2px colour band, with the name drawn only where a
             // run of clips starts (design 1a) so a repeating pattern reads as one block instead

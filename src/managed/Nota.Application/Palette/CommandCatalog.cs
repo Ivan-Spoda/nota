@@ -92,6 +92,13 @@ public static class CommandCatalog
         C("roll.octaveDown", "Transpose Notes Down an Octave", "Piano roll", "", "pitch shift"),
         C("roll.removeOutOfScale", "Remove Out-of-Scale Notes", "Piano roll", "", "key fix"),
 
+        // ---- Grid (the arrangement or the piano roll — whichever was used last) -----------
+        C("grid.narrower", "Narrow Grid", "Grid", "⌘1", "finer smaller snap"),
+        C("grid.wider", "Widen Grid", "Grid", "⌘2", "coarser larger snap"),
+        C("grid.triplets", "Toggle Triplet Grid", "Grid", "⌘3", "triplet 1/8T swing"),
+        C("grid.snap", "Toggle Snap to Grid", "Grid", "⌘4", "magnet free"),
+        C("grid.adaptive", "Toggle Adaptive Grid", "Grid", "⌘5", "auto zoom fixed"),
+
         // ---- Settings ---------------------------------------------------------------------
         C("prefs.open", "Settings", "Settings", "⌘,", "preferences options"),
         C("prefs.audio", "Settings: Audio", "Settings", "", "preferences device driver sample rate buffer"),

@@ -311,6 +311,7 @@ public partial class MainWindow : Window
         Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;
         vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
         Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
+        InitSnapGrid();
         // Settings → Appearance can switch the waveform style while the arrangement is open.
         vm.Settings.Changed += () => Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
         Browser.SetViewModel(vm.Browser);
@@ -566,12 +567,6 @@ public partial class MainWindow : Window
         SyncClipTab();   // Clip tab availability is per-context (arrangement vs session)
     }
 
-    // Toolbar Snap chip: cycle the arrangement's clip-drag snap grid.
-    private static readonly (double beats, string label)[] SnapSteps =
-    {
-        (0.25, "1/16"), (0.5, "1/8"), (1.0, "1/4"), (2.0, "1/2"), (4.0, "1 bar"),
-    };
-    private int _snapIndex = 2;   // 1/4
     private void OnPickProjectKey(object? sender, RoutedEventArgs e)
     {
         if (_vm is null) return;
@@ -653,14 +648,6 @@ public partial class MainWindow : Window
             ((Ellipse)TapDots.Children[i]).BindResource(Shape.FillProperty, i < lit ? "Brush.Accent" : "Brush.BorderStrong");
     }
 
-    private void OnCycleSnap(object? sender, RoutedEventArgs e)
-    {
-        _snapIndex = (_snapIndex + 1) % SnapSteps.Length;
-        var (beats, label) = SnapSteps[_snapIndex];
-        Timeline.SnapBeats = beats;
-        SnapLabel.Text = label;
-    }
-
     // A launched scene may carry its own tempo / signature; the engine applies it on the
     // scene's start boundary and the transport follows here.
     private void SyncSceneTempo()
@@ -716,13 +703,25 @@ public partial class MainWindow : Window
         return null;
     }
 
-    // Snap on/off. Separate from the GRID cell, which only picks the denomination:
-    // the latch is what you reach for to nudge something off-grid for a while.
+    // Snap on/off: the latch you reach for to nudge something off-grid for a while. The
+    // same switch as ⌘4 and the grid menu's "Snap to grid" (EditorGrids.Arrangement.SnapOn).
     private void OnToggleSnapEnabled(object? sender, RoutedEventArgs e)
     {
         bool on = SnapToggle.IsChecked == true;
-        Timeline.SnapEnabled = on;
+        var grids = EditorGrids.Shared;
+        grids.Set(EditorKind.Arrangement, grids.Get(EditorKind.Arrangement) with { SnapOn = on });
         if (_vm is not null) _vm.StatusText = on ? "Snap on" : "Snap off — clips position freely";
+    }
+
+    // The toolbar GRID cell and the magnet follow the arrangement's grid wherever it changes
+    // (zoom, the menu, ⌘1–⌘5).
+    private void InitSnapGrid()
+    {
+        var chip = Nota.App.SnapChip.Attach(SnapChip, SnapLabel, SnapCaption, EditorKind.Arrangement, () => Timeline.SnapGridState);
+        Timeline.GridChanged += chip.Refresh;
+        void SyncLatch() => SnapToggle.IsChecked = EditorGrids.Shared.Get(EditorKind.Arrangement).SnapOn;
+        EditorGrids.Shared.Changed += k => { if (k == EditorKind.Arrangement) SyncLatch(); };
+        SyncLatch();
     }
 
     /// <summary>Whether MIDI Learn is armed — device cards with their own Learn button

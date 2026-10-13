@@ -79,7 +79,7 @@ Three top-level views, switched from the toolbar (**Arrangement · Session · Mo
 the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 
 - **Arrangement View** — a linear timeline, floating on the app ground as its own island:
-  place, move, trim and duplicate clips; grid and snap to bars/beats; scroll and zoom;
+  place, move, trim and duplicate clips; the snap grid (below); scroll and zoom;
   recording into the arrangement (audio and MIDI); split at the cursor or across a
   selection (Cmd/Ctrl+E cuts every track in the selection); clip scrubbing on the ruler.
   ⌘A selects every clip; moving several selected clips is one undo step.
@@ -102,6 +102,14 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
     and the name prints only at the head of each run so a repeated pattern reads as one
     block. View ▸ Clip names cycles every clip / first of a run / none; a clip named by
     hand always shows its name.
+- **Snap grid** (arrangement and piano roll, each with its own setting, remembered
+  app-wide): **Auto** follows the zoom so you snap to the lines you see — finer as you zoom
+  in, whole bars zoomed out — in **Narrow / Medium / Wide** density; or a fixed step from
+  1/32 to 4 bars (its label dims when it is finer than the drawn lines). **Triplets** in
+  both modes. The toolbar's GRID cell and the piano roll's header chip open a menu with
+  every option; ⌘1 / ⌘2 narrow / widen (in Auto, the density), ⌘3 triplets, ⌘4 snap
+  on / off, ⌘5 Auto ↔ fixed (also Edit → Grid), acting on the editor used last. Hold ⌥ to
+  drag freely; clip edges still attract a dragged clip.
 - **Session View** — a clip grid (tracks × scenes) with an inspector: named, coloured clips
   with note / waveform previews and a progress pie on the clip's own clock; selection apart
   from launching, keyboard editing (arrows, Return, ⌘C/X/V, ⌘D, ⌘I, F2, Delete) and drag
@@ -163,8 +171,9 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 ## MIDI and virtual instruments
 
 - **MIDI clip**: notes (pitch, start, length, velocity).
-- **Piano Roll**: draw, move, stretch and delete notes; quantization; grid length; a
-  velocity editor; transposing the selection.
+- **Piano Roll**: draw, move, stretch and delete notes on the snap grid; **QUANTIZE** with
+  its own step (1/32 … 1/2, triplets; independent of the zoom) and strength; a velocity
+  editor; transposing the selection.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
   - ⌘D duplicates notes over whatever they land on, like clips in the arrangement.

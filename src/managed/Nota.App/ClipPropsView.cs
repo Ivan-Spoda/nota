@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // The 232px inspector beside the piano roll (nota-design "Nota Clip Editor" 1a): CLIP
-// (Start / Length in bars.beats.16ths, the Loop switch and its length), GRID (grid
-// dropdown, Quantize, strength), TRANSPOSE (− value +) and SELECTION (the selected note's
+// (Start / Length in bars.beats.16ths, the Loop switch and its length), QUANTIZE (its step,
+// Quantize, strength — the snap grid itself is the header chip), TRANSPOSE (− value +) and SELECTION (the selected note's
 // pitch / start / length / velocity, or the range of several), ending in one hint line.
 // Edits drive the PianoRollView; read-outs follow its Changed event.
 
@@ -12,17 +12,20 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Nota.Application.Editing;
 using static Nota.App.ClipEditorKit;
 
 namespace Nota.App;
 
 public sealed class ClipPropsView : UserControl
 {
-    // Grid steps in beats (4/4, one beat = a 1/4 note). Straight divisions then triplets.
-    private static readonly double[] GridValues =
-        { 4.0, 2.0, 1.0, 0.5, 0.25, 0.125, 0.0625, 2.0 / 3, 1.0 / 3, 1.0 / 6, 1.0 / 12 };
-    private static readonly string[] GridLabels =
-        { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/64", "1/4T", "1/8T", "1/16T", "1/32T" };
+    // Quantize steps (the app-wide Settings.QuantizeStep, independent of the snap grid and
+    // the zoom): straight divisions coarse to fine, then triplets. No bar steps.
+    private static readonly GridStep[] QuantizeSteps =
+    {
+        GridStep.Of(4, false), GridStep.Of(3, false), GridStep.Of(2, false), GridStep.Of(1, false), GridStep.Of(0, false),
+        GridStep.Of(4, true), GridStep.Of(3, true), GridStep.Of(2, true), GridStep.Of(1, true), GridStep.Of(0, true),
+    };
 
     private readonly PianoRollView _roll;
     private readonly TextBlock _startText = Mono("");
@@ -34,7 +37,6 @@ public sealed class ClipPropsView : UserControl
     private readonly StackPanel _selRows = new();
     private readonly Border _selCard;
     private readonly Border _selEmpty;
-    private int _gridIndex = 4;   // 1/16
     private int _transpose;
     private double _strength = 0.8;
 
@@ -42,7 +44,7 @@ public sealed class ClipPropsView : UserControl
     {
         _roll = roll;
         _startText.Text = Position(startBeat);
-        _gridText.Text = GridLabels[_gridIndex];
+        _gridText.Text = roll.Grids.Quantize.Label;
 
         // CLIP — clips always loop in this model; the switch waits for a per-clip loop.
         var loop = SwitchRow("Loop", () => true, () => { }, out _, _loopText);
@@ -52,13 +54,14 @@ public sealed class ClipPropsView : UserControl
             Pair(Labeled("Start", Field(_startText)), Labeled("Length", Field(_lengthText))),
             loop);
 
-        // GRID — the grid step, one-tap Quantize at the strength below.
-        var grid = Section("GRID",
-            Pair(Dropdown(_gridText, a => ShowMenu(a, GridLabels, _gridIndex, i =>
+        // QUANTIZE — its own step (not the snap grid, which follows the zoom), one-tap
+        // Quantize at the strength below.
+        var grid = Section("QUANTIZE",
+            Pair(Dropdown(_gridText, a => ShowMenu(a, Array.ConvertAll(QuantizeSteps, q => q.Label),
+                    Array.IndexOf(QuantizeSteps, _roll.Grids.Quantize), i =>
                 {
-                    _gridIndex = i;
-                    _gridText.Text = GridLabels[i];
-                    _roll.Grid = GridValues[i];
+                    _roll.Grids.SetQuantize(QuantizeSteps[i]);
+                    _gridText.Text = QuantizeSteps[i].Label;
                 })),
                 ClipEditorKit.Button("Quantize", () => _roll.Quantize(_strength))),
             SliderRow("STRENGTH", 64, () => _strength, v => _strength = v,

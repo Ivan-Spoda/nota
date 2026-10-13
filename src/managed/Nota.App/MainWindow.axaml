@@ -55,6 +55,18 @@
             <NativeMenuItem Header="Paste Bounced Audio" app:Commands.Id="edit.pasteBounced"/>
             <NativeMenuItem Header="Copy Clips to Session / Arrangement" app:Commands.Id="edit.copyToOtherView"/>
             <NativeMenuItem Header="Delete" app:Commands.Id="edit.delete"/>
+            <NativeMenuItemSeparator/>
+            <NativeMenuItem Header="Grid">
+              <NativeMenuItem.Menu>
+                <NativeMenu>
+                  <NativeMenuItem Header="Narrow Grid" app:Commands.Id="grid.narrower"/>
+                  <NativeMenuItem Header="Widen Grid" app:Commands.Id="grid.wider"/>
+                  <NativeMenuItem Header="Triplet Grid" app:Commands.Id="grid.triplets"/>
+                  <NativeMenuItem Header="Snap to Grid" app:Commands.Id="grid.snap"/>
+                  <NativeMenuItem Header="Adaptive Grid" app:Commands.Id="grid.adaptive"/>
+                </NativeMenu>
+              </NativeMenuItem.Menu>
+            </NativeMenuItem>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
@@ -234,12 +246,13 @@
               <TextBlock Classes="CellLabel" Text="KEY" HorizontalAlignment="Center"/>
             </StackPanel>
           </Button>
-          <!-- Clip snap grid: click to cycle -->
-          <Button x:Name="SnapChip" Classes="cell" Click="OnCycleSnap" ToolTip.Tip="Cycle the clip snap grid">
+          <!-- Clip snap grid (SnapChip.cs): the step in effect, live with the zoom in Auto;
+               click for the grid menu. MinWidth fits the widest value (1/16T). -->
+          <Button x:Name="SnapChip" Classes="cell">
             <StackPanel Spacing="2">
               <TextBlock x:Name="SnapLabel" Classes="Mono" Text="1/4" FontSize="14" LineHeight="16"
-                         MinWidth="36" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
-              <TextBlock Classes="CellLabel" Text="GRID" HorizontalAlignment="Center"/>
+                         MinWidth="46" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
+              <TextBlock x:Name="SnapCaption" Classes="CellLabel" Text="GRID" HorizontalAlignment="Center"/>
             </StackPanel>
           </Button>
         </StackPanel>

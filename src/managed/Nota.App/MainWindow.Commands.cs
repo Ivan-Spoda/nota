@@ -12,6 +12,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Application.Palette;
 using Nota.Presentation;
 
@@ -110,6 +111,14 @@ public partial class MainWindow
 
         // ---- Piano roll: the clip open in the editor
         Availability Roll(PaletteContext c) => Need(c.HasOpenMidiClip, "Open a MIDI clip first");
+        // ---- Grid: the editor used last (piano roll or arrangement), status line names it
+        void G(string id, Func<GridSetting, GridSetting> step) => B(id, () => StepGrid(step));
+        G("grid.narrower", SnapGrid.Narrower);
+        G("grid.wider", SnapGrid.Wider);
+        G("grid.triplets", SnapGrid.ToggleTriplets);
+        G("grid.snap", SnapGrid.ToggleSnap);
+        G("grid.adaptive", SnapGrid.ToggleAdaptive);
+
         B("roll.quantize", () => { if (_editorRoll is { } roll) { roll.Quantize(1.0); if (_vm is not null) _vm.StatusText = "Quantized notes"; } }, Roll);
         B("roll.octaveUp", () => _editorRoll?.TransposeBy(12), Roll);
         B("roll.octaveDown", () => _editorRoll?.TransposeBy(-12), Roll);
@@ -174,5 +183,24 @@ public partial class MainWindow
         if (MenuItemFor("edit.lockEnvelopes") is { } mi) mi.IsChecked = locked;
         _vm.StatusText = locked ? "Envelopes locked — clip moves keep automation in place"
                                 : "Envelopes follow clips";
+    }
+
+    // The grid shortcuts act on the piano roll when the detail area (docked or floating) was
+    // used last and a MIDI clip is open in it; otherwise on the arrangement.
+    private EditorKind GridTarget()
+    {
+        bool rollOpen = _editorRoll is { } roll && _clipEditor is not null && roll.IsEffectivelyVisible;
+        bool detailLast = _detailWasLastFocused || _detailWindow?.IsActive == true;
+        return rollOpen && detailLast ? EditorKind.PianoRoll : EditorKind.Arrangement;
+    }
+
+    private void StepGrid(Func<GridSetting, GridSetting> step)
+    {
+        var kind = GridTarget();
+        var grids = EditorGrids.Shared;
+        grids.Set(kind, step(grids.Get(kind)));
+        var r = kind == EditorKind.PianoRoll && _editorRoll is { } roll ? roll.SnapGridState : Timeline.SnapGridState;
+        string label = r.SnapOn ? SnapGrid.Label(grids.Get(kind), r) : "Snap off";
+        if (_vm is not null) _vm.StatusText = $"{(kind == EditorKind.PianoRoll ? "Piano roll" : "Arrangement")} grid: {label}";
     }
 }

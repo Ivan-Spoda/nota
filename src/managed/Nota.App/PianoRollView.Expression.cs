@@ -248,15 +248,7 @@ public sealed partial class PianoRollView
             UpdateRange();
             ctx.FillRectangle(VelBg, new Rect(0, 0, w, h));
             double ppb = _o.PixelsPerBeat;
-            double step = _o.GridStepBeats();
-            double viewEnd = Math.Min(_o._lengthBeats, _o.ScrollBeats + w / Math.Max(1e-6, ppb));
-            double startB = Math.Max(0, Math.Floor(_o.ScrollBeats / step) * step);
-            for (int k = 0; ; k++)
-            {
-                double b = startB + k * step;
-                if (b > viewEnd + 1e-9) break;
-                ctx.DrawLine(_o.GridPen(b), new Point(_o.BeatToX(b) + 0.5, 0), new Point(_o.BeatToX(b) + 0.5, h));
-            }
+            _o.DrawGridLines(ctx, w, h);
             // Rest line: no bend / centred slide.
             if (Dim != NoteExpressionDim.Pressure)
             {

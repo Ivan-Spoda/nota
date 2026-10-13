@@ -393,6 +393,7 @@ public partial class MainWindow
         if (_vm is null) return;
         var roll = new PianoRollView
         {
+            BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement
             Commit = notes =>
             {
                 // The roll can outlive its clip: the target track/clip may have been
@@ -594,6 +595,7 @@ public partial class MainWindow
         SyncClipTab();                 // a Drum Rack slot lights the Pattern tab up
         var roll = new PianoRollView
         {
+            BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement
             Commit = notes =>
             {
                 var arr = new NotaNote[notes.Count];

@@ -61,6 +61,17 @@ public sealed class Settings
     /// up/down live-shifts this)</summary>
     public int GamepadOctave { get; set; }
 
+    // --- snap grid (specs/003-adaptive-snap-grid) ------------------------------
+    // App-wide, one per editor, never written to project files: opening a project
+    // doesn't change how the user likes to snap.
+    /// <summary>The arrangement's grid: Auto · Medium, snap on by default.</summary>
+    public Nota.Application.Editing.GridSetting ArrangementGrid { get; set; } = Nota.Application.Editing.GridSetting.DefaultArrangement;
+    /// <summary>The piano roll's grid, independent of the arrangement's.</summary>
+    public Nota.Application.Editing.GridSetting PianoRollGrid { get; set; } = Nota.Application.Editing.GridSetting.DefaultPianoRoll;
+    /// <summary>The piano roll's Quantize (and clip tools') step — its own value, so the
+    /// result never depends on the zoom. 1/16 by default.</summary>
+    public Nota.Application.Editing.GridStep QuantizeStep { get; set; } = Nota.Application.Editing.GridStep.Of(1, false);
+
     // --- command palette (⌘⇧P) ----------------------------------------------
     /// <summary>How often and when each palette / browser item was last applied, by palette
     /// id — frecency for the ranking (CP-15).</summary>

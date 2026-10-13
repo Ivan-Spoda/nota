@@ -215,6 +215,14 @@ if (args.Length >= 1 && args[0] == "--tap")
     Console.WriteLine(failures == 0 ? "TAP PASSED" : $"TAP FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Snap grid alone: `--grid`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--grid")
+{
+    Console.WriteLine("-- snap grid --");
+    foreach (var (ok, label) in SnapGridTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "GRID PASSED" : $"GRID FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // What Nota Mosaic makes of a real library: `--mosaic-dump <file.sfz | folder>`.
 if (args.Length >= 2 && args[0] == "--mosaic-dump")
 {
@@ -14512,6 +14520,9 @@ foreach (var (ok, label) in MosaicTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- tap tempo --");
 foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- snap grid --");
+foreach (var (ok, label) in SnapGridTests.Run()) Check(ok, label);
 
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");

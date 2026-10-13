@@ -14,6 +14,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Presentation;
 
 namespace Nota.App;
@@ -38,8 +39,7 @@ public sealed partial class ArrangementView : UserControl
     private double _playheadBeats;
     private double _totalBeats = 64;
     private int _beatsPerBar = 4;
-    private double _snapBeats = 1.0;               // snap grid (1 beat) — M4-2
-    private bool _snapEnabled = true;              // transport magnet toggle (off = free positioning)
+    private ResolvedGrid _lastGrid;                // what the snap chip last showed (GridChanged)
     internal int SelTrackId = -1, SelClipIndex = -1;   // "primary" selection (Clip tab, effect target, trim)
     // Multi-selection of clips across tracks (marquee / group move + delete). The
     // primary (SelTrackId/SelClipIndex) is always one of these when non-empty.
@@ -243,6 +243,7 @@ public sealed partial class ArrangementView : UserControl
 
     public ArrangementView()
     {
+        EditorGrids.Shared.Changed += k => { if (k == EditorKind.Arrangement) Redraw(); };
         _ruler = new RulerControl(this) { Height = RulerH };
         _overview = new OverviewControl(this);
         _sectionsLane = new SectionsControl(this);
@@ -428,13 +429,18 @@ public sealed partial class ArrangementView : UserControl
     public double ScrollBeats => _scrollBeats;
     public double PlayheadBeats => _playheadBeats;
     public int BeatsPerBar { get => _beatsPerBar; set { _beatsPerBar = value; Redraw(); } }
-    /// <summary>Clip-drag snap grid in beats (transport GRID cell, 1b).</summary>
-    public double SnapBeats { get => _snapBeats; set { _snapBeats = Math.Max(1.0 / 32, value); Redraw(); } }
 
-    /// <summary>Master snap on/off (the transport magnet). Off positions freely — the
-    /// same effect as holding Alt, but latched. The grid itself keeps its spacing, so
-    /// switching back resumes on the denomination the GRID cell shows.</summary>
-    public bool SnapEnabled { get => _snapEnabled; set { _snapEnabled = value; Redraw(); } }
+    /// <summary>The snap grid at the current zoom (specs/003-adaptive-snap-grid): the step
+    /// every clip edit snaps to and the finest line drawn. Resolved on demand — it is a few
+    /// comparisons and allocates nothing — so zoom, time signature and setting changes can
+    /// never leave a stale cache behind. Snap off (the transport magnet, ⌘4) keeps the lines.</summary>
+    internal ResolvedGrid SnapGridState => SnapGrid.Resolve(EditorGrids.Shared.Get(EditorKind.Arrangement), _pixelsPerBeat, _beatsPerBar);
+
+    /// <summary>The step in effect changed (zoom, time signature or the grid setting) — the
+    /// toolbar's snap chip relabels.</summary>
+    public event Action? GridChanged;
+
+    private double SnapStepBeats => SnapGridState.Snap.Beats(_beatsPerBar);
 
     /// <summary>How many clips print their name on the lane (View ▸ Clip names). The default
     /// names only the head of each run, so a repeating pattern reads as one block.</summary>
@@ -558,7 +564,7 @@ public sealed partial class ArrangementView : UserControl
         _loopDragging = true;
         _loopActive = true;
         _loopS = Math.Max(0, Snap(Math.Min(a, b)));
-        _loopE = Math.Max(_loopS + _snapBeats, Snap(Math.Max(a, b)));
+        _loopE = Math.Max(_loopS + SnapStepBeats, Snap(Math.Max(a, b)));
         Redraw();
     }
 
@@ -585,7 +591,7 @@ public sealed partial class ArrangementView : UserControl
     private (double Start, double End) SnapLoopRange(double a, double b)
     {
         double s = Math.Max(0, Snap(Math.Min(a, b)));
-        return (s, Math.Max(s + _snapBeats, Snap(Math.Max(a, b))));
+        return (s, Math.Max(s + SnapStepBeats, Snap(Math.Max(a, b))));
     }
 
     /// <summary>Loop over the beat span of the current clip selection. False if nothing selected.</summary>
@@ -681,6 +687,8 @@ public sealed partial class ArrangementView : UserControl
         _footerLanes.InvalidateVisual();
         _overview.InvalidateVisual();  // the viewport window follows scroll+zoom
         UpdateOverviewRange();
+        var g = SnapGridState;
+        if (g != _lastGrid) { _lastGrid = g; GridChanged?.Invoke(); }
     }
 
     /// <summary>Rebuilds the track/clip model + headers from the engine. Pass
@@ -1049,7 +1057,10 @@ public sealed partial class ArrangementView : UserControl
     }
 
     internal double Snap(double beat)
-        => _snapEnabled && _snapBeats > 0 ? Math.Round(beat / _snapBeats) * _snapBeats : beat;
+    {
+        var g = SnapGridState;
+        return g.SnapOn ? SnapGrid.SnapBeat(beat, g.Snap.Beats(_beatsPerBar), _beatsPerBar) : beat;
+    }
 
     /// <summary>Snap unless Alt is held (Alt = free/fine positioning). Reads the live
     /// modifier state so it can be toggled mid-drag (req 1.2.1/2.4/3.1/8.2.1, 7.10).</summary>
@@ -2471,6 +2482,7 @@ public sealed partial class ArrangementView : UserControl
     private static readonly IBrush ChromeBg = NotaPalette.BgSunken; // Brush.BgSunken
     private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1); // Brush.GridBeat
     private static readonly IPen BarPen = new Pen(NotaPalette.GridBar, 1);   // Brush.GridBar
+    private static readonly IPen SubBeatPen = new Pen(NotaPalette.GridSubBeat, 1);   // finer than a beat
     // Playhead: a 1px brass line with a 7×5 flag on the ruler, no glow (almanac § timeline).
     // The brush is the palette slot itself — a SolidColorBrush built from its Color froze the
     // playhead in one theme.
@@ -2638,4 +2650,22 @@ public sealed partial class ArrangementView : UserControl
     private static IBrush Alpha(Color c, double a) => new SolidColorBrush(Color.FromArgb((byte)(a * 255), c.R, c.G, c.B));
 
     private double BeatToX(double beat) => (beat - _scrollBeats) * _pixelsPerBeat;
+
+    /// <summary>The vertical grid over a lane-wide canvas: one line per snap position at the
+    /// drawn step (SnapGrid.GridLines, the same set Snap() lands on), weighted bar › beat ›
+    /// sub-beat. Shared by the lanes and the footer rows.</summary>
+    private void DrawGrid(DrawingContext ctx, double w, double h)
+    {
+        if (_pixelsPerBeat <= 0) return;
+        double step = SnapGridState.Draw.Beats(_beatsPerBar);
+        double bar = _beatsPerBar > 0 ? _beatsPerBar : 4;
+        foreach (double b in SnapGrid.GridLines(_scrollBeats, _scrollBeats + w / _pixelsPerBeat, step, _beatsPerBar))
+        {
+            double x = BeatToX(b);
+            var pen = IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;
+            ctx.DrawLine(pen, new Point(x, 0), new Point(x, h));
+        }
+
+        static bool IsWhole(double v) => Math.Abs(v - Math.Round(v)) < 1e-6;
+    }
 }
