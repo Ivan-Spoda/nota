@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.51.2** (plus changes in development on `main`). This document describes what is
+**0.52.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -325,7 +325,10 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 - **Warp / time-stretch**: **Complex** and **Complex Pro** modes (the latter with formant
   preservation, correct even when the sample rate and the device rate differ), plus
   transient detection. Trim brackets, warp markers and envelope points snap to the clip
-  editors' snap grid.
+  editors' snap grid. Warping runs in the background (the track shows "Processing…" and a
+  re-warped clip plays its previous version until the new one is ready), so long files
+  don't stall the app. The clip editor redraws the visible waveform at screen resolution,
+  down to single samples, and its ruler thins or adds bars, beats and 16ths with the zoom.
 - **Changing the sample rate** does not break third-party plugins or warped clips — the
   caches are rebuilt once when the rate changes.
 
@@ -844,7 +847,10 @@ and user presets, automation, persistence and cloning.
     in its header too.
   - Dropping an instrument onto an existing track **replaces the instrument** in place
     (clips, devices and volume are kept); dropping onto empty space creates a new track.
-    Racks are not replaced in place.
+    Racks are not replaced in place. An instrument preset dropped onto an instrument track
+    loads into that track's instrument (switching it if needed; the effects stay).
+  - A drop selects the track it lands on (a newly created one included), in the
+    arrangement and the session view.
 - **Preset preview**: the same player sits under the Instruments, Audio Effects, MIDI
   Effects and Presets tabs and plays the selected factory preset, saved preset, drum kit or
   built-in device (its default sound). These tabs have their own **Auto**, off by default:

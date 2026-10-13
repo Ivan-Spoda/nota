@@ -22,6 +22,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.52.1] — 2026-10-13
+
 ### Added
 - **Full screen without the title bar:** switching the window to full screen hides the
   title bar and its separator — the workspace fills the screen edge to edge, and the bar
