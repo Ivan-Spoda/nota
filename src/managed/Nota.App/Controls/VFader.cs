@@ -21,6 +21,8 @@ internal sealed class VFader : Control
     private double _value;
     private bool _drag;
     public event Action<double>? ValueChanged;
+    public bool Dragging => _drag;
+    public double Value => _value;
     public event Action? GestureBegin;   // M9-C automation write
     public event Action? GestureEnd;
 

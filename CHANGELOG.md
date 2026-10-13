@@ -42,6 +42,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   points snap to the grid drawn in the waveform, with the same chip, menu and shortcuts as
   the piano roll (they share one setting). Warp markers follow snap on / off and ⌥ — they
   used to stick to whole beats.
+- **Levels and volume on Return and Master rows:** the Return and Master rows at the
+  bottom of the arrangement now have a level meter, like the one on every track, and a
+  volume fader with its dB value. Turn up a send and watch the return's meter move, or
+  lower a return or the whole mix without opening the Mixer. Double-click a fader to set
+  it back to 0 dB.
 
 ### Changed
 - **New projects come ready to play:** a new project — and the workspace Nota opens with —
@@ -69,6 +74,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   The browser also opens wider by default.
 
 ### Fixed
+- **Return and Master rows show the real volume:** a Return row always read −∞ and the
+  Master row always read 0.0, whatever the actual volume. They now show the current
+  volume in dB.
+- **Master volume set in the Mixer is kept:** the Mixer's Master fader started at 0 dB in
+  every project, its changes didn't show in the transport's master control and weren't
+  saved with the project. The Mixer, the transport and the arrangement's Master row now
+  share one master volume, and it's saved.
 - **No more clicks when you move filter knobs fast:** quickly turning Freq or Morph on Auto
   Filter, or Freq, Gain or Q on EQ-8 and Dynamic EQ-8, could make a click. Steep automation
   on these knobs could too. The knobs now glide to the new value over a few milliseconds,

@@ -187,6 +187,8 @@ public partial class MainWindow : Window
         _exporter = App.Services.GetRequiredService<IAudioExporter>();
 
         Timeline.Engine = vm.Engine;
+        Timeline.GetMasterVolume = () => (float)vm.Transport.MasterVolume;   // Master row fader
+        Timeline.SetMasterVolume = v => vm.Transport.MasterVolume = v;
         Timeline.FreezeRole = FreezeRoleOf;   // live-freeze (v1.1) header badges
         Timeline.FreezeMenuItems = BuildTrackFreezeMenu;   // track context menu: Freeze / Live Freeze
         Timeline.FreezeTracksMenuItems = BuildTracksFreezeMenu;   // multi-track menu: Freeze / Unfreeze all
@@ -366,7 +368,12 @@ public partial class MainWindow : Window
 
         // Mixer lives in its own window (View → Mixer), not as a main-view tab — created here
         // once and hosted in the window when opened (see MainWindow.Mixer.cs).
-        _mixer = new MixerView(vm.Engine) { IsVisible = false };
+        _mixer = new MixerView(vm.Engine)
+        {
+            IsVisible = false,
+            GetMasterVolume = () => (float)vm.Transport.MasterVolume,
+            SetMasterVolume = v => vm.Transport.MasterVolume = v,
+        };
 
         // Modular: signal-graph view of the selected track (mockup 1a). Follows track
         // selection like the Detail device chain does.

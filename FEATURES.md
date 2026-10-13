@@ -102,6 +102,9 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
     mute/solo and level, and opens to the full control set when selected, so groups read as
     families rather than as more tracks. A track without a colour of its own takes its
     group's hue, shaded per sibling.
+  - **Return and Master rows stay pinned** under the tracks, each with a level meter, a
+    volume fader and its dB value (the Master fader is the same master volume as the
+    transport's and the Mixer's).
   - **Clip names appear where a run begins** — a clip is a colour band over its waveform,
     and the name prints only at the head of each run so a repeated pattern reads as one
     block. View ▸ Clip names cycles every clip / first of a run / none; a clip named by

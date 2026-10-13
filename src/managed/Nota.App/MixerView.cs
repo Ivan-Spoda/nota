@@ -44,7 +44,12 @@ public sealed class MixerView : UserControl
     private readonly List<Control> _sendSections = new();
     private readonly List<Control> _ioSections = new();
     private bool _sendsVisible = true, _ioVisible = true;
-    private float _masterVolume = 1.0f;
+    // The master volume lives in TransportViewModel.MasterVolume (saved with the project, shown
+    // in the MST module and the arrangement's Master row); the master strip goes through these.
+    public Func<float>? GetMasterVolume { get; set; }
+    public Action<float>? SetMasterVolume { get; set; }
+    private VFader? _masterFader;
+    private DragNumber? _masterDb;
 
     public MixerView(IAudioEngine engine)
     {
@@ -87,6 +92,12 @@ public sealed class MixerView : UserControl
         {
             if (id < 0) meter.Push(_engine.MasterMeter());
             else if (_engine.TryGetTrackMeter(id, out var m)) meter.Push(m);
+        }
+        // Follow master volume changes made elsewhere (MST, Master row, Remote, project load).
+        if (GetMasterVolume is { } get && _masterFader is { Dragging: false } f && _masterDb is { } db)
+        {
+            double v = get();
+            if (Math.Abs(f.Value - v) > 1e-3) { f.SetValueExternal(v); db.Value = LinToDb(v); }
         }
     }
 
@@ -141,7 +152,7 @@ public sealed class MixerView : UserControl
         col.Children.Add(ioRow);
 
         Control db;
-        var faderRow = FaderRow(-1, _masterVolume, NotaPalette.Accent, out db, out var meter);
+        var faderRow = FaderRow(-1, GetMasterVolume?.Invoke() ?? 1f, NotaPalette.Accent, out db, out var meter);
         _meters.Add((-1, meter));
         col.Children.Add(faderRow);
         col.Children.Add(db);
@@ -334,7 +345,8 @@ public sealed class MixerView : UserControl
             Width = 52, HorizontalAlignment = HorizontalAlignment.Center,
         };
         ToolTip.SetTip(dbNum, "Set the gain — drag, or double-click to type");
-        void SetVolume(double v) { if (id < 0) { _masterVolume = (float)v; _engine.SetMasterVolume(_masterVolume); } else _engine.SetTrackVolume(id, (float)v); }
+        void SetVolume(double v) { if (id < 0) SetMasterVolume?.Invoke((float)v); else _engine.SetTrackVolume(id, (float)v); }
+        if (id < 0) { _masterFader = fader; _masterDb = dbNum; }
         fader.ValueChanged += v => { SetVolume(v); dbNum.Value = LinToDb(v); };
         dbNum.ValueChanged += d => { double v = DbToLin(d); SetVolume(v); fader.SetValueExternal(v); };
         if (id > 0)   // M9-C: record volume moves (master volume isn't a track target)

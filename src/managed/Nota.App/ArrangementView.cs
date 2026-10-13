@@ -68,6 +68,19 @@ public sealed partial class ArrangementView : UserControl
     private readonly Dictionary<int, MiniFader> _volFaders = new();
     private readonly Dictionary<int, PanBar> _panBars = new();
     private readonly Dictionary<int, TextBlock> _volDb = new();
+    // Return / Master footer rows: meter, volume fader and its dB read-out. Kept apart from the
+    // track-header maps because the two columns are rebuilt independently.
+    private readonly Dictionary<int, MeterBar> _footerMeters = new();
+    private readonly Dictionary<int, MiniFader> _footerFaders = new();
+    private readonly Dictionary<int, TextBlock> _footerDb = new();
+    private MeterBar? _masterRowMeter;
+    private MiniFader? _masterRowFader;
+    private TextBlock? _masterRowDb;
+
+    /// <summary>The master volume lives in <c>TransportViewModel.MasterVolume</c> (saved with the
+    /// project, shown in the MST module); the Master row reads and writes it through these.</summary>
+    public Func<float>? GetMasterVolume { get; set; }
+    public Action<float>? SetMasterVolume { get; set; }
     // Per-track header card + its name label, so a selection change repaints just those two
     // properties instead of tearing down and rebuilding every header control (click latency).
     private readonly Dictionary<int, (Border card, TextBlock name, bool isGroup, Border spine, IBrush spineIdle)> _headerCards = new();
@@ -631,6 +644,15 @@ public sealed partial class ArrangementView : UserControl
             if (eng.TryGetTrackMeter(id, out var m)) bar.Push(m);
             else bar.Reset();
         }
+        foreach (var (id, bar) in _footerMeters)
+        {
+            if (eng.TryGetTrackMeter(id, out var m)) bar.Push(m);
+            else bar.Reset();
+        }
+        // The master level is the engine's master meter; the master *track* is only its effect chain.
+        _masterRowMeter?.Push(eng.MasterMeter());
+        if (GetMasterVolume is { } getMaster)
+            FollowVolume(_masterRowFader, _masterRowDb, getMaster());
         int n = eng.TrackCount;
         for (int i = 0; i < n; i++)
         {
@@ -640,11 +662,22 @@ public sealed partial class ArrangementView : UserControl
             {
                 f.Value = ti.Volume;
                 if (_volDb.TryGetValue(ti.Id, out var db))
-                    db.Text = ti.Volume <= 0.0011 ? "−∞" : AudioMath.LinToDb(ti.Volume).ToString("0.0");
+                    db.Text = VolumeDbText(ti.Volume);
             }
             if (_panBars.TryGetValue(ti.Id, out var p) && !p.Dragging && Math.Abs(p.Pan - ti.Pan) > 1e-3)
                 p.Pan = ti.Pan;
+            if (_footerFaders.TryGetValue(ti.Id, out var rf))
+                FollowVolume(rf, _footerDb.GetValueOrDefault(ti.Id), ti.Volume);
         }
+    }
+
+    // Moves a footer fader and its read-out to a volume changed elsewhere (Mixer, MST, MCP,
+    // automation, project load) — unless the user is dragging it.
+    private static void FollowVolume(MiniFader? fader, TextBlock? db, double volume)
+    {
+        if (fader is null || fader.Dragging || Math.Abs(fader.Value - volume) <= 1e-3) return;
+        fader.Value = volume;
+        if (db is not null) db.Text = VolumeDbText(volume);
     }
 
     private void Zoom(double factor)
@@ -1810,8 +1843,7 @@ public sealed partial class ArrangementView : UserControl
             VerticalAlignment = VerticalAlignment.Center, Width = 30, TextAlignment = TextAlignment.Right,
             Margin = new Thickness(6, 0, 0, 0),
         };
-        void ShowDb(double v) => db.Text = v <= 0.0011 ? "−∞"
-            : AudioMath.LinToDb(v).ToString("0.0", NotaNum.Culture);
+        void ShowDb(double v) => db.Text = VolumeDbText(v);
         ShowDb(t.Volume);
         fader.ValueChanged += v => { _engine?.SetTrackVolume(volTrackId, (float)v); ShowDb(v); };
         fader.GestureBegin += () => _engine?.BeginAutomationWrite(volTrackId, AutomationTarget.Volume, -1, -1, "");
@@ -2382,10 +2414,18 @@ public sealed partial class ArrangementView : UserControl
     private void RebuildFooterHeaders()
     {
         _footerHeaders.Children.Clear();
+        _footerMeters.Clear();
+        _footerFaders.Clear();
+        _footerDb.Clear();
         double y = 0;
         foreach (var r in _returns)
         {
-            var row = BuildSlimRow(r.Name, "", r.ColorIndex, r.Id, "Brush.SurfaceCard");
+            int id = r.Id;
+            var row = BuildSlimRow(r.Name, r.ColorIndex, id, "Brush.SurfaceCard", r.Volume,
+                v => _engine?.SetTrackVolume(id, (float)v), out var meter, out var fader, out var db);
+            _footerMeters[id] = meter;
+            _footerFaders[id] = fader;
+            _footerDb[id] = db;
             Canvas.SetLeft(row, 0);
             Canvas.SetTop(row, y);
             _footerHeaders.Children.Add(row);
@@ -2394,31 +2434,60 @@ public sealed partial class ArrangementView : UserControl
         // Master row: selectable (opens the master effect chain) via the reserved id.
         int masterId = _engine?.MasterTrackId ?? -1;
         string masterName = _engine is { } me2 && me2.GetTrackName(masterId) is { Length: > 0 } mn ? mn : "Master";
-        var master = BuildSlimRow(masterName, "", -1, masterId, "Brush.SurfaceRaised", masterSpine: true);
+        var master = BuildSlimRow(masterName, -1, masterId, "Brush.SurfaceRaised", GetMasterVolume?.Invoke() ?? 1f,
+            v => SetMasterVolume?.Invoke((float)v), out _masterRowMeter, out _masterRowFader, out _masterRowDb,
+            masterSpine: true);
         Canvas.SetLeft(master, 0);
         Canvas.SetTop(master, y);
         _footerHeaders.Children.Add(master);
         _footerHeaders.Children.Add(_footerDropRing);   // browser drop target (kept invisible until a drag)
     }
 
-    private Control BuildSlimRow(string title, string sub, int colorIndex, int trackId, string bgKey, bool masterSpine = false)
+    // A slim footer row: name and volume read-out over a mini fader, with the same vertical
+    // level meter as a track header on the right. No pan, and the fader writes no automation —
+    // returns have no visible lane down here.
+    private Control BuildSlimRow(string title, int colorIndex, int trackId, string bgKey, double volume,
+        Action<double> setVolume, out MeterBar meter, out MiniFader fader, out TextBlock db, bool masterSpine = false)
     {
         var spineBrush = masterSpine ? NotaPalette.Accent : ClipColors(colorIndex).content;
-        var name = new TextBlock { Text = title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextPrimary"), VerticalAlignment = VerticalAlignment.Center };
-        var db = new TextBlock { Text = masterSpine ? "0.0" : "−∞", FontSize = 9, Classes = { "Mono" }, Foreground = Brush("Brush.TextTertiary"), VerticalAlignment = VerticalAlignment.Center };
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var name = new TextBlock
+        {
+            Text = title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextPrimary"),
+            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var dbText = new TextBlock
+        {
+            Text = VolumeDbText(volume), FontSize = 9, Classes = { "Mono" }, Foreground = Brush("Brush.TextTertiary"),
+            VerticalAlignment = VerticalAlignment.Center, Width = 30, TextAlignment = TextAlignment.Right,
+            Margin = new Thickness(6, 0, 0, 0),
+        };
+        db = dbText;
+        fader = new MiniFader(volume) { VerticalAlignment = VerticalAlignment.Center, Default = 1.0 };
+        fader.ValueChanged += v => { setVolume(v); dbText.Text = VolumeDbText(v); };
+
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), RowDefinitions = new RowDefinitions("*,*") };
         Grid.SetColumn(name, 0);
-        Grid.SetColumn(db, 1);
+        Grid.SetColumn(dbText, 1);
+        Grid.SetRow(fader, 1);
+        Grid.SetColumnSpan(fader, 2);
         row.Children.Add(name);
-        row.Children.Add(db);
+        row.Children.Add(dbText);
+        row.Children.Add(fader);
+
+        meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 8, Margin = new Thickness(0, 6, 3, 6) };
+        DockPanel.SetDock(meter, Dock.Right);
+        var body = new DockPanel
+        {
+            LastChildFill = true,
+            Children = { meter, new Border { Padding = new Thickness(8, 4), Child = row } },
+        };
 
         var spine = new Border { Width = 3, Background = spineBrush };
-        var content = new Border { Padding = new Thickness(8, 0), Child = row };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("3,*") };
         Grid.SetColumn(spine, 0);
-        Grid.SetColumn(content, 1);
+        Grid.SetColumn(body, 1);
         grid.Children.Add(spine);
-        grid.Children.Add(content);
+        grid.Children.Add(body);
 
         bool sel = trackId > 0 && trackId == SelTrackId;
         if (sel) spine.Background = NotaPalette.Accent;   // selected: brass stripe, name stays Ink 1
@@ -2451,6 +2520,10 @@ public sealed partial class ArrangementView : UserControl
         flyout.Items.Add(BuildColorSubmenu(new[] { trackId }));
         flyout.ShowAt(anchor, showAtPointer: true);
     }
+
+    /// <summary>A volume as the header read-outs print it: dB with one decimal, "−∞" at silence.</summary>
+    private static string VolumeDbText(double v)
+        => v <= 0.0011 ? "−∞" : AudioMath.LinToDb(v).ToString("0.0", NotaNum.Culture);
 
     private static IBrush Brush(string key) => (IBrush?)NotaPalette.ByKey(key) ?? NotaPalette.TextPrimary;
 
