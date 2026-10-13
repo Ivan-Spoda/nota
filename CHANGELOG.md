@@ -14,6 +14,10 @@ Changes accumulate under `## [Unreleased]` as they merge into `main`, **without*
 `[Unreleased]` is promoted to a dated version, `VERSION` is bumped, a `vX.Y.Z` git tag is
 created, and the build-and-publish run starts.
 
+This file is the working log and is never rewritten for publication. The published text —
+the GitHub release and the news posts — comes from the curated, summarised
+`release-notes/X.Y.Z.en.md` and `release-notes/X.Y.Z.ru.md`.
+
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]

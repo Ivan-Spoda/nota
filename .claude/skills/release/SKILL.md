@@ -1,173 +1,204 @@
 ---
 name: release
-description: Cut a Nota release — actualize CHANGELOG.md (promote [Unreleased] to a dated version and add a short human-readable summary of it), bump VERSION and the engine's src/native/nota.engine/VERSION, write RU + EN news-channel posts about the new features, create the vX.Y.Z tag, then commit and push. Run this when the user asks to release, ship, cut a version, or tag a release. The GitHub Actions release workflow then builds every platform and drafts the release from the changelog section.
+description: Cut a Nota release in three phases. `prepare` (on develop) promotes CHANGELOG.md [Unreleased] to a dated version, writes the curated EN + RU release notes in release-notes/ (the one source for the GitHub release and the news channels), bumps the app and engine versions, makes the release image and the PR text. `tag` (on main, after the user merged the develop → main PR) creates the vX.Y.Z tag. `verify` (after the user pushed the tag) waits for the build and checks the GitHub draft against the curated notes. Run this when the user asks to release, ship, cut a version, tag a release or check a release build.
 user-invocable: true
 ---
 
 # Cutting a Nota release
 
-A release is a deliberate act: `## [Unreleased]` in `CHANGELOG.md` is promoted to a dated
-version, `VERSION` is bumped (and the native engine's own
-`src/native/nota.engine/VERSION`), a `vX.Y.Z` tag is created, and pushing the tag triggers
-`.github/workflows/release.yml` — which builds every target (x64 + arm64 across macOS,
-Windows, Linux) and drafts the GitHub release using the version's changelog section as the
-body.
+Two files describe a release, for two readers:
 
-Because the CI pulls that whole section verbatim into the release notes, and because
-`[Unreleased]` can accumulate arbitrarily many, arbitrarily verbose entries, **this skill's
-job is to lead that section with a short, human-readable summary** — so the release notes
-open with something a person actually wants to read, with the full detail below.
+- **`CHANGELOG.md`** is the raw working log. Entries land under `## [Unreleased]` as work
+  merges ("what we did, we write"), so it can repeat itself or hold changes that a later
+  entry undid. At release time it is only promoted to `## [X.Y.Z] — date` and is never
+  rewritten. The app's What's New window reads it, and the CI guard requires the section.
+- **`release-notes/X.Y.Z.en.md`** and **`release-notes/X.Y.Z.ru.md`** are the curated
+  text: summarised, deduplicated, checked against the code. **Everything published comes
+  from them.** `scripts/release-notes.sh X.Y.Z <target>` renders them for each place:
 
-**Argument** (`/release <arg>`, optional): the bump — `patch`, `minor` (default), `major`,
-or an explicit `X.Y.Z`. Nota has historically bumped **minor** per release.
+  | target    | where it goes                                   |
+  |-----------|-------------------------------------------------|
+  | `github`  | GitHub release body (the workflow uses this)    |
+  | `post-en` | English news channels                           |
+  | `post-ru` | Russian news channels                           |
 
-## 0. Preflight — stop if any of these fail
-
-1. **On `main`.** `git rev-parse --abbrev-ref HEAD` must be `main`. Releases build only
-   from main (the CI guard enforces it too). If not, stop and tell the user.
-2. **Clean working tree.** `git status --porcelain` must be empty, so the release commit
-   contains *only* the VERSION + engine VERSION + CHANGELOG changes. If dirty, stop and ask the user to
-   commit or stash first.
-3. **Up to date with origin.** `git fetch origin` then confirm local `main` is not behind
-   `origin/main` (`git rev-list --left-right --count origin/main...HEAD`). If behind, stop.
-4. **There is something to release.** `## [Unreleased]` must have real content (not just
-   empty category headers). If empty, stop — nothing to ship.
-
-## 1. Decide the new version
-
-- Read the current version from `VERSION` (e.g. `0.37.0`).
-- Apply the argument: `patch` → `x.y.(z+1)`, `minor` → `x.(y+1).1` (default), `major` →
-  `(x+1).1.1`, or use the explicit `X.Y.Z` if one was given. **A component that resets starts
-  at 1, never 0** (the user's rule: 0.50.1 → 0.51.1, not 0.51.0). Same for the engine's
-  minor / major bumps in step 3b.
-- Sanity-check it's strictly greater than the current version, and that neither the git tag
-  `vX.Y.Z` nor a `## [X.Y.Z]` changelog section already exists. If either exists, stop.
-- Get today's date: `date +%F` (do NOT hard-code it).
-
-## 2. Actualize CHANGELOG.md
-
-Read the entire `## [Unreleased]` block (everything from `## [Unreleased]` up to the next
-`## [` heading), then rewrite the top of the file so it looks like:
+The release runs through the branches like this. **The user does every commit, push and PR
+by hand.** This skill never commits, pushes or opens a PR (see the user-commits rule).
 
 ```
-## [Unreleased]
-
-## [X.Y.Z] — YYYY-MM-DD
-
-### Highlights
-- <3–6 bullets summarising the release in plain language>
-
-### Added
-- <the existing detailed entries, kept as-is>
-### Changed
-- …
-### Fixed
-- …
-### Removed
-- …
+develop ── /release prepare ── user commits, pushes, opens PR develop → main
+main    ── user merges ── /release tag ── user pushes the tag
+CI      ── release.yml builds 6 files + draft release ── /release verify ── user publishes
 ```
 
-Rules:
-- **Write the Highlights yourself** — this is the whole point. Read every `[Unreleased]`
-  entry and distil them into 3–6 short, plain-language bullets a musician (not a compiler)
-  would understand: group related changes, lead with the biggest user-facing wins, drop the
-  internal/mechanical noise. One line each, no jargon, present tense. If the release is
-  dominated by one headline feature, say so in the first bullet.
-- **Keep the full detail.** The existing category entries stay under Highlights unchanged —
-  the changelog is the permanent record; Highlights is just the readable lede.
-- Leave a fresh **empty** `## [Unreleased]` section at the very top for future work.
-- Preserve the file's header/preamble and every older version section exactly.
-- Keep the categories in the order `Added, Changed, Fixed, Removed`; omit any that are empty.
+**Argument** (`/release <phase> [bump]`): the phase is `prepare` (default), `tag` or
+`verify`. For `prepare` the bump is `minor` or `patch` (see step P2).
 
-Show the user the promoted section (Highlights + headings) before continuing.
+---
 
-## 3. Bump VERSION
+## Phase 1 — `prepare` (on `develop`)
 
-Write the new `X.Y.Z` to `VERSION` (no trailing newline changes beyond what's already
-there; it's read with `.Trim()`). This is the single source of truth the CI checks the tag
-against — it MUST equal the tag version.
+### P1. Preflight. Stop if any check fails
 
-## 3b. Bump the engine version
+1. On `develop`: `git rev-parse --abbrev-ref HEAD`.
+2. The tree is clean (`git status --porcelain` is empty). Otherwise ask the user to commit
+   or stash first, so the release changes stay separate.
+3. Up to date: `git fetch origin`, then `git rev-list --left-right --count origin/develop...HEAD`
+   must show `0` behind.
+4. `## [Unreleased]` has real entries.
 
-The native engine (`src/native/nota.engine`) has its own semver in
-`src/native/nota.engine/VERSION`, independent of the app version. CMake reads it into
-`project(... VERSION)` and bakes it into `nota_engine_version()` (shown in the About
-window next to the app version). It moves only when the engine itself changed:
+### P2. Choose the bump
 
-- Find the previous release tag: `git describe --tags --abbrev=0 --match 'v*'`.
-- Check for engine changes since then:
-  `git diff --quiet <prev-tag> HEAD -- src/native/nota.engine` (exit 1 = changed).
-- **Changed** → bump the engine's **patch** (`a.b.c` → `a.b.(c+1)`). If the user asked
-  for an explicit engine bump (e.g. "engine minor", or an explicit engine `X.Y.Z`), use
-  that instead — minor for a C ABI change (new/changed `nota_*` exports), major for a
-  breaking one.
-- **Unchanged** → leave it as-is.
+The app and the engine always move together, by the same kind of bump:
 
-Tell the user the old → new engine version (or that it's unchanged).
+| bump    | when                                         | app             | engine          |
+|---------|----------------------------------------------|-----------------|-----------------|
+| `minor` | a major feature (new device, view, workflow) | 0.51.2 → 0.52.1 | 0.30.3 → 0.31.1 |
+| `patch` | fixes, polish, small additions               | 0.51.2 → 0.51.3 | 0.30.3 → 0.30.4 |
 
-## 3c. Write the news posts (RU + EN)
+A component that resets starts at **1, never 0**. If the user gave no bump, propose one
+from the `[Unreleased]` content and confirm it with them. Preview it with
+`scripts/release-bump.sh <bump> --dry-run`. It refuses a version whose tag already exists.
 
-Write two posts for the project's news channel, `docs/news/X.Y.Z.ru.md` (Russian) and
-`docs/news/X.Y.Z.en.md` (English) — same content, each written natively in its language,
-not a word-for-word translation.
+### P3. Promote CHANGELOG.md
 
-- Open with a one-line title (`🎛 **Nota X.Y.Z вышла**` / `🎛 **Nota X.Y.Z is out**`) and
-  one or two sentences on what defines the release.
-- Then the new features as numbered, bold-titled sections **in order of importance** —
-  biggest user-facing win first, small conveniences last. A short paragraph each: what it
-  is and why a musician cares, not every detail of the changelog.
-- Group small items (shortcuts, tweaks) into one section; finish with an **Also** list for
-  visual changes and notable fixes, then any behaviour change users must know (moved or
-  removed shortcuts).
-- End with the download link: `https://github.com/<owner>/<repo>/releases/tag/vX.Y.Z`.
-- Check every claim against the code and the newest changelog entry — `[Unreleased]` can
-  contain entries contradicted by later ones (e.g. a shortcut reassigned twice). Fix the
-  changelog too if you find one.
+Rename `## [Unreleased]` to `## [X.Y.Z] — YYYY-MM-DD` (date from `date +%F`). Add a fresh
+empty `## [Unreleased]` above it. **Don't touch the entries**: no Highlights and no
+rewording. The changelog stays the honest log. Keep the preamble and older sections as they
+are.
 
-Commit the posts together with the release. Show both to the user in the report.
+### P4. Write the curated notes, EN and RU
 
-## 3d. Docs check
+This is the main work of the phase. Create `release-notes/X.Y.Z.en.md` and
+`release-notes/X.Y.Z.ru.md`.
 
-Run the `nota-docs` skill in `audit` mode over the `[Unreleased]` entries you just promoted.
-Docs changes are committed in `../nota-docs`, not in the release commit. Missing docs don't
-block the release — list them in the report.
+1. **Gather.** Read the whole `[X.Y.Z]` section you just promoted, then
+   `git log --oneline <prev-tag>..HEAD` (previous tag:
+   `git describe --tags --abbrev=0 --match 'v*'`).
+2. **Reconcile.** Merge entries that describe the same thing. Where entries conflict (a
+   shortcut reassigned twice, a feature added and then reworked), **the code decides**:
+   read the handler, the default or the UI and describe what ships. Drop anything that
+   was added and then removed within the same release, and leave out internal or
+   mechanical changes (refactors, CI, tests) unless a user can feel them.
+3. **Write.** Each language natively, not as a translation. Format (bold titles and `•`
+   bullets, no `#` headings, so the text pastes into Telegram as-is):
 
-## 3e. Feature list
+   ```
+   <!-- SPDX-License-Identifier: AGPL-3.0-only -->
+   One or two sentences on what defines this release.
 
-Run the `nota-features` skill in `audit` mode: fold every changelog entry since the version in
-`FEATURES.md`'s header into the list and set the header to `X.Y.Z`. `FEATURES.md` goes into
-the release commit.
+   **1. Biggest user-facing win**
+   A short paragraph: what it is and why a musician cares. Not every changelog detail.
 
-## 4. Commit, tag, push
+   **2. Next feature**
+   …
 
-```bash
-git add VERSION CHANGELOG.md FEATURES.md src/native/nota.engine/VERSION docs/news/
-git commit -m "(chore) Release vX.Y.Z"
-git tag -a "vX.Y.Z" -m "Nota vX.Y.Z"
-git push origin main
-git push origin "vX.Y.Z"
-```
+   **Also**
+   • visual changes, notable fixes, small conveniences, one line each
+   • any behaviour change users must know: a moved or removed shortcut, a changed default
+   ```
 
-Notes:
-- The commit and tag must sit **on main** — the CI's guard job rejects a tag whose commit
-  isn't contained in `main`.
-- Push the branch **before** the tag, so the tagged commit is already on the remote `main`
-  when the guard runs.
-- End the commit message body with the standard `Co-Authored-By` trailer if your harness
-  requires it.
+   Rank the sections by importance. A patch release can be just the lede plus **Also**.
+   Leave out the title and the download link, because `release-notes.sh` adds them per
+   target. Use the user's product language: "track", "device card", "piano roll", not class
+   names.
+4. Show the user both rendered posts (`scripts/release-notes.sh X.Y.Z post-en`, `post-ru`)
+   and iterate until they approve. The rest of the release depends on this text.
 
-## 5. Report
+### P5. Bump the versions
 
-Tell the user:
-- the released version and tag,
-- the engine version (bumped `a.b.c → a.b.d`, or unchanged),
-- the Highlights you wrote,
-- that the tag push kicked off `.github/workflows/release.yml`, which will produce the 5
-  platform artifacts and a **draft** GitHub release (they review + publish manually),
-- the release/actions URL to watch (derive from `git remote get-url origin`).
+`scripts/release-bump.sh <bump>` writes `VERSION` and `src/native/nota.engine/VERSION`
+(both without a trailing newline, read with `.Trim()` / CMake). The CI checks the tag against
+`VERSION`, so the two must agree.
+
+### P6. Feature list and docs
+
+- Run `nota-features` in `audit` mode: fold this version's entries into `FEATURES.md` and
+  set its header to `X.Y.Z`. That change goes into the release commit.
+- Run `nota-docs` in `audit` mode over the same entries. Its changes are committed in
+  `../nota-docs`. Missing docs don't block the release; list them in the report.
+
+### P7. Release image
+
+Build a 16:9 poster in `../media/news/X.Y.Z-src/` (outside the repo). Start from the last
+release's `poster.html` (`ls -d ../media/news/*-src | sort -V | tail -1`) and copy its
+fonts.
+
+- Header: the logo, `Nota X.Y.Z` (version in brass), a one-line subtitle taken from the
+  notes' lede, and a mono tag row with the 2–4 headline features.
+- Two or three cards with real screenshots of the headline features. Shoot them from the
+  app (see the UI-verify recipe, with an isolated `NOTA_DATA_DIR`) or reuse fresh shots
+  from `../nota-docs`. Use Ember Graphite colours (`nota-design`).
+- Render it at 2×:
+
+  ```bash
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+    --hide-scrollbars --window-size=1280,720 --force-device-scale-factor=2 \
+    --screenshot="$PWD/../media/news/X.Y.Z.png" "file://$PWD/../media/news/X.Y.Z-src/poster.html"
+  ```
+
+- Look at the PNG (Read it) and check for overlaps, clipped text or empty space before
+  showing it to the user. Also save the rendered posts next to it as
+  `../media/news/X.Y.Z.en.md` and `X.Y.Z.ru.md` (the output of `post-en` / `post-ru`).
+
+### P8. Hand over to the user
+
+Don't commit. Give the user:
+
+- the version change (`app a → b`, `engine c → d`) and the list of changed files:
+  `CHANGELOG.md`, `VERSION`, `src/native/nota.engine/VERSION`, `FEATURES.md`,
+  `release-notes/X.Y.Z.{en,ru}.md`,
+- the commit message `(chore) Release X.Y.Z`,
+- the **PR text** for develop → main. Title `Release X.Y.Z`, body = the output of
+  `scripts/release-notes.sh X.Y.Z github`, so the reviewer reads exactly what will be
+  published,
+- the image path and any docs gaps,
+- the next step: merge the PR, then run `/release tag`.
+
+---
+
+## Phase 2 — `tag` (on `main`, after the merge)
+
+1. If the user is still on develop, tell them to run `git switch main && git pull --ff-only`.
+   Don't switch branches on their tree yourself if it has changes.
+2. Run `scripts/release-tag.sh`. It repeats the CI guard locally (on main, clean, equal to
+   `origin/main`, the tag is free locally and on origin, the `## [X.Y.Z]` section and both
+   notes files exist) and then creates the annotated tag `vX.Y.Z`. **It doesn't push.**
+3. Give the user the push command and the Actions link
+   (`https://github.com/nota-daw/nota/actions/workflows/release.yml`):
+
+   ```bash
+   git push origin vX.Y.Z
+   ```
+
+If the script fails, report its message as is. Common causes: the PR isn't merged yet, or
+local main is behind.
+
+---
+
+## Phase 3 — `verify` (after the tag push)
+
+1. Find the run: `gh run list --repo nota-daw/nota --workflow release.yml --limit 3`. Wait
+   for it with `gh run watch <id> --repo nota-daw/nota --exit-status` (run it in the
+   background, because a build takes about 20–30 min). Don't poll in a loop.
+2. If a job failed, show its log tail: `gh run view <id> --log-failed`.
+3. When it's green, run `scripts/release-verify.sh X.Y.Z`. It checks that the draft body
+   equals `release-notes.sh X.Y.Z github` word for word and that all six files are
+   attached (dmg arm64/x86_64, exe x64/arm64, AppImage x86_64/aarch64).
+4. Report the result. If the body differs (someone edited the draft, or the notes changed
+   after the tag), show the diff and fix it at the source. Don't edit the draft by hand to
+   make it match. The user reviews the draft and publishes it themselves, then posts
+   `../media/news/X.Y.Z.{en,ru}.md` with `X.Y.Z.png` to the channels.
+
+---
 
 ## Don't
-- Don't release from a branch other than `main`, or with a dirty tree.
-- Don't hard-code the date or reuse an existing version/tag.
-- Don't discard the detailed changelog entries — summarise *in addition to* them, not instead.
-- Don't publish the GitHub release from here; the workflow drafts it for human review.
+
+- Don't commit, push, open PRs, push tags or publish the release. All of these are the
+  user's steps.
+- Don't reword or summarise inside `CHANGELOG.md`. Curated text goes only to
+  `release-notes/`.
+- Don't write published text anywhere except `release-notes/`. GitHub and the channels
+  must come from the same files.
+- Don't bump only one of app or engine, and don't reset a component to 0.
+- Don't hard-code the date or reuse an existing version or tag.
