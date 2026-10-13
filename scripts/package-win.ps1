@@ -43,13 +43,16 @@ Write-Host "    native artifacts: $NativeOut"
 Write-Host "==> Publishing managed app ($Rid, self-contained)…"
 if (Test-Path $PubDir) { Remove-Item -Recurse -Force $PubDir }
 dotnet publish src/managed/Nota.App -c Release -r $Rid --self-contained true `
-  "-p:NotaNativeDir=$NativeOut" -o $PubDir
+  "-p:NotaNativeDir=$NativeOut" -p:DebugType=none -p:DebugSymbols=false -o $PubDir
 
 # The csproj copies the native artifacts into the publish output for a win RID;
 # copy them explicitly too as a safety net.
 Copy-Item (Join-Path $NativeOut 'nota_engine.dll') $PubDir -Force
 $scanWorker = Join-Path $NativeOut 'nota-scanworker.exe'
 if (Test-Path $scanWorker) { Copy-Item $scanWorker $PubDir -Force }
+# No debug symbols in the installer (DebugType=none above; this also drops any .pdb a
+# package ships alongside its assembly).
+Get-ChildItem -Path $PubDir -Recurse -Filter *.pdb | Remove-Item -Force
 
 Write-Host "==> Building installer with Inno Setup…"
 function Find-ISCC {

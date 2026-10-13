@@ -66,7 +66,7 @@ lipo -info "${NATIVE_BUILD}/libnota_engine.dylib"
 # 2) Managed publish, pointed at this arch's engine ---------------------------
 echo "==> Publishing managed (${RID}, self-contained)…"
 quiet dotnet publish src/managed/Nota.App -c Release -r "${RID}" --self-contained true \
-  -p:NotaNativeDir="${NATIVE_BUILD}" -o "${PUB}"
+  -p:NotaNativeDir="${NATIVE_BUILD}" -p:DebugType=none -p:DebugSymbols=false -o "${PUB}"
 
 # 3) Assemble the .app --------------------------------------------------------
 echo "==> Assembling ${APP_NAME}.app…"

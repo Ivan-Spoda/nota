@@ -77,7 +77,7 @@ cmake --build "${NATIVE}" >/dev/null
 echo "==> Publishing managed app (${RID}, self-contained)…"
 rm -rf "${PUB}"
 dotnet publish src/managed/Nota.App -c Release -r "${RID}" --self-contained true \
-  "-p:NotaNativeDir=$(pwd)/${NATIVE}" -o "${PUB}" >/dev/null
+  "-p:NotaNativeDir=$(pwd)/${NATIVE}" -p:DebugType=none -p:DebugSymbols=false -o "${PUB}" >/dev/null
 
 # The csproj copies the native artifacts for a linux RID; copy them explicitly too
 # as a safety net.

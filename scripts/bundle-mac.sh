@@ -33,7 +33,7 @@ echo "==> Publishing managed app (${RID}, self-contained)…"
 PUBDIR="$(pwd)/dist/publish"
 rm -rf "${PUBDIR}"
 dotnet publish src/managed/Nota.App -c Release -r "${RID}" --self-contained true \
-  -o "${PUBDIR}" >/dev/null
+  -p:DebugType=none -p:DebugSymbols=false -o "${PUBDIR}" >/dev/null
 
 echo "==> Assembling ${APP}…"
 mkdir -p "${APP_DIR}"
