@@ -29,6 +29,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   maximized states. On Windows and Linux a new **View → Toggle Full Screen** command
   (shortcut **F11**) enters and leaves full screen; on macOS the green button does it.
 
+### Changed
+- **Drops select their track:** dropping an instrument, effect, preset, sample or MIDI file
+  from the browser selects the track it landed on — a newly created track included — in
+  both the arrangement and the session view. Moving clips to another track, or dropping a
+  clip onto a Sampler / Drum Rack / Grain track, selects the destination track too.
+
 ### Fixed
 - **Nota Reverb no longer fires a loud, looping metallic burst:** after a few minutes of
   playback the reverb could suddenly ring at full level and keep ringing. The cause was a

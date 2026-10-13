@@ -291,6 +291,12 @@ public sealed partial class SessionView : UserControl
             SlotSelected?.Invoke(sel.TrackId, sel.Scene);
     }
 
+    /// <summary>Selects the slot at (<paramref name="trackId"/>, <paramref name="scene"/>) — e.g. where a browser drop landed.</summary>
+    internal void SelectSlot(int trackId, int scene)
+    {
+        if (ColumnFor(trackId) is not null) Select(new Selection(SelKind.Slot, trackId, scene));
+    }
+
     private void InvalidateAll()
     {
         foreach (var c in _cols) { foreach (var cell in c.Cells) cell.InvalidateVisual(); c.Header?.Sync(); }

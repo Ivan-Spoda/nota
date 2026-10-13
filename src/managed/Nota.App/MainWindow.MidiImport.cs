@@ -16,9 +16,9 @@ namespace Nota.App;
 
 public partial class MainWindow
 {
-    private void ImportMidiFileToArrangement(BrowserItem item, int trackId, double beat)
+    private int ImportMidiFileToArrangement(BrowserItem item, int trackId, double beat)
     {
-        if (_vm is null || ReadMidiFile(item) is not { } file) return;
+        if (_vm is null || ReadMidiFile(item) is not { } file) return -1;
         string baseName = Path.GetFileNameWithoutExtension(item.Path);
         bool multi = file.Parts.Count > 1;
         int firstTrack = -1;
@@ -41,6 +41,7 @@ public partial class MainWindow
         finally { Engine.EndUndoGroup(); }
         if (firstTrack > 0) _lastInstrumentTrackId = firstTrack;
         _vm.StatusText = multi ? $"Imported {item.Name} ({file.Parts.Count} parts)" : $"Imported {item.Name}";
+        return firstTrack;
     }
 
     private void ImportMidiFileToSlot(BrowserItem item, int trackId, int scene, bool instrumentTrack)

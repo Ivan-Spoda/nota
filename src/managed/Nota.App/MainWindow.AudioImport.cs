@@ -54,6 +54,7 @@ public partial class MainWindow
             LengthBeats = 4, Label = $"{name} · Processing…",   // real length arrives with the header
         };
         Timeline.AddPendingImport(pending);
+        Timeline.Select(t, -1);   // the track it lands on (a new one included) is selected right away
         _session?.Refresh();
         _vm.StatusText = $"Importing {name}…";
 

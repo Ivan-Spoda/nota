@@ -937,6 +937,12 @@ public sealed partial class ArrangementView : UserControl
         if (placed.Length > 0) SetSelection(placed);
     }
 
+    // Tell the window the primary track changed under a clip selection (devices / clip tab follow).
+    internal void AnnounceSelectedTrack()
+    {
+        if (SelTrackId > 0) TrackSelected?.Invoke(SelTrackId);
+    }
+
     /// <summary>Duplicates the whole clip selection as one block, placed right after itself
     /// (keyboard Cmd+D / context menu). The copies become the new selection. False if none.</summary>
     public bool DuplicateSelectedClip()

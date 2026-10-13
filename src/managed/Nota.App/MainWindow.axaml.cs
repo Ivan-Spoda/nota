@@ -194,7 +194,7 @@ public partial class MainWindow : Window
         Timeline.MidiClipActivated += OpenClipEditor;
         Timeline.AudioClipActivated += OpenAudioClipEditor;
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)
-        Timeline.SampleToInstrument += (item, t) => DropBrowserItem(item, t);   // audio clip → Grain / Drum Rack / Sampler…
+        Timeline.SampleToInstrument += (item, t) => { DropBrowserItem(item, t); Timeline.Select(t, -1); };   // audio clip → Grain / Drum Rack / Sampler… (that track becomes the selection)
         Timeline.DevicesPeekRequested += t => { if (_deviceChain?.TrackId != t) ShowDevices(t); };
         Timeline.PasteBouncedRequested += (track, beat) => _ = PasteBouncedAsync(track, beat);
         Timeline.ConvertClipRequested += OnConvertClip;   // audio clip → MIDI (Convert / Slice)

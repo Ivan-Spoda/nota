@@ -601,6 +601,7 @@ public sealed partial class ArrangementView
                 {
                     _o.Refresh();   // also restores the preview if the engine rejected the move
                     if (committed) _o.ReselectPlaced();   // cross-track moves change indices
+                    if (committed && rowDelta != 0) _o.AnnounceSelectedTrack();   // the destination track is now the active one
                 }
                 else InvalidateVisual();
                 return;

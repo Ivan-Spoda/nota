@@ -31,21 +31,26 @@ public partial class MainWindow
         if (_vm is null) return;
         try
         {
+            int landed = -1;   // the track the drop ended up on (a new one included) — it becomes the selection
             switch (item.Kind)
             {
                 case BrowserItemKind.Sample:
-                    // Decodes in the background; the track shows a filling placeholder meanwhile.
+                    // Decodes in the background; the track shows a filling placeholder meanwhile
+                    // (and is selected there as soon as it exists).
                     _ = ImportAudioInBackgroundAsync(item.Path, Insertion.TrackIsAudio(trackId) ? trackId : -1, beat);
                     break;
                 case BrowserItemKind.MidiFile:
-                    ImportMidiFileToArrangement(item, trackId, beat);
+                    landed = ImportMidiFileToArrangement(item, trackId, beat);
                     break;
                 default:   // instruments replace / start a track; effects + presets target the track
-                    ApplyInsertResult(Insertion.DropOnArrangement(item, trackId, beat), revealDevices: item.Kind is not (BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument));
+                    var r = Insertion.DropOnArrangement(item, trackId, beat);
+                    ApplyInsertResult(r, revealDevices: item.Kind is not (BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument));
+                    if (r.Ok) landed = r.TrackId;
                     break;
             }
             Timeline.Refresh();
             _session?.Refresh();
+            if (landed > 0) Timeline.Select(landed, -1);
         }
         catch (Exception ex) { _vm.StatusText = $"Drop failed: {ex.Message}"; }
     }
@@ -55,21 +60,28 @@ public partial class MainWindow
         if (_vm is null) return;
         try
         {
+            bool landed = false;   // the drop's slot (and so its track) becomes the selection
             switch (item.Kind)
             {
                 case BrowserItemKind.Sample:
                     if (instrumentTrack) { _vm.StatusText = "Drop samples onto audio slots."; break; }
                     if (Engine.AddSessionAudioFile(trackId, scene, item.Path))
+                    {
                         _vm.StatusText = $"Added {item.Name} to slot";
+                        landed = true;
+                    }
                     break;
                 case BrowserItemKind.MidiFile:
+                    landed = instrumentTrack;
                     ImportMidiFileToSlot(item, trackId, scene, instrumentTrack);
                     break;
                 case BrowserItemKind.BuiltinEffect:
                 case BrowserItemKind.PluginEffect:
                 case BrowserItemKind.BuiltinMidiEffect:
                 case BrowserItemKind.Preset:
-                    ApplyInsertResult(Insertion.RouteToTrack(item, trackId)); // a session column is a track
+                    var r = Insertion.RouteToTrack(item, trackId); // a session column is a track
+                    ApplyInsertResult(r);
+                    landed = r.Ok;
                     break;
                 default: // instruments
                     _vm.StatusText = "Drop instruments onto the arrangement.";
@@ -77,6 +89,11 @@ public partial class MainWindow
             }
             _session?.Refresh();
             Timeline.Refresh();
+            if (landed && trackId > 0)
+            {
+                _session?.SelectSlot(trackId, scene);   // the arrangement follows to the same track
+                if (Timeline.SelectedTrackId != trackId) Timeline.Select(trackId, -1);
+            }
         }
         catch (Exception ex) { _vm.StatusText = $"Drop failed: {ex.Message}"; }
     }
