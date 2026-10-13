@@ -64,6 +64,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   The browser also opens wider by default.
 
 ### Fixed
+- **Plug-in search in Downloads no longer crashes:** typing a search that matched nothing
+  and then erasing it with Backspace threw an error instead of bringing the list back.
 - **Long audio files no longer stall the app:** after dropping a long file (a multi-minute
   FLAC, say) onto the arrangement, the app stuttered for as long as it took to time-stretch
   the clip to the project tempo. Warping now runs in the background, so the app stays smooth

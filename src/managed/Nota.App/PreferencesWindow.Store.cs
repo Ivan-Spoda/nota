@@ -259,12 +259,13 @@ public sealed partial class PreferencesWindow
         }
         if (available.Count == 0 && items[0] is StoreEntry first) items[0] = first with { First = true };
         _storeItems.ItemsSource = items;
-        if (_storeList.Content is not Border { Tag: "store-table" })
-            _storeList.Content = new Border
-            {
-                Tag = "store-table", BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel,
-                ClipToBounds = true, Child = _storeItems,
-            };
+        // The rows keep their table border while the empty / loading stub stands in, so reuse
+        // it — wrapping _storeItems in a fresh one would throw "already has a parent".
+        _storeList.Content = _storeItems.Parent as Border ?? new Border
+        {
+            BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel,
+            ClipToBounds = true, Child = _storeItems,
+        };
     }
 
     private static bool MatchesFilter(StorePlugin p, int filter, IReadOnlyDictionary<string, InstalledStorePlugin> installed) => filter switch
