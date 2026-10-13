@@ -37,6 +37,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Clearer device selection:** the selected device is outlined by a ring just outside the
   card instead of on its edge, so it no longer crowds the device name or the preset picker.
   The Devices / Pattern / Clip tabs sit a little lower, clear of the panel's top edge.
+- **Tighter panel gutters, wider browser:** the resize handles between the browser, the
+  arrangement and the Devices panel no longer add space of their own, so the gaps between
+  the panels match the window's outer margin. The whole gap can now be grabbed to resize.
+  The browser also opens wider by default.
 
 ### Fixed
 - **Nota Reverb no longer fires a loud, looping metallic burst:** after a few minutes of
