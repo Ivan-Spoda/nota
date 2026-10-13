@@ -1252,6 +1252,9 @@ NOTA_API float       nota_builtin_device_param_default(const NotaEngine* engine,
  * Nota EQ-8: a telemetry block, then its pre and post spectra); 0 for devices
  * without one. Lock-free; torn reads are fine. */
 NOTA_API int32_t     nota_device_scope(const NotaEngine* engine, int32_t track_id, int32_t device_index, float* out, int32_t max_samples);
+/* Device-free self-test: Nota Reverb's comb read never indexes past its delay line when the
+ * read position lands a hair past the write head (the "metallic burst" bug). 1 = pass. */
+NOTA_API int32_t     nota_engine_reverb_wrap_selftest(NotaEngine* engine);
 /* Interactive-device command channel (the looper's Record/Overdub/Play/Stop/Undo/
  * Clear and per-layer mute/gain). The engine applies it at the next quantize boundary. */
 NOTA_API void        nota_device_action(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t id, int32_t iarg, float farg);

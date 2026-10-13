@@ -107,6 +107,10 @@ public sealed partial class NotaEngine
     public int DeviceScope(int trackId, int deviceIndex, float[] outSamples, int maxSamples)
     { ThrowIfDisposed(); return NativeMethods.DeviceScope(_handle, trackId, deviceIndex, outSamples, maxSamples); }
 
+    /// <summary>Device-free self-test: the Reverb comb read stays inside its delay line at the wrap edge.</summary>
+    public bool ReverbWrapSelfTest()
+    { ThrowIfDisposed(); return NativeMethods.ReverbWrapSelfTest(_handle) != 0; }
+
     public void DeviceAction(int trackId, int deviceIndex, int id, int iarg, float farg)
     { ThrowIfDisposed(); NativeMethods.DeviceAction(_handle, trackId, deviceIndex, id, iarg, farg); }
     public int DeviceLayerWave(int trackId, int deviceIndex, int layer, float[] outSamples, int maxSamples)

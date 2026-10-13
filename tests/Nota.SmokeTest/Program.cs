@@ -4227,6 +4227,7 @@ Console.WriteLine("-- Nota Reverb --");
     const int Decay = 0, HFDamp = 1, PreDelay = 2, Size = 3, Algorithm = 10, Freeze = 11, DryWet = 12, Output = 13,
               DryLevel = 14, EarlyRefl = 15, ModOnTail = 16, Vintage = 17, BassMono = 18, WetOnly = 19, LatencyComp = 20;
     Check(rd >= 0 && re.TrackDeviceBuiltinKind(rt, rd) == 2 && re.DeviceParamCount(rt, rd) == 21, "add built-in Nota Reverb (kind 2, 21 params)");
+    Check(re.ReverbWrapSelfTest(), "Reverb comb read stays inside its delay line at the wrap edge (no metallic burst)");
     Check(re.DeviceParamName(rt, rd, Decay) == "Decay" && re.DeviceParamName(rt, rd, Output) == "Output"
           && re.DeviceParamName(rt, rd, DryLevel) == "Dry Level" && re.DeviceParamName(rt, rd, EarlyRefl) == "Early Refl"
           && re.DeviceParamName(rt, rd, ModOnTail) == "Mod on Tail" && re.DeviceParamName(rt, rd, Vintage) == "Vintage"

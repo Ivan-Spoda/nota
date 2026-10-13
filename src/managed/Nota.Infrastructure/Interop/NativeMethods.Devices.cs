@@ -73,6 +73,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_device_scope")]
     internal static partial int DeviceScope(IntPtr engine, int trackId, int deviceIndex, [Out] float[] outSamples, int maxSamples);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_reverb_wrap_selftest")]
+    internal static partial int ReverbWrapSelfTest(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_device_action")]
     internal static partial void DeviceAction(IntPtr engine, int trackId, int deviceIndex, int id, int iarg, float farg);
     [LibraryImport(Lib, EntryPoint = "nota_device_layer_wave")]

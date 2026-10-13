@@ -30,6 +30,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   (shortcut **F11**) enters and leaves full screen; on macOS the green button does it.
 
 ### Fixed
+- **Nota Reverb no longer fires a loud, looping metallic burst:** after a few minutes of
+  playback the reverb could suddenly ring at full level and keep ringing. The cause was a
+  rare off-by-one read just past the end of a reverb delay line, which pulled a garbage
+  value into the tail. The read now always stays inside the line. Nota Delay and the
+  Wavetable synth's chorus had the same rare edge case and are fixed too.
 - **The preset picker opens from anywhere on it:** the preset field in a device header only
   responded to a click on the preset's name. The whole field opens the list again.
 - **The preset picker stays put:** a device's type and voice count (Consort's "DUO 1/2",

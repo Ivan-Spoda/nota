@@ -240,6 +240,27 @@ public:
     float getParam(int32_t i) const override { return (i >= 0 && i < kNumParams) ? p_[i].load(std::memory_order_relaxed) : 0.0f; }
     void setParam(int32_t i, float v) override { if (i >= 0 && i < kNumParams) p_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed); }
 
+    // Regression self-test for the comb read wrap (nota_engine_reverb_wrap_selftest): put the
+    // read position a hair past the write head — the case that used to read buf[size] — and
+    // check the comb reads its own first sample. Device-free, no allocation beyond the comb.
+    static bool combWrapSelfTest() {
+        int hits = 0;
+        for (int size : {1000, 1500, 2000, 2500, 3000, 4000}) {
+            for (int w : {2, 100, size / 2, size - 3}) {
+                Comb c; c.init(size);
+                std::fill(c.buf.begin(), c.buf.end(), 0.0f);
+                c.buf[0] = 1.0f; c.w = w; c.set(0.0f, 0.0f, 1.0f);
+                // Smallest float delay above w: w - delay is a tiny negative, rp + size rounds to size.
+                const float delay = std::nextafter(static_cast<float>(w), 1e9f);
+                float rp = w - delay; if (rp < 0) rp += size;
+                if (static_cast<int>(rp) != size) continue;   // this size/w doesn't hit the rounding case
+                ++hits;
+                if (c.process(0.0f, delay) != 1.0f) return false;
+            }
+        }
+        return hits > 0;   // the rounding case must actually have been exercised
+    }
+
     // Nothing is added to the dry path — the wet is the effect itself.
     int32_t latencySamples() const override { return 0; }
 
@@ -322,7 +343,8 @@ private:
         const int n = static_cast<int>(b.size());
         double rp = preW_ - std::clamp(delay, 0.0, static_cast<double>(n) - 2.0);
         if (rp < 0) rp += n;
-        const int i0 = static_cast<int>(rp); const float frac = static_cast<float>(rp - i0);
+        int i0 = static_cast<int>(rp); const float frac = static_cast<float>(rp - i0);
+        if (i0 >= n) i0 -= n;   // a hair-negative rp + n can round up to exactly n
         int i1 = i0 + 1; if (i1 >= n) i1 -= n;
         return b[i0] + (b[i1] - b[i0]) * frac;
     }
@@ -348,7 +370,13 @@ private:
             if (!std::isfinite(in)) in = 0.0f;
             float rp = w - std::clamp(delay, 1.0f, (float)size - 2.0f);
             if (rp < 0) rp += size;
-            int i0 = (int)rp; float frac = rp - i0; int i1 = i0 + 1; if (i1 >= size) i1 -= size;
+            int i0 = (int)rp; float frac = rp - i0;
+            // A read position a hair past the write head (w - delay ≈ -1e-5) wraps to
+            // size - 1e-5, which rounds to exactly `size` in float: buf[size] is one past the
+            // end. That stray heap word (often a huge finite float) recirculated as the loud
+            // looped "metallic burst". Keep the index in range.
+            if (i0 >= size) i0 -= size;
+            int i1 = i0 + 1; if (i1 >= size) i1 -= size;
             float out = buf[i0] + (buf[i1] - buf[i0]) * frac;
             store = out * damp2 + store * damp1;
             // Never let a NaN/Inf latch into the recirculating loop (would ring forever, hot).

@@ -318,7 +318,8 @@ private:
     float read(const std::vector<float>& b, double delay) const {
         double rp = write_ - std::clamp(delay, 1.0, static_cast<double>(size_) - 3.0);
         while (rp < 0) rp += size_;
-        const int i0 = static_cast<int>(rp); const float frac = static_cast<float>(rp - i0);
+        int i0 = static_cast<int>(rp); const float frac = static_cast<float>(rp - i0);
+        if (i0 >= size_) i0 -= size_;   // a hair-negative rp + size_ can round up to exactly size_
         int i1 = i0 + 1; if (i1 >= size_) i1 -= size_;
         return b[i0] + (b[i1] - b[i0]) * frac;
     }
