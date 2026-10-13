@@ -263,7 +263,7 @@ public partial class MainWindow
         }
     }
 
-    // Fill the warp-clip caches deferred during load, incrementally on the UI thread so the
+    // Fill the warp-clip caches deferred during load, on the engine's worker thread, so the
     // status-bar strip advances and the app stays responsive. Warped clips are silent until
     // their cache lands (a few seconds for a big project); everything else plays immediately.
     private async Task BuildWarpCachesAsync()
@@ -274,16 +274,12 @@ public partial class MainWindow
         if (total <= 0) return;
         await RunBackgroundAsync("Preparing warped clips…", async prog =>
         {
-            // ~a few ms of stretching per step keeps each UI frame short; yield so it paints.
-            const int chunk = 48000;   // device frames per step
-            long remaining = total;
-            while (remaining > 0 && gen == _warpBuildGen)   // bail if another project opened
+            // The stretch runs on the engine's worker thread; the UI only polls + installs.
+            await PollWarpBuildAsync(() => gen == _warpBuildGen, remaining =>   // bail if another project opened
             {
-                remaining = Engine.WarpBuildStep(chunk);
                 double frac = Math.Clamp(1.0 - (double)remaining / total, 0.0, 1.0);
                 prog.Report(ProgressReport.At(frac, $"Preparing warped clips… {frac * 100:0}\u2009%"));
-                await Task.Yield();
-            }
+            });
         });
     }
 

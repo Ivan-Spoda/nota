@@ -189,6 +189,11 @@ public sealed partial class NotaEngine
     public long WarpBuildRemaining
     { get { ThrowIfDisposed(); return NativeMethods.WarpBuildRemaining(_handle); } }
 
+    /// <summary>Background warp build: installs a finished cache, starts the next stale clip on
+    /// a worker thread. Never blocks; returns frames still needing a cache (0 = done).</summary>
+    public long WarpBuildPoll()
+    { ThrowIfDisposed(); return NativeMethods.WarpBuildPoll(_handle); }
+
     /// <summary>Per-clip volume envelope (0..1, clip-local beats).</summary>
     public AutomationPoint[] GetClipVolumeEnvelope(int trackId, int clipIndex)
     {
@@ -542,6 +547,20 @@ public sealed partial class NotaEngine
     {
         ThrowIfDisposed();
         return NativeMethods.ClipGetWarpFullPeaks(_handle, trackId, clipIndex, outMinMax, maxPoints);
+    }
+
+    /// <summary>Peaks over warped beats [beat0, beat1] of the full material (zoomed clip editor).</summary>
+    public int GetClipWarpPeaksRange(int trackId, int clipIndex, double beat0, double beat1, float[] outMinMax, int maxPoints)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.ClipGetWarpPeaksRange(_handle, trackId, clipIndex, beat0, beat1, outMinMax, maxPoints);
+    }
+
+    /// <summary>Peaks over source frames [frame0, frame1) of the whole sample (zoomed clip editor).</summary>
+    public int GetClipSourcePeaksRange(int trackId, int clipIndex, double frame0, double frame1, float[] outMinMax, int maxPoints)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.ClipGetSourcePeaksRange(_handle, trackId, clipIndex, frame0, frame1, outMinMax, maxPoints);
     }
 
     // --- Instrument tracks, MIDI clips & notes -----------------------------

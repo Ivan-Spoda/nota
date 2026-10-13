@@ -138,6 +138,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_warp_build_remaining")]
     internal static partial long WarpBuildRemaining(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_warp_build_poll")]
+    internal static partial long WarpBuildPoll(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_clip_volume_env_get")]
     internal static partial int ClipVolumeEnvGet(IntPtr engine, int trackId, int clipIndex, [Out] AutomationPoint[]? outPoints, int cap);
 
@@ -322,6 +325,14 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_clip_get_warp_full_peaks")]
     internal static partial int ClipGetWarpFullPeaks(IntPtr engine, int trackId, int clipIndex,
                                                      [Out] float[] outMinMax, int maxPoints);
+
+    [LibraryImport(Lib, EntryPoint = "nota_clip_get_warp_peaks_range")]
+    internal static partial int ClipGetWarpPeaksRange(IntPtr engine, int trackId, int clipIndex, double beat0, double beat1,
+                                                      [Out] float[] outMinMax, int maxPoints);
+
+    [LibraryImport(Lib, EntryPoint = "nota_clip_get_source_peaks_range")]
+    internal static partial int ClipGetSourcePeaksRange(IntPtr engine, int trackId, int clipIndex, double frame0, double frame1,
+                                                        [Out] float[] outMinMax, int maxPoints);
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_add_instrument_track")]
     internal static partial int AddInstrumentTrack(IntPtr engine);

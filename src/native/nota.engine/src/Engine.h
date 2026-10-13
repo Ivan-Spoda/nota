@@ -34,6 +34,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace nota {
@@ -383,11 +384,16 @@ public:
     int32_t getClipPeaks(int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints) const;
     int32_t getClipSourcePeaks(int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints) const;
     int32_t getClipWarpFullPeaks(int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints) const;
+    int32_t getClipWarpPeaksRange(int32_t trackId, int32_t clipIndex, double beat0, double beat1, float* outMinMax, int32_t maxPoints) const;
+    int32_t getClipSourcePeaksRange(int32_t trackId, int32_t clipIndex, double frame0, double frame1, float* outMinMax, int32_t maxPoints) const;
 
     // --- incremental warp-cache build (project load, with a progress bar) ---
     void    setDeferWarpBuild(bool defer);               // load path: skip cache builds, fill them via warpBuildStep
     int64_t warpBuildStep(int32_t maxFrames);            // build ~maxFrames of warped audio; returns frames remaining
     int64_t warpBuildRemainingFrames() const;            // frames of warped audio still needing a cache (progress)
+    // Background build (editor edits, imports, project load): installs a finished cache and
+    // starts the next stale clip on a worker thread. Never blocks; returns frames remaining.
+    int64_t warpBuildPoll();
 
     // --- arrangement geometry (M4) ---
     bool trackInfo(int32_t index, NotaTrackInfo* out) const;
@@ -1490,6 +1496,25 @@ private:
         std::unique_ptr<ClipWarpStream> stream;
         int64_t offset = 0;
     } wb_;
+    // The ONE clip being stretched on a worker thread (warpBuildPoll). The worker only reads
+    // its own copies (inputs) and the immutable sample; the authoring thread installs the
+    // result if the clip still has those inputs, else drops it. Cancelled + joined on teardown.
+    struct WarpJob {
+        int32_t trackId = -1;
+        int32_t clipIndex = -1;
+        std::shared_ptr<SampleBuffer> sample;
+        std::shared_ptr<WarpCache> cache;
+        std::atomic<int64_t> done{0};
+        std::atomic<bool> cancel{false};
+        std::atomic<bool> finished{false};
+        std::thread thread;
+    };
+    std::unique_ptr<WarpJob> wj_;
+    void cancelWarpJob();
+    // Warped clip whose cache is missing or built from other inputs (needs a (re)build).
+    bool warpNeedsBuild(const AudioClip& c) const;
+    // The next clip needing a build (arrangement clips, then session slots), or null.
+    const AudioClip* nextWarpBuildTarget(int32_t& trackId, int32_t& clipIndex) const;
     // Per-clip scratch for a warped clip carrying a volume envelope (render there,
     // then fold into the mix with the per-sample envelope gain). M9 follow-up.
     std::vector<float> clipEnvScratch_;

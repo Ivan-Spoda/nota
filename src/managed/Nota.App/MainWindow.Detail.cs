@@ -369,6 +369,7 @@ public partial class MainWindow
         bool slot = SessionClip.SceneOf(clipIndex) >= 0;
         _audioEditor = new AudioClipEditorView(Engine, trackId, clipIndex,
             TrackBrush(trackId), slot ? () => _session?.Refresh() : () => Timeline.Refresh());
+        _audioEditor.WarpBuildRequested = () => _ = PollWarpBuildAsync();
         _audioEditorTrackId = trackId;
         _audioEditorClipIndex = clipIndex;
     }

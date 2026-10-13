@@ -43,6 +43,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   The browser also opens wider by default.
 
 ### Fixed
+- **Long audio files no longer stall the app:** after dropping a long file (a multi-minute
+  FLAC, say) onto the arrangement, the app stuttered for as long as it took to time-stretch
+  the clip to the project tempo. Warping now runs in the background, so the app stays smooth
+  while the track says "Processing…".
+- **Editing a long clip's tempo no longer freezes:** clicking the BPM tag in the clip editor
+  froze the app for seconds on a long warped clip, because even a plain click re-warped the
+  whole file. A click now does nothing, and a double-click opens the BPM field at once. A real
+  tempo, marker, trim, pitch or warp-mode change re-warps in the background, and the clip
+  keeps playing its previous version until the new one is ready.
+- **Readable clip-editor ruler on long clips:** bar numbers no longer pile on top of each
+  other. The ruler labels every 2nd, 4th, 8th… bar as needed and adds beats and 16ths as
+  you zoom in. The grid through the waveform thins out the same way. The seconds ruler for
+  unwarped clips counts in minutes on long files and in milliseconds up close.
+- **The clip editor's waveform sharpens as you zoom:** zooming in used to magnify a coarse
+  overview into wide blocks. The visible part is now redrawn at screen resolution, and long
+  clips zoom all the way in to individual samples.
 - **Nota Reverb no longer fires a loud, looping metallic burst:** after a few minutes of
   playback the reverb could suddenly ring at full level and keep ringing. The cause was a
   rare off-by-one read just past the end of a reverb delay line, which pulled a garbage

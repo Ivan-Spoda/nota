@@ -532,6 +532,16 @@ NOTA_API int32_t nota_clip_get_source_peaks(const NotaEngine* engine, int32_t tr
  * clip editor's warped-clip Start/End brackets. Same output layout. */
 NOTA_API int32_t nota_clip_get_warp_full_peaks(const NotaEngine* engine, int32_t track_id,
                                                int32_t clip_index, float* out_min_max, int32_t max_points);
+/* Zoom-aware clip-editor peaks over a sub-range, file order, up to 8192 points:
+ * warp_peaks_range spans warped beats [beat0, beat1] of the full material (via the
+ * markers); source_peaks_range spans source frames [frame0, frame1) of the whole sample.
+ * Buckets narrower than one frame read that single frame (min == max). */
+NOTA_API int32_t nota_clip_get_warp_peaks_range(const NotaEngine* engine, int32_t track_id,
+                                                int32_t clip_index, double beat0, double beat1,
+                                                float* out_min_max, int32_t max_points);
+NOTA_API int32_t nota_clip_get_source_peaks_range(const NotaEngine* engine, int32_t track_id,
+                                                  int32_t clip_index, double frame0, double frame1,
+                                                  float* out_min_max, int32_t max_points);
 
 /* ---- Background audio import -------------------------------------------- */
 /* Decodes a WAV/FLAC/MP3 block by block on ANY thread (it touches no engine state), so
@@ -1016,6 +1026,12 @@ NOTA_API double     nota_clip_auto_warp(NotaEngine* engine, int32_t track_id, in
 NOTA_API void       nota_engine_set_defer_warp_build(NotaEngine* engine, int32_t defer);
 NOTA_API int64_t    nota_engine_warp_build_step(NotaEngine* engine, int32_t max_frames);
 NOTA_API int64_t    nota_engine_warp_build_remaining(const NotaEngine* engine);
+/* Background warp-cache build: never blocks. Installs a cache a worker thread finished
+ * (if its clip is unchanged since), then starts the next clip needing one on a worker.
+ * Drive it from a timer until it returns 0. Pair with set_defer_warp_build around edits so
+ * they skip the synchronous stretch; a clip keeps playing its previous (stale) cache —
+ * clipped to its new length — until the new one lands. Returns frames still remaining. */
+NOTA_API int64_t    nota_engine_warp_build_poll(NotaEngine* engine);
 /* Beats-mode warp: detect transients and pin a grid-snapped warp marker at each hit
  * so percussion locks tightly to the grid. Sets Beats mode. Returns the detected BPM,
  * or 0 when detection fails (clip left unchanged). */

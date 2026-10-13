@@ -18,6 +18,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Nota.Application;
 using static Nota.App.ClipEditorKit;
 
@@ -57,6 +58,7 @@ public sealed class AudioClipEditorView : UserControl
     private int _warpMode = 3;   // Complex
     private bool _snapToGrid = true;                  // trim brackets snap to whole beats (default on)
     private double _detectedBpm;
+    private long _srcFrames;   // the whole sample's frames (unwarped detail peaks)
     private bool _envMode;
     private int _envTarget;   // 0 = Volume (0..1), 1 = Pan (-1..1)
     private static readonly string[] WarpModes = { "Beats", "Tones", "Texture", "Complex", "Complex Pro", "Re-Pitch" };
@@ -71,9 +73,23 @@ public sealed class AudioClipEditorView : UserControl
         _wave.SetColor(clipColor);
         _wave.MarkersCommitted = (src, beat) =>
         {
-            _engine.SetClipWarpMarkers(TrackId, ClipIndex, src, beat);
+            WarpEdit(() => _engine.SetClipWarpMarkers(TrackId, ClipIndex, src, beat));
             Reload();
             _onChanged();
+        };
+        // Zoomed in: the visible slice's own peaks (file order, like the overview).
+        _wave.DetailPeaks = (f0, f1, n) =>
+        {
+            var pk = new float[n * 2];
+            int got = 0;
+            if (_warpEnabled)
+            {
+                if (_engine.TryGetAudioClipInfo(TrackId, ClipIndex, out var wi) && wi.WarpBeats > 0)
+                    got = _engine.GetClipWarpPeaksRange(TrackId, ClipIndex, f0 * wi.WarpBeats, f1 * wi.WarpBeats, pk, n);
+            }
+            else if (_srcFrames > 0)
+                got = _engine.GetClipSourcePeaksRange(TrackId, ClipIndex, f0 * _srcFrames, f1 * _srcFrames, pk, n);
+            return (pk, got);
         };
         _wave.SourceRegionCommitted = (off, len) =>
         {
@@ -83,7 +99,7 @@ public sealed class AudioClipEditorView : UserControl
         };
         _wave.WarpTrimCommitted = (ps, pe) =>
         {
-            _engine.SetClipWarpTrim(TrackId, ClipIndex, ps, pe);
+            WarpEdit(() => _engine.SetClipWarpTrim(TrackId, ClipIndex, ps, pe));
             Reload();
             _onChanged();
         };
@@ -205,11 +221,13 @@ public sealed class AudioClipEditorView : UserControl
     private readonly Canvas _overlay;
     private readonly ScrollBar _hScroll;
     private int _bpmSeg = -1;
+    private double _bpmEditStart;   // the segment's BPM when the field opened
 
     // Inline BPM editor over the warp strip: position + focus a small field.
     private void ShowBpmEditor(int seg, double bpm, double xCenter, double yTop)
     {
         _bpmSeg = seg;
+        _bpmEditStart = bpm;
         _bpmBox.Text = bpm.ToString("0.##", NotaNum.Culture);
         Canvas.SetLeft(_bpmBox, Math.Max(0, xCenter - _bpmBox.Width / 2));
         Canvas.SetTop(_bpmBox, Math.Max(0, yTop - 2));
@@ -229,7 +247,8 @@ public sealed class AudioClipEditorView : UserControl
         if (!_bpmBox.IsVisible) return;
         int seg = _bpmSeg;
         HideBpm();
-        if (seg >= 0 && double.TryParse(_bpmBox.Text, NumberStyles.Any, NotaNum.Culture, out var v) && v > 0)
+        if (seg >= 0 && double.TryParse(_bpmBox.Text, NumberStyles.Any, NotaNum.Culture, out var v) && v > 0
+            && Math.Abs(v - _bpmEditStart) >= 0.005)   // unchanged → no re-warp
             _wave.SetSegmentBpm(seg, v);   // → MarkersCommitted → engine + Reload
     }
 
@@ -287,6 +306,8 @@ public sealed class AudioClipEditorView : UserControl
         if (gi.SampleId != 0 && _engine.TryGetSampleInfo(gi.SampleId, out var gs) && gs.Frames > 0)
         { haveSample = true; srcSR = gs.SampleRate; srcFrames = gs.Frames; }
         _wave.SetSourceRate(srcSR);
+        _srcFrames = srcFrames;
+        _wave.SetSourceFrames(srcFrames);
 
         // Warp markers (only meaningful while warping). Unwarped clips instead show the
         // whole sample with draggable Start/End brackets (source-region editing).
@@ -343,11 +364,24 @@ public sealed class AudioClipEditorView : UserControl
         _wave.SetPlayhead(frac);
     }
 
+    /// <summary>Set by the host: runs the engine's background warp build after a warp edit.</summary>
+    public Action? WarpBuildRequested;
+
+    // A warp-affecting edit skips the synchronous stretch (seconds of UI freeze on a long
+    // file): the clip keeps playing its previous cache until the background build lands.
+    private void WarpEdit(Action edit)
+    {
+        _engine.SetDeferWarpBuild(true);
+        try { edit(); }
+        finally { _engine.SetDeferWarpBuild(false); }
+        WarpBuildRequested?.Invoke();
+    }
+
     private void Resize(int deltaBeats)
     {
         double len = Math.Max(0.25, _lengthBeats + deltaBeats);
         // Warped clips own a musical target length; unwarped clips trim the source.
-        if (_warpEnabled) _engine.SetClipWarpLength(TrackId, ClipIndex, len);
+        if (_warpEnabled) WarpEdit(() => _engine.SetClipWarpLength(TrackId, ClipIndex, len));
         else _engine.TrimClip(TrackId, ClipIndex, _startBeat, len);
         Reload();
         _onChanged();
@@ -379,7 +413,7 @@ public sealed class AudioClipEditorView : UserControl
     private void ToggleWarp()
     {
         _warpEnabled = !_warpEnabled;
-        _engine.SetClipWarp(TrackId, ClipIndex, _warpEnabled, _warpMode);
+        WarpEdit(() => _engine.SetClipWarp(TrackId, ClipIndex, _warpEnabled, _warpMode));
         Reload();
         _onChanged();
     }
@@ -387,7 +421,7 @@ public sealed class AudioClipEditorView : UserControl
     private void SetWarpMode(int mode)
     {
         _warpMode = Math.Clamp(mode, 0, WarpModes.Length - 1);
-        _engine.SetClipWarp(TrackId, ClipIndex, _warpEnabled, _warpMode);
+        WarpEdit(() => _engine.SetClipWarp(TrackId, ClipIndex, _warpEnabled, _warpMode));
         Reload();
         _onChanged();
     }
@@ -397,7 +431,7 @@ public sealed class AudioClipEditorView : UserControl
     // material, in which case the clip is left as-is.
     private void AutoWarp()
     {
-        _detectedBpm = _engine.AutoWarpClip(TrackId, ClipIndex);
+        WarpEdit(() => _detectedBpm = _engine.AutoWarpClip(TrackId, ClipIndex));
         ShowDetected();
         Reload();
         _onChanged();
@@ -407,7 +441,7 @@ public sealed class AudioClipEditorView : UserControl
     // percussion locks tightly to the grid ("Beats"). Fails on flat material.
     private void TransientWarp()
     {
-        _detectedBpm = _engine.BeatWarpClip(TrackId, ClipIndex);
+        WarpEdit(() => _detectedBpm = _engine.BeatWarpClip(TrackId, ClipIndex));
         ShowDetected();
         Reload();
         _onChanged();
@@ -488,7 +522,7 @@ public sealed class AudioClipEditorView : UserControl
     private void Pitch(int d)
     {
         _pitch = Math.Clamp(_pitch + d, -48, 48);
-        _engine.SetClipPitch(TrackId, ClipIndex, _pitch);
+        WarpEdit(() => _engine.SetClipPitch(TrackId, ClipIndex, _pitch));
         Reload();          // pitch changes the clip's beat-length (varispeed)
         _onChanged();
     }
@@ -560,6 +594,7 @@ public sealed class AudioClipEditorView : UserControl
         // BPM chip and drag up/down; the warp re-times live (committed on release).
         private int _bpmScrubSeg = -1, _bpmHoverSeg = -1;
         private double _bpmScrubStartY, _bpmScrubStartBpm;
+        private bool _bpmScrubMoved;   // a plain click (no drag) must not re-warp the clip
 
         // Volume envelope (M9 follow-up): points (beat, value 0..1) in clip-local beats.
         private static readonly IPen EnvPen = new Pen(NotaPalette.Accent, 1.8);
@@ -663,7 +698,10 @@ public sealed class AudioClipEditorView : UserControl
         // this same axis, so one zoom+scroll drives everything. _zoom=1 is fit-to-width.
         private double _zoom = 1.0;
         private double _scrollFrac;
-        private const double MaxZoom = 60.0;
+        // Deep enough to reach single source frames (~8 px each) on any clip length.
+        private double _srcFramesAll;   // the whole sample's frames (sets the zoom limit)
+        public void SetSourceFrames(double frames) => _srcFramesAll = Math.Max(0, frames);
+        private double MaxZoom => Math.Max(60.0, _srcFramesAll * 8 / Math.Max(1, Bounds.Width));
         /// <summary>Raised when zoom/scroll changes so the host can resync its scrollbar.</summary>
         public Action? ViewChanged;
         public double Zoom => _zoom;
@@ -744,7 +782,7 @@ public sealed class AudioClipEditorView : UserControl
         }
 
         public void SetColor(IBrush b) { _wave = b; InvalidateVisual(); }
-        public void SetPeaks(float[] peaks, int count) { _peaks = peaks; _count = count; InvalidateVisual(); }
+        public void SetPeaks(float[] peaks, int count) { _peaks = peaks; _count = count; ClearDetail(); InvalidateVisual(); }
         public void SetPlayhead(double frac)
         {
             if (Math.Abs(frac - _frac) < 1e-4) return;
@@ -815,7 +853,7 @@ public sealed class AudioClipEditorView : UserControl
                             BpmEditRequested?.Invoke(b.seg, b.bpm, (b.rect.Left + b.rect.Right) / 2, b.rect.Top);
                         else
                         {
-                            _bpmScrubSeg = b.seg; _bpmScrubStartY = pp.Y; _bpmScrubStartBpm = b.bpm;
+                            _bpmScrubSeg = b.seg; _bpmScrubStartY = pp.Y; _bpmScrubStartBpm = b.bpm; _bpmScrubMoved = false;
                             e.Pointer.Capture(this);
                         }
                         e.Handled = true;
@@ -948,6 +986,8 @@ public sealed class AudioClipEditorView : UserControl
             {
                 double dy = _bpmScrubStartY - e.GetPosition(this).Y;
                 double bpm = Math.Clamp(_bpmScrubStartBpm + dy * 0.5, 20, 999);
+                if (!_bpmScrubMoved && Math.Abs(dy) < 2) return;   // a click, not a drag (yet)
+                _bpmScrubMoved = true;
                 ApplySegmentBpm(_bpmScrubSeg, bpm, commit: false);   // live warp + redraw, no engine round-trip
                 return;
             }
@@ -1026,7 +1066,14 @@ public sealed class AudioClipEditorView : UserControl
                 InvalidateVisual();
                 return;
             }
-            if (_bpmScrubSeg >= 0) { _bpmScrubSeg = -1; e.Pointer.Capture(null); Commit(); return; }   // push the scrubbed warp (one undo step)
+            if (_bpmScrubSeg >= 0)   // push the scrubbed warp (one undo step) — only if it was dragged
+            {
+                _bpmScrubSeg = -1; e.Pointer.Capture(null);
+                if (_bpmScrubMoved) Commit();
+                _bpmScrubMoved = false;
+                InvalidateVisual();
+                return;
+            }
             if (_envDrag >= 0 || _envBend is not null) { _envDrag = -1; _envBend = null; e.Pointer.Capture(null); CommitEnv(); return; }
             if (_srcDrag >= 0)
             {
@@ -1117,9 +1164,140 @@ public sealed class AudioClipEditorView : UserControl
             MarkersCommitted?.Invoke(src, beat);
         }
 
+        // ---- zoom-aware waveform detail ----------------------------------------
+        // The overview (_peaks) spans the whole clip at a fixed resolution; zoomed in, the
+        // host fetches peaks for just the visible slice (padded a screen either side so a
+        // scroll doesn't refetch at once). Content (file-order) fracs, like the overview.
+        /// <summary>Set by the host: peaks over content fracs [f0, f1] at n buckets → (peaks, count).</summary>
+        public Func<double, double, int, (float[] peaks, int count)>? DetailPeaks;
+        private float[]? _dPeaks;
+        private int _dCount;
+        private double _dF0, _dF1;
+        private bool _detailQueued;
+        private const double DetailPx = 1.5;   // overview buckets wider than this → fetch detail
+
+        private void ClearDetail() { _dPeaks = null; _dCount = 0; }
+
+        // Visible content-frac range (mirrored back when the clip is drawn reversed).
+        private (double f0, double f1) VisibleContent(double w)
+        {
+            double v0 = Math.Clamp(XToFracView(0, w), 0, 1), v1 = Math.Clamp(XToFracView(w, w), 0, 1);
+            return _reversed ? (1 - v1, 1 - v0) : (v0, v1);
+        }
+
+        private bool DetailCovers(double f0, double f1, double w)
+        {
+            if (_dPeaks is null || _dCount <= 0 || _dF0 > f0 + 1e-12 || _dF1 < f1 - 1e-12) return false;
+            double px = (_dF1 - _dF0) * _zoom * w / _dCount;   // detail bucket width at this zoom
+            return px <= DetailPx * 1.01 && px >= 0.25;         // fine enough, and not zoomed far back out
+        }
+
+        private void RequestDetail()
+        {
+            if (_detailQueued || DetailPeaks is null) return;
+            _detailQueued = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                _detailQueued = false;
+                if (DetailPeaks is null) return;
+                double ww = Bounds.Width;
+                var (a, b) = VisibleContent(ww);
+                double span = b - a;
+                if (span <= 0) return;
+                double p0 = Math.Max(0, a - span), p1 = Math.Min(1, b + span);
+                int n = (int)Math.Clamp(Math.Ceiling((p1 - p0) * _zoom * ww), 1, MaxDetail);
+                // Too wide a slice for one fetch → just the visible part.
+                if ((p1 - p0) * _zoom * ww / n > DetailPx) { p0 = a; p1 = b; n = (int)Math.Clamp(Math.Ceiling(span * _zoom * ww), 1, MaxDetail); }
+                var (pk, cnt) = DetailPeaks(p0, p1, n);
+                if (cnt <= 0) return;
+                _dPeaks = pk; _dCount = cnt; _dF0 = p0; _dF1 = p1;
+                InvalidateVisual();
+            }, DispatcherPriority.Background);
+        }
+        private const int MaxDetail = 8192;   // the engine's range-peaks cap
+
+        // Peaks whose buckets evenly span content fracs [f0, f1], drawn through the zoom/
+        // scroll (and mirror) axis; only the visible buckets are visited.
+        private void DrawPeaks(DrawingContext ctx, float[] peaks, int count, double f0, double f1, double w,
+                               double mid, double wh, AdsrFrame adsrF, ClipAdsr adsrFit, bool shaped)
+        {
+            double amp = wh / 2 - 6;
+            double span = f1 - f0;
+            if (span <= 0) return;
+            double bwRaw = span * _zoom * w / count;
+            double bw = Math.Max(1, bwRaw);
+            var (c0, c1) = VisibleContent(w);
+            int i0 = Math.Max(0, (int)Math.Floor((c0 - f0) / span * count) - 1);
+            int i1 = Math.Min(count - 1, (int)Math.Ceiling((c1 - f0) / span * count) + 1);
+            for (int i = i0; i <= i1; i++)
+            {
+                // FracToX marks the bucket's leading edge — its RIGHT edge once mirrored.
+                double fx = FracToX(f0 + span * i / count, w);
+                if (_reversed) fx -= bwRaw;
+                if (fx + bw < 0 || fx > w) continue;
+                // The ADSR shapes the played region the way it sounds (outside it is darkened anyway).
+                double g = _gain;
+                if (shaped)
+                {
+                    double bt = adsrF.Beat(fx + bw / 2);
+                    if (bt >= 0 && bt <= _adsrLen) g *= adsrFit.GainAt(bt, _adsrLen);
+                }
+                float mn = (float)Math.Clamp(peaks[i * 2] * g, -1.0, 1.0);
+                float mx = (float)Math.Clamp(peaks[i * 2 + 1] * g, -1.0, 1.0);
+                ctx.FillRectangle(_wave, new Rect(fx, mid - mx * amp, bw, Math.Max(1, (mx - mn) * amp)));
+            }
+        }
+
+        // ---- ruler / grid density ----------------------------------------------
+        private const double GridMinPx = 8;     // closest two grid lines may sit
+        private const double TickMinPx = 6;     // closest two ruler ticks may sit
+        private const double LabelPadPx = 12;   // gap after a ruler label
+        // Beat steps the ruler and grid choose from: sub-beats (power-of-two), beats, then bars ×2ⁿ.
+        private const double GridFinest = 1.0 / 16;   // the wave grid stops at 64ths (ruler ticks go finer)
+        private static readonly double[] BeatSteps = BuildBeatSteps();
+        private static double[] BuildBeatSteps()
+        {
+            var l = new System.Collections.Generic.List<double>();
+            for (double f = 1.0 / 4096; f < 4; f *= 2) l.Add(f);   // ruler ticks reach sample-level zoom
+            for (double b = BeatsPerBar; b <= BeatsPerBar * 65536.0; b *= 2) l.Add(b);
+            return l.ToArray();
+        }
+        // The smallest step (beats) at least minPx wide.
+        private static double BeatStep(double pxPerBeat, double minPx)
+        {
+            foreach (var s in BeatSteps) if (s * pxPerBeat >= minPx) return s;
+            return BeatSteps[^1];
+        }
+        private static bool IsMultiple(double v, double step) => Math.Abs(v / step - Math.Round(v / step)) < 1e-6;
+        // Visible beat range, clamped to the warp.
+        private (double b0, double b1) VisibleBeats(double w)
+        {
+            var (f0, f1) = VisibleContent(w);
+            return (f0 * TotalBeats, f1 * TotalBeats);
+        }
+        private double _monoCharW;
+        private double MonoCharW => _monoCharW > 0 ? _monoCharW
+            : _monoCharW = new FormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, RulerBar).Width / 10;
+
+        // bar / bar.beat / bar.beat.16th[.sub] label for a beat (1-based), as fine as the step needs.
+        private static string BeatLabel(double beat, double step)
+        {
+            int bar = (int)Math.Floor(beat / BeatsPerBar + 1e-9) + 1;
+            double inBar = beat - (bar - 1) * BeatsPerBar;
+            int bt = (int)Math.Floor(inBar + 1e-9) + 1;
+            double sub = inBar - (bt - 1);
+            if (IsMultiple(beat, BeatsPerBar)) return bar.ToString(NotaNum.Culture);
+            if (step >= 1 || sub < 1e-6) return $"{bar}.{bt}";
+            int six = (int)Math.Floor(sub * 4 + 1e-6) + 1;   // 16ths within the beat
+            return $"{bar}.{bt}.{six}";
+        }
+
         public override void Render(DrawingContext ctx)
         {
             double w = Bounds.Width, h = Bounds.Height;
+            // Zoomed in, buckets, markers and the playhead can sit past either edge: keep every
+            // stroke inside the editor instead of over the inspector or the panel beside it.
+            using var bounds = ctx.PushClip(new Rect(0, 0, w, h));
             double top = WaveTop, wh = Math.Max(0, h - top);
             ctx.FillRectangle(Bg, new Rect(0, 0, w, h));
             _bpmHot.Clear();
@@ -1130,16 +1308,18 @@ public sealed class AudioClipEditorView : UserControl
             ctx.DrawLine(StripEdge, new Point(0, top - 0.5), new Point(w, top - 0.5));
             DrawRuler(ctx, w);
 
-            // Beat grid through the wave (warped: the beats are known).
+            // Beat grid through the wave (warped: the beats are known), thinned to the zoom so
+            // a long clip doesn't turn into a solid comb; only the visible slice is walked.
             if (_mk.Count > 1)
             {
                 double tb = TotalBeats;
-                int last = (int)Math.Floor(tb + 1e-6);
-                for (int b = 1; b <= last; b++)
+                double step = Math.Max(GridFinest, BeatStep(_zoom * w / tb, GridMinPx));
+                var (b0, b1) = VisibleBeats(w);
+                for (double b = Math.Max(step, Math.Floor(b0 / step) * step); b <= Math.Min(b1, tb - 1e-6); b += step)
                 {
                     double x = BeatToX(b, w);
-                    if (x < -0.5 || x > w + 0.5) continue;
-                    ctx.DrawLine(b % BeatsPerBar == 0 ? GridBarPen : GridBeatPen, new Point(x + 0.5, top), new Point(x + 0.5, h));
+                    bool bar = IsMultiple(b, BeatsPerBar);
+                    ctx.DrawLine(bar ? GridBarPen : GridBeatPen, new Point(x + 0.5, top), new Point(x + 0.5, h));
                 }
             }
 
@@ -1152,25 +1332,30 @@ public sealed class AudioClipEditorView : UserControl
             bool shaped = !adsrFit.IsIdentity;
             if (_peaks is not null && _count > 0 && wh > 4)
             {
-                double amp = wh / 2 - 6;
-                double bw = Math.Max(1, _zoom * w / _count);
-                for (int i = 0; i < _count; i++)
+                // Zoomed in past the overview's resolution → the visible slice's own peaks
+                // (re-fetched once the view settles). Until a fresh fetch lands, the previous
+                // detail keeps drawing wherever it reaches (it's still far finer than the
+                // overview), so zooming never flashes back to the overview's wide blocks.
+                var (c0, c1) = VisibleContent(w);
+                bool coarse = _zoom * w / _count > DetailPx;
+                if (coarse && !DetailCovers(c0, c1, w)) RequestDetail();
+                bool useDetail = coarse && _dPeaks is not null && _dCount > 0
+                                 && (_dF1 - _dF0) / _dCount < 1.0 / _count && _dF1 > c0 && _dF0 < c1;
+                if (!useDetail)
+                    DrawPeaks(ctx, _peaks, _count, 0, 1, w, mid, wh, adsrF, adsrFit, shaped);
+                else
                 {
-                    // FracToX marks the bucket's leading edge — its RIGHT edge once mirrored.
-                    double fx = FracToX((double)i / _count, w);
-                    if (_reversed) fx -= bw;
-                    if (fx + bw < 0) { if (_reversed) break; continue; }
-                    if (fx > w) { if (_reversed) continue; break; }
-                    // The ADSR shapes the played region the way it sounds (outside it is darkened anyway).
-                    double g = _gain;
-                    if (shaped)
-                    {
-                        double bt = adsrF.Beat(fx + bw / 2);
-                        if (bt >= 0 && bt <= _adsrLen) g *= adsrFit.GainAt(bt, _adsrLen);
-                    }
-                    float mn = (float)Math.Clamp(_peaks[i * 2] * g, -1.0, 1.0);
-                    float mx = (float)Math.Clamp(_peaks[i * 2 + 1] * g, -1.0, 1.0);
-                    ctx.FillRectangle(_wave, new Rect(fx, mid - mx * amp, bw, Math.Max(1, (mx - mn) * amp)));
+                    // The overview only outside the detail's span, the detail inside it.
+                    double xa = FracToX(_dF0, w), xb = FracToX(_dF1, w);
+                    if (xa > xb) (xa, xb) = (xb, xa);
+                    if (xa > 0)
+                        using (ctx.PushClip(new Rect(0, top, xa, wh)))
+                            DrawPeaks(ctx, _peaks, _count, 0, 1, w, mid, wh, adsrF, adsrFit, shaped);
+                    if (xb < w)
+                        using (ctx.PushClip(new Rect(xb, top, w - xb, wh)))
+                            DrawPeaks(ctx, _peaks, _count, 0, 1, w, mid, wh, adsrF, adsrFit, shaped);
+                    using (ctx.PushClip(new Rect(Math.Max(0, xa), top, Math.Max(0, Math.Min(w, xb) - Math.Max(0, xa)), wh)))
+                        DrawPeaks(ctx, _dPeaks!, _dCount, _dF0, _dF1, w, mid, wh, adsrF, adsrFit, shaped);
                 }
             }
 
@@ -1327,22 +1512,37 @@ public sealed class AudioClipEditorView : UserControl
         // Bars in Ink 2, beats in Ink 6, mono 9 on the baseline right of each tick.
         private void DrawRuler(DrawingContext ctx, double w)
         {
+            using var clip = ctx.PushClip(new Rect(0, 0, w, RulerH));   // a label half off-screen stays inside
+            double cw = MonoCharW;
             if (_mk.Count > 1)
             {
+                // Labels at the smallest step wide enough for its own label text (bars thin
+                // to every 2nd/4th/8th… on a long clip); unlabelled ticks at a finer step.
                 double tb = TotalBeats;
-                double beatW = _zoom * w / tb;
-                int step = beatW >= 30 ? 1 : BeatsPerBar;
-                int last = (int)Math.Floor(tb + 1e-6);
-                for (int b = 0; b <= last; b += step)
+                double ppb = _zoom * w / tb;
+                int barDigits = ((int)Math.Floor(tb / BeatsPerBar) + 1).ToString(NotaNum.Culture).Length;
+                double labelStep = BeatSteps[^1];
+                foreach (var st in BeatSteps)
+                {
+                    if (st < 0.25 || st == 2) continue;   // labels: 16ths, half-beats, beats, then bars
+                    int chars = st >= BeatsPerBar ? barDigits : st >= 1 ? barDigits + 2 : barDigits + 4;
+                    if (st * ppb >= chars * cw + LabelPadPx + 4) { labelStep = st; break; }
+                }
+                double tickStep = Math.Min(labelStep, BeatStep(ppb, TickMinPx));
+                var (b0, b1) = VisibleBeats(w);
+                double end = Math.Min(b1 + tickStep, tb + 1e-6);
+                for (double b = Math.Max(0, Math.Floor(b0 / tickStep) * tickStep - labelStep); b <= end; b += tickStep)
                 {
                     double x = BeatToX(b, w);
-                    if (x < -40 || x > w + 0.5) continue;
-                    bool bar = b % BeatsPerBar == 0;
-                    ctx.DrawLine(bar ? GridBarPen : GridBeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, RulerH));
-                    if (b >= last) continue;
-                    int barNo = b / BeatsPerBar + 1, beatNo = b % BeatsPerBar + 1;
-                    string label = bar ? barNo.ToString(NotaNum.Culture) : $"{barNo}.{beatNo}";
-                    var ft = new FormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, bar ? RulerBar : RulerBeat);
+                    if (x < -200 || x > w + 0.5) continue;
+                    bool labelled = IsMultiple(b, labelStep);
+                    bool bar = IsMultiple(b, BeatsPerBar);
+                    if (labelled)
+                        ctx.DrawLine(bar ? GridBarPen : GridBeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, RulerH));
+                    else
+                        ctx.DrawLine(GridBeatPen, new Point(x + 0.5, RulerH - 6), new Point(x + 0.5, RulerH));
+                    if (!labelled || b >= tb - 1e-6) continue;
+                    var ft = new FormattedText(BeatLabel(b, labelStep), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, bar ? RulerBar : RulerBeat);
                     ctx.DrawText(ft, new Point(_reversed ? x - 4 - ft.Width : x + 4, RulerH - 5 - ft.Height));
                 }
                 return;
@@ -1350,19 +1550,30 @@ public sealed class AudioClipEditorView : UserControl
             if (!(_srcMode && _srcTotal > 0 && _srcSR > 0)) return;
             double secs = _srcTotal / _srcSR;
             double pxPerSec = _zoom * w / Math.Max(1e-6, secs);
-            double[] steps = { 0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60 };
-            double stepS = 60;
-            foreach (var s in steps) if (s * pxPerSec >= 56) { stepS = s; break; }
-            for (int k = 0; k * stepS <= secs + 1e-9; k++)
+            double[] steps = { 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600 };
+            double stepS = steps[^1];
+            foreach (var st in steps)
+                if (st * pxPerSec >= SecondsLabel(secs, st).Length * cw + LabelPadPx + 4) { stepS = st; break; }
+            var (f0, f1) = VisibleContent(w);
+            long k0 = Math.Max(0, (long)Math.Floor(f0 * secs / stepS) - 1), k1 = (long)Math.Ceiling(f1 * secs / stepS) + 1;
+            for (long k = k0; k <= k1 && k * stepS <= secs + 1e-9; k++)
             {
                 double t = k * stepS;
                 double x = SrcToX(t * _srcSR, w);
-                if (x < -40 || x > w + 0.5) continue;
+                if (x < -200 || x > w + 0.5) continue;
                 ctx.DrawLine(GridBeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, RulerH));
-                var ft = new FormattedText(string.Format(NotaNum.Culture, stepS < 1 ? "{0:0.0#} s" : "{0:0} s", t),
-                    NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, k == 0 ? RulerBar : RulerBeat);
+                var ft = new FormattedText(SecondsLabel(t, stepS), NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, k == 0 ? RulerBar : RulerBeat);
                 ctx.DrawText(ft, new Point(_reversed ? x - 4 - ft.Width : x + 4, RulerH - 5 - ft.Height));
             }
+        }
+
+        // Seconds-ruler label: m:ss once a step reaches a minute, else seconds with as many
+        // decimals as the step needs.
+        private static string SecondsLabel(double t, double step)
+        {
+            if (step >= 60) { long r = (long)Math.Round(t); return $"{r / 60}:{r % 60:00}"; }
+            string fmt = step >= 1 ? "0" : step >= 0.1 ? "0.0#" : step >= 0.01 ? "0.00" : "0.000#";
+            return t.ToString(fmt, NotaNum.Culture) + " s";
         }
 
         // bar.beat.16th of a warp beat (1-based) for the selected marker's chip.

@@ -46,6 +46,7 @@ Engine::Engine()
 }
 
 Engine::~Engine() {
+    cancelWarpJob();   // a background warp build must not outlive the engine
     stop();
     if (input_) input_->stop();   // monitoring can keep the capture device open until teardown
 }
