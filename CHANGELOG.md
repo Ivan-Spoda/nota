@@ -30,6 +30,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   (shortcut **F11**) enters and leaves full screen; on macOS the green button does it.
 
 ### Fixed
+- **The preset picker opens from anywhere on it:** the preset field in a device header only
+  responded to a click on the preset's name. The whole field opens the list again.
+- **The preset picker stays put:** a device's type and voice count (Consort's "DUO 1/2",
+  "POLY 12/16") now sit left of the preset picker, so the picker no longer shifts when the
+  count changes width.
 - **Sample-pack presets open in the browser:** under Nota Mosaic → Packs, a pack wouldn't
   expand, so its presets couldn't be seen or dragged. Packs now expand to their presets like
   any other preset folder.

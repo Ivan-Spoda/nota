@@ -209,7 +209,9 @@ public sealed partial class DeviceChainView
         }
         // A compact (mini) card keeps the same picker — same list, same current preset — only narrower:
         // the preset belongs to the device, not to the card size.
-        if (presets.Count > 0) right.Children.Insert(0, PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
+        // The picker sits right of the type badge: the badge's live voice count changes width
+        // (Consort's "DUO 1/2" → "POLY 12/16"), and on the left it would push the picker around.
+        if (presets.Count > 0) right.Children.Insert(right.Children.IndexOf(badge) + 1, PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
             nameWidth: s.Compact ? 74 : 132));
 
         void Move(int to) { if (s.Kind == ChainKind.Midi) _engine.MoveMidiEffect(_trackId, di, to); else _engine.MoveDevice(_trackId, di, to); ExtrasMoved(s.Kind, di, to); Rebuild(); Changed?.Invoke(); }
