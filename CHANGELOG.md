@@ -34,6 +34,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   from the browser selects the track it landed on — a newly created track included — in
   both the arrangement and the session view. Moving clips to another track, or dropping a
   clip onto a Sampler / Drum Rack / Grain track, selects the destination track too.
+- **Clearer device selection:** the selected device is outlined by a ring just outside the
+  card instead of on its edge, so it no longer crowds the device name or the preset picker.
+  The Devices / Pattern / Clip tabs sit a little lower, clear of the panel's top edge.
 
 ### Fixed
 - **Nota Reverb no longer fires a loud, looping metallic burst:** after a few minutes of

@@ -286,21 +286,27 @@ public sealed partial class DeviceChainView
         var bodyHost = new Border { Child = body };
         var root = new DockPanel { LastChildFill = true, Children = { headerBar, bodyHost } };
         bool sel = IsSelected(s.Kind, di);
-        // Selection is drawn as an inset overlay ring (not by thickening the card's own edge
-        // border): the edge border sits on the rounded-clip boundary under the square-cornered
-        // header, where a 2px stroke reads as "cut after the curve". The overlay lives safely
-        // inside the clip so its rounded corners render cleanly.
+        // Selection is drawn as a focus ring outside the card, with a small gap (not by
+        // thickening the card's own edge border, nor as an inset overlay): drawn on or inside
+        // the edge it crowds the header — the title and the preset picker read as touching it.
+        // The ring hangs outside the clipped shell; the chain row's margin and spacing leave it room.
+        const double RingGap = 3;
         var selRing = new Border
         {
-            BorderBrush = AccentBright, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Body, Margin = new Thickness(0.5),
+            BorderBrush = AccentBright, BorderThickness = new Thickness(1.5),
+            CornerRadius = new CornerRadius(NotaRadius.BodyValue + RingGap), Margin = new Thickness(-RingGap),
             IsHitTestVisible = false, IsVisible = sel,
+        };
+        var shell = new Border
+        {
+            Background = ShellBg, BorderBrush = BorderDef,
+            BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Body, ClipToBounds = true,
+            Child = root,
         };
         var card = new Border
         {
-            Width = s.Width, Height = CardH, Background = ShellBg, BorderBrush = BorderDef,
-            BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Body, ClipToBounds = true,
-            Child = new Panel { Children = { root, selRing } },
+            Width = s.Width, Height = CardH,
+            Child = new Panel { Children = { shell, selRing } },
         };
         // Bypassed: the body loses its brass but stays playable (almanac: no opacity for state).
         if (s.Bypassed) card.AttachedToVisualTree += (_, _) => Inactive.Set(bodyHost, true, interactive: true);

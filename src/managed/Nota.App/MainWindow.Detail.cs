@@ -345,7 +345,7 @@ public partial class MainWindow
         DetailDevicesBtn.IsChecked = true;
         DetailPatternBtn.IsChecked = false;
         DetailClipBtn.IsChecked = false;
-        ShowDetail(332, honorPersist: false);   // Devices: natural card-fitting height (island: +12 gutter under it)
+        ShowDetail(338, honorPersist: false);   // Devices: natural card-fitting height (island: +12 gutter under it, +6 header top inset)
     }
 
     private void OpenClipEditor(int trackId, int clipIndex)
