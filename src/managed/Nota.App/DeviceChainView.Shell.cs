@@ -209,7 +209,9 @@ public sealed partial class DeviceChainView
         }
         // A compact (mini) card keeps the same picker — same list, same current preset — only narrower:
         // the preset belongs to the device, not to the card size.
-        if (presets.Count > 0) right.Children.Insert(0, PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
+        // The picker sits right of the type badge: the badge's live voice count changes width
+        // (Consort's "DUO 1/2" → "POLY 12/16"), and on the left it would push the picker around.
+        if (presets.Count > 0) right.Children.Insert(right.Children.IndexOf(badge) + 1, PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
             nameWidth: s.Compact ? 74 : 132));
 
         void Move(int to) { if (s.Kind == ChainKind.Midi) _engine.MoveMidiEffect(_trackId, di, to); else _engine.MoveDevice(_trackId, di, to); ExtrasMoved(s.Kind, di, to); Rebuild(); Changed?.Invoke(); }
@@ -284,21 +286,27 @@ public sealed partial class DeviceChainView
         var bodyHost = new Border { Child = body };
         var root = new DockPanel { LastChildFill = true, Children = { headerBar, bodyHost } };
         bool sel = IsSelected(s.Kind, di);
-        // Selection is drawn as an inset overlay ring (not by thickening the card's own edge
-        // border): the edge border sits on the rounded-clip boundary under the square-cornered
-        // header, where a 2px stroke reads as "cut after the curve". The overlay lives safely
-        // inside the clip so its rounded corners render cleanly.
+        // Selection is drawn as a focus ring outside the card, with a small gap (not by
+        // thickening the card's own edge border, nor as an inset overlay): drawn on or inside
+        // the edge it crowds the header — the title and the preset picker read as touching it.
+        // The ring hangs outside the clipped shell; the chain row's margin and spacing leave it room.
+        const double RingGap = 3;
         var selRing = new Border
         {
-            BorderBrush = AccentBright, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Body, Margin = new Thickness(0.5),
+            BorderBrush = AccentBright, BorderThickness = new Thickness(1.5),
+            CornerRadius = new CornerRadius(NotaRadius.BodyValue + RingGap), Margin = new Thickness(-RingGap),
             IsHitTestVisible = false, IsVisible = sel,
+        };
+        var shell = new Border
+        {
+            Background = ShellBg, BorderBrush = BorderDef,
+            BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Body, ClipToBounds = true,
+            Child = root,
         };
         var card = new Border
         {
-            Width = s.Width, Height = CardH, Background = ShellBg, BorderBrush = BorderDef,
-            BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Body, ClipToBounds = true,
-            Child = new Panel { Children = { root, selRing } },
+            Width = s.Width, Height = CardH,
+            Child = new Panel { Children = { shell, selRing } },
         };
         // Bypassed: the body loses its brass but stays playable (almanac: no opacity for state).
         if (s.Bypassed) card.AttachedToVisualTree += (_, _) => Inactive.Set(bodyHost, true, interactive: true);

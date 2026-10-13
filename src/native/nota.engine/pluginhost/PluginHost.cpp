@@ -32,6 +32,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -360,6 +361,26 @@ extern "C" NOTA_API const char* nota_pluginhost_scan_path(int32_t index) {
 namespace {
 
 constexpr int kMaxChans = 64;
+// Channels a referring juce::AudioBuffer holds without allocating (its preallocated
+// space is 32 pointers, one of them the null terminator).
+constexpr int kNoAllocChans = 31;
+
+// Channel pointers for one processBlock: `storage`'s channels, then every further channel
+// the plugin may address pointing at `spare` (one zeroed, discarded channel). JUCE maps the
+// plugin's buses with buffer.getWritePointer(ch), which is null past the buffer's width, and a
+// VST3 plugin can widen its layout at any moment (restartComponent kIoChanged → JUCE
+// re-prepares it on the message thread, e.g. Reaktor switching Play/Patch/Build) — so the
+// buffer is never narrower than the plugin's current layout, with headroom for a change that
+// lands between this read and processBlock. Returns the channel count. Audio thread.
+int pluginChannelPtrs(const juce::AudioProcessor& p, juce::AudioBuffer<float>& storage,
+                      float* spare, int frames, float* (&ptrs)[kMaxChans]) {
+    const int have = juce::jmin(storage.getNumChannels(), kMaxChans);
+    const int want = juce::jmin(kMaxChans, juce::jmax(kNoAllocChans, have,
+                                                      p.getTotalNumInputChannels(), p.getTotalNumOutputChannels()));
+    if (want > have) juce::FloatVectorOperations::clear(spare, frames);
+    for (int c = 0; c < want; ++c) ptrs[c] = c < have ? storage.getWritePointer(c) : spare;
+    return want;
+}
 
 // Message-thread producer -> audio-thread consumer. The editor window's computer
 // keyboard pushes note events here; the plugin adapter drains them in its audio
@@ -653,8 +674,7 @@ public:
         const int nc = juce::jmin(storage_.getNumChannels(), kMaxChans);
         storage_.clear();
         float* ptrs[kMaxChans];
-        for (int c = 0; c < nc; ++c) ptrs[c] = storage_.getWritePointer(c);
-        juce::AudioBuffer<float> block(ptrs, nc, frames);
+        juce::AudioBuffer<float> block(ptrs, pluginChannelPtrs(*plugin_, storage_, spare_.data(), frames, ptrs), frames);
         plugin_->processBlock(block, pending_);
         pending_.clear();
         const float* l = block.getReadPointer(0);
@@ -720,12 +740,15 @@ private:
         plugin_->setPlayConfigDetails(0, 2, sr, maxBlock_);
         plugin_->prepareToPlay(sr, maxBlock_);
         plugin_->setPlayHead(&playHead_);   // DAW transport sync
-        storage_.setSize(juce::jmax(2, plugin_->getTotalNumOutputChannels()), maxBlock_);
+        // In and out share the buffer, so it spans the wider side.
+        storage_.setSize(juce::jmax(2, plugin_->getTotalNumInputChannels(), plugin_->getTotalNumOutputChannels()), maxBlock_);
+        spare_.assign((size_t)maxBlock_, 0.0f);
     }
 
     NotaPlayHead playHead_;   // declared first: outlives plugin_ (which points at it)
     std::unique_ptr<juce::AudioPluginInstance> plugin_;
     juce::AudioBuffer<float> storage_;
+    std::vector<float> spare_;   // the channels past storage_ (see pluginChannelPtrs)
     juce::MidiBuffer pending_;
     int maxBlock_;
     std::string name_;   // cached plugin name for displayName()
@@ -770,6 +793,7 @@ public:
         const int chans = juce::jmax(2, juce::jmax(plugin_->getTotalNumInputChannels(),
                                                    plugin_->getTotalNumOutputChannels()));
         storage_.setSize(chans, maxBlock_);
+        spare_.assign((size_t)maxBlock_, 0.0f);
         if (hasSidechain_ && plugin_->getBus(true, 1) != nullptr) {
             scChanOffset_ = plugin_->getChannelIndexInProcessBlockBuffer(true, 1, 0);
             scNumChans_   = plugin_->getBus(true, 1)->getNumberOfChannels();
@@ -803,8 +827,7 @@ public:
         scBuf_ = nullptr;   // consume once; the engine re-hands it each block if a source is set
 
         float* ptrs[kMaxChans];
-        for (int c = 0; c < nc; ++c) ptrs[c] = storage_.getWritePointer(c);
-        juce::AudioBuffer<float> block(ptrs, nc, frames);
+        juce::AudioBuffer<float> block(ptrs, pluginChannelPtrs(*plugin_, storage_, spare_.data(), frames, ptrs), frames);
         empty_.clear();
         plugin_->processBlock(block, empty_);
 
@@ -888,6 +911,7 @@ private:
     bool hasSidechain_ = false;              // plugin exposes a usable sidechain input bus
     int  scChanOffset_ = -1, scNumChans_ = 0; // where its channels sit in the process buffer
     juce::AudioBuffer<float> storage_;
+    std::vector<float> spare_;   // the channels past storage_ (see pluginChannelPtrs)
     juce::MidiBuffer empty_;
     int maxBlock_ = 0;
     EditorHost editor_; // declared last: destroyed before plugin_

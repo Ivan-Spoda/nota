@@ -8,6 +8,8 @@
 // a sidechain source) and an LFO (rate free or tempo-synced / amount / wave incl.
 // sample-&-hold / morph / start phase / stereo phase / retrigger). Mod Smooth slews the
 // modulation. A pre-filter Drive stage adds colour; Analog saturates; Dry/Wet blends.
+// Freq, Res and Morph themselves glide (~20 ms) so a fast knob move or automation step
+// doesn't click; a fresh device or a sample-rate change starts at the set values.
 //
 // A core Device (JUCE-free), lock-free params. All params are normalized 0..1 and
 // denormalized in process(); persistence/automation/clone flow generically. Param order
@@ -127,6 +129,7 @@ public:
         for (auto& s : svf_) s.reset();
         env_ = 0.0f; lfoPhase_ = 0.0; shHeld_ = 0.0f; shCycle_ = -1.0;
         smOct_ = smRes_ = 0.0; holdLeft_ = 0; armed_ = true;
+        primed_ = false;
         histAcc_ = 0.0; histEnvMax_ = 0.0f;
         srA_.store(static_cast<float>(sr_), std::memory_order_relaxed);
     }
@@ -185,10 +188,10 @@ public:
     void process(float* buf, int32_t frames) override {
         const auto t0 = std::chrono::steady_clock::now();
         const double baseHz  = expMap(get(Freq), 30.0, 18000.0);
-        const float  resBase = std::clamp(get(Res), 0.0f, 1.0f);
+        const double resBase = std::clamp(get(Res), 0.0f, 1.0f);
         const int    type    = std::clamp((int)std::lround(get(Type) * 3.0f), 0, 3);
         const bool   slope24 = get(Slope) >= 0.5f;
-        const float  morph   = std::clamp(get(Morph), 0.0f, 1.0f);
+        const double morph   = std::clamp(get(Morph), 0.0f, 1.0f);
         const bool   envOn   = get(EnvOn) >= 0.5f;
         const double envBip  = envOn ? ((double)get(EnvAmt) - 0.5) * 2.0 : 0.0;           // −1..1
         const float  attMs   = (float)expMap(get(EnvAtt), 0.1, 500.0);
@@ -211,6 +214,10 @@ public:
         const double smMs    = 120.0 * (double)get(ModSmooth) * (double)get(ModSmooth);
         const double smCoef  = smMs < 0.05 ? 0.0 : std::exp(-(double)kCtrl / (smMs * 0.001 * sr_));
         const double offset  = (double)std::clamp(get(LfoOffset), 0.0f, 1.0f);
+        const double baseOct = std::log2(baseHz);
+        const double glide   = 1.0 - std::exp(-(double)kCtrl / (kGlideS * sr_));   // per control block
+        const double glideS  = 1.0 - std::exp(-1.0 / (kGlideS * sr_));               // per sample (Morph)
+        if (!primed_) { glOct_ = baseOct; glRes_ = resBase; glMorph_ = morph; primed_ = true; }
         const bool   retrig  = get(LfoRetrig) >= 0.5f;
 
         // Per-sample envelope coefficients (one-pole).
@@ -264,9 +271,13 @@ public:
             smOctR_ = rawR + smCoef * (smOctR_ - rawR);
             smRes_ = rawRes + smCoef * (smRes_ - rawRes);
 
-            const double fcL = std::clamp(baseHz * std::exp2(toFreq ? smOct_ : 0.0), 20.0, nyq);
-            const double fcR = std::clamp(baseHz * std::exp2(toFreq ? smOctR_ : 0.0), 20.0, nyq);
-            const double resN = std::clamp((double)resBase + (toRes ? smRes_ : 0.0), 0.0, 1.0);
+            // The knobs glide toward their targets (snapping once there, so a still knob is exact).
+            glOct_ = settle(glOct_ + (baseOct - glOct_) * glide, baseOct, 1e-5);
+            glRes_ = settle(glRes_ + (resBase - glRes_) * glide, resBase, 1e-6);
+
+            const double fcL = std::clamp(std::exp2(glOct_ + (toFreq ? smOct_ : 0.0)), 20.0, nyq);
+            const double fcR = std::clamp(std::exp2(glOct_ + (toFreq ? smOctR_ : 0.0)), 20.0, nyq);
+            const double resN = std::clamp(glRes_ + (toRes ? smRes_ : 0.0), 0.0, 1.0);
             const double k = 1.0 / (0.5 + resN * 14.5);
             const double gL = std::tan(3.14159265358979323846 * fcL / sr_);
             const double a1L = 1.0 / (1.0 + gL * (gL + k)), a2L = gL * a1L, a3L = gL * a2L;
@@ -295,8 +306,10 @@ public:
                 } else env_ = det + rCoef * (env_ - det);
                 if (env_ > 1.0f) env_ = 1.0f;
 
-                buf[i * 2]     = filterOne(0, l, drive, driveGain, driveComp, type, morph, (float)k, a1L, a2L, a3L, slope24, wet, outGain, analog);
-                buf[i * 2 + 1] = filterOne(1, r, drive, driveGain, driveComp, type, morph, (float)k, a1R, a2R, a3R, slope24, wet, outGain, analog);
+                glMorph_ = settle(glMorph_ + (morph - glMorph_) * glideS, morph, 1e-6);   // a crossfade: glide per sample
+                const float morphNow = (float)glMorph_;
+                buf[i * 2]     = filterOne(0, l, drive, driveGain, driveComp, type, morphNow, (float)k, a1L, a2L, a3L, slope24, wet, outGain, analog);
+                buf[i * 2 + 1] = filterOne(1, r, drive, driveGain, driveComp, type, morphNow, (float)k, a1R, a2R, a3R, slope24, wet, outGain, analog);
                 outPk = std::max(outPk, std::max(std::fabs(buf[i * 2]), std::fabs(buf[i * 2 + 1])));
             }
 
@@ -434,6 +447,9 @@ public:
 
 private:
     static constexpr int32_t kCtrl = 16;   // control-rate block for coefficient updates
+    static constexpr double kGlideS = 0.02; // Freq / Res / Morph glide time constant
+
+    static double settle(double v, double target, double eps) { return std::fabs(v - target) < eps ? target : v; }
 
     float get(int i) const { return p_[i].load(std::memory_order_relaxed); }
     static double expMap(float v, double lo, double hi) { return lo * std::pow(hi / lo, std::clamp((double)v, 0.0, 1.0)); }
@@ -506,6 +522,8 @@ private:
     double lfoPhase_ = 0.0;
     double anchorBeat_ = 0.0;               // synced LFO restarts here after a retrig
     double smOct_ = 0.0, smOctR_ = 0.0, smRes_ = 0.0;   // smoothed modulation
+    double glOct_ = 0.0, glRes_ = 0.0, glMorph_ = 0.0;  // gliding knobs: log2 Hz, 0..1, 0..1
+    bool primed_ = false;                   // the glides start at the set values
     float shHeld_ = 0.0f;
     double shCycle_ = -1.0;                 // last synced S&H cycle index
     double beatStart_ = 0.0, spb_ = 0.0;    // transport (for LFO sync)

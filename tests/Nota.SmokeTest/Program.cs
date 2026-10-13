@@ -215,6 +215,30 @@ if (args.Length >= 1 && args[0] == "--tap")
     Console.WriteLine(failures == 0 ? "TAP PASSED" : $"TAP FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Filter knob glide alone: `--glide`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--glide")
+{
+    Console.WriteLine("-- filter knob glide --");
+    foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "GLIDE PASSED" : $"GLIDE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Snap grid alone: `--grid`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--grid")
+{
+    Console.WriteLine("-- snap grid --");
+    foreach (var (ok, label) in SnapGridTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "GRID PASSED" : $"GRID FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Default project template alone: `--template`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--template")
+{
+    Console.WriteLine("-- default project template --");
+    foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TEMPLATE PASSED" : $"TEMPLATE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // What Nota Mosaic makes of a real library: `--mosaic-dump <file.sfz | folder>`.
 if (args.Length >= 2 && args[0] == "--mosaic-dump")
 {
@@ -4227,6 +4251,7 @@ Console.WriteLine("-- Nota Reverb --");
     const int Decay = 0, HFDamp = 1, PreDelay = 2, Size = 3, Algorithm = 10, Freeze = 11, DryWet = 12, Output = 13,
               DryLevel = 14, EarlyRefl = 15, ModOnTail = 16, Vintage = 17, BassMono = 18, WetOnly = 19, LatencyComp = 20;
     Check(rd >= 0 && re.TrackDeviceBuiltinKind(rt, rd) == 2 && re.DeviceParamCount(rt, rd) == 21, "add built-in Nota Reverb (kind 2, 21 params)");
+    Check(re.ReverbWrapSelfTest(), "Reverb comb read stays inside its delay line at the wrap edge (no metallic burst)");
     Check(re.DeviceParamName(rt, rd, Decay) == "Decay" && re.DeviceParamName(rt, rd, Output) == "Output"
           && re.DeviceParamName(rt, rd, DryLevel) == "Dry Level" && re.DeviceParamName(rt, rd, EarlyRefl) == "Early Refl"
           && re.DeviceParamName(rt, rd, ModOnTail) == "Mod on Tail" && re.DeviceParamName(rt, rd, Vintage) == "Vintage"
@@ -14347,6 +14372,73 @@ Console.WriteLine("-- background audio import --");
         double rd = 0; for (int i = 0; i < ra.Length; i++) rd = Math.Max(rd, Math.Abs(ra[i] - rb[i]));
         Check(Rms(ra, 8192) > 0.001f && rd < 1e-5, $"import: plays identically to the synchronous load (max diff {rd:E1})");
 
+        // Zoomed clip-editor peaks: the full warp range matches the full-material query, and a
+        // source sub-range matches a brute-force scan of the samples.
+        {
+            ie.TryGetAudioClipInfo(ct, cc, out var pi);
+            var full = new float[256 * 2]; var rng = new float[256 * 2];
+            int fn = ie.GetClipWarpFullPeaks(ct, cc, full, 256);
+            int rn = ie.GetClipWarpPeaksRange(ct, cc, 0, pi.WarpBeats, rng, 256);
+            Check(fn == 256 && rn == 256 && full.SequenceEqual(rng), "range peaks: whole warp range == full-material peaks");
+            var raw = ie.ReadSample(pi.SampleId);
+            ie.TryGetSampleInfo(pi.SampleId, out var psi);
+            int chn = psi.Channels;
+            float Mid(long f) => chn == 1 ? raw[f] : 0.5f * (raw[f * chn] + raw[f * chn + 1]);
+            var sub = new float[64 * 2];
+            int sn = ie.GetClipSourcePeaksRange(ct, cc, 1000, 1000 + 64 * 64, sub, 64);
+            double err = 0;
+            for (int b = 0; b < sn; b++)
+            {
+                float mn = 1, mx = -1;
+                for (long f = 1000 + b * 64; f < 1000 + (b + 1) * 64; f++) { float m = Mid(f); mn = Math.Min(mn, m); mx = Math.Max(mx, m); }
+                err = Math.Max(err, Math.Max(Math.Abs(mn - sub[b * 2]), Math.Abs(mx - sub[b * 2 + 1])));
+            }
+            Check(sn == 64 && err < 1e-6, $"range peaks: source sub-range matches a full scan (max err {err:E1})");
+            var tiny = new float[100 * 2];
+            Check(ie.GetClipSourcePeaksRange(ct, cc, 5000, 5010, tiny, 100) == 100, "range peaks: sub-frame buckets read single frames");
+        }
+
+        // Background warp build: a deferred marker edit keeps the old cache playing (not
+        // silent), then warp_build_poll installs — off the calling thread — a cache that plays
+        // exactly like the synchronous build of the same edit.
+        {
+            var ms = new double[64]; var mb = new double[64];
+            int mk = ie.GetClipWarpMarkers(ct, cc, ms, mb);
+            var src2 = ms[..mk]; var beats2 = mb[..mk].Select(b => b * 1.25).ToArray();
+            ie.SetDeferWarpBuild(true);
+            ie.SetClipWarpMarkers(ct, cc, src2, beats2);
+            ie.SetDeferWarpBuild(false);
+            Check(ie.WarpBuildRemaining > 0, "bg warp: the deferred edit leaves a stale cache to rebuild");
+            ie.Stop(); ie.Seek(0); ie.Play();
+            var stale = new float[8192 * 2];
+            ie.RenderOffline(stale, 8192);
+            Check(Rms(stale, 8192) > 0.001f, "bg warp: the clip keeps playing its old cache meanwhile");
+            long guard3 = 0;
+            var bgw = System.Diagnostics.Stopwatch.StartNew();
+            while (ie.WarpBuildPoll() > 0 && ++guard3 < 100000) Thread.Sleep(1);
+            Check(ie.WarpBuildRemaining == 0, $"bg warp: worker build installed ({bgw.ElapsedMilliseconds} ms, {guard3} polls)");
+            se.SetClipWarpMarkers(st2, sc2, src2, beats2);   // synchronous reference
+            ie.Stop(); ie.Seek(0); ie.Play(); se.Stop(); se.Seek(0); se.Play();
+            var ba = new float[8192 * 2]; var bb = new float[8192 * 2];
+            ie.RenderOffline(ba, 8192); se.RenderOffline(bb, 8192);
+            double bd = 0; for (int i = 0; i < ba.Length; i++) bd = Math.Max(bd, Math.Abs(ba[i] - bb[i]));
+            Check(Rms(ba, 8192) > 0.001f && bd < 1e-5, $"bg warp: plays identically to the synchronous rebuild (max diff {bd:E1})");
+            // An edit while a build runs supersedes it: the stale result is dropped, not installed.
+            ie.SetDeferWarpBuild(true);
+            ie.SetClipWarpMarkers(ct, cc, src2, mb[..mk]);
+            ie.SetDeferWarpBuild(false);
+            ie.WarpBuildPoll();   // starts the build for the original markers…
+            ie.SetDeferWarpBuild(true);
+            ie.SetClipWarpMarkers(ct, cc, src2, beats2);   // …then the user edits again
+            ie.SetDeferWarpBuild(false);
+            guard3 = 0;
+            while (ie.WarpBuildPoll() > 0 && ++guard3 < 100000) Thread.Sleep(1);
+            ie.Stop(); ie.Seek(0); ie.Play();
+            ie.RenderOffline(ba, 8192);
+            bd = 0; for (int i = 0; i < ba.Length; i++) bd = Math.Max(bd, Math.Abs(ba[i] - bb[i]));
+            Check(ie.WarpBuildRemaining == 0 && bd < 1e-5, $"bg warp: a superseded build is dropped, the latest edit wins (max diff {bd:E1})");
+        }
+
         // Analysis cache: content fingerprint + round trip in a project's analysis/ folder.
         string? k1 = Nota.Infrastructure.AudioAnalysisCache.Fingerprint(clicks);
         string copy = Path.Combine(dir, "renamed copy.wav");
@@ -14444,6 +14536,15 @@ foreach (var (ok, label) in MosaicTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- tap tempo --");
 foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- snap grid --");
+foreach (var (ok, label) in SnapGridTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- default project template --");
+foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- filter knob glide --");
+foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);
 
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");

@@ -14,6 +14,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Presentation;
 
 namespace Nota.App;
@@ -38,8 +39,7 @@ public sealed partial class ArrangementView : UserControl
     private double _playheadBeats;
     private double _totalBeats = 64;
     private int _beatsPerBar = 4;
-    private double _snapBeats = 1.0;               // snap grid (1 beat) — M4-2
-    private bool _snapEnabled = true;              // transport magnet toggle (off = free positioning)
+    private ResolvedGrid _lastGrid;                // what the snap chip last showed (GridChanged)
     internal int SelTrackId = -1, SelClipIndex = -1;   // "primary" selection (Clip tab, effect target, trim)
     // Multi-selection of clips across tracks (marquee / group move + delete). The
     // primary (SelTrackId/SelClipIndex) is always one of these when non-empty.
@@ -68,6 +68,19 @@ public sealed partial class ArrangementView : UserControl
     private readonly Dictionary<int, MiniFader> _volFaders = new();
     private readonly Dictionary<int, PanBar> _panBars = new();
     private readonly Dictionary<int, TextBlock> _volDb = new();
+    // Return / Master footer rows: meter, volume fader and its dB read-out. Kept apart from the
+    // track-header maps because the two columns are rebuilt independently.
+    private readonly Dictionary<int, MeterBar> _footerMeters = new();
+    private readonly Dictionary<int, MiniFader> _footerFaders = new();
+    private readonly Dictionary<int, TextBlock> _footerDb = new();
+    private MeterBar? _masterRowMeter;
+    private MiniFader? _masterRowFader;
+    private TextBlock? _masterRowDb;
+
+    /// <summary>The master volume lives in <c>TransportViewModel.MasterVolume</c> (saved with the
+    /// project, shown in the MST module); the Master row reads and writes it through these.</summary>
+    public Func<float>? GetMasterVolume { get; set; }
+    public Action<float>? SetMasterVolume { get; set; }
     // Per-track header card + its name label, so a selection change repaints just those two
     // properties instead of tearing down and rebuilding every header control (click latency).
     private readonly Dictionary<int, (Border card, TextBlock name, bool isGroup, Border spine, IBrush spineIdle)> _headerCards = new();
@@ -243,6 +256,7 @@ public sealed partial class ArrangementView : UserControl
 
     public ArrangementView()
     {
+        EditorGrids.Shared.Changed += k => { if (k == EditorKind.Arrangement) Redraw(); };
         _ruler = new RulerControl(this) { Height = RulerH };
         _overview = new OverviewControl(this);
         _sectionsLane = new SectionsControl(this);
@@ -428,13 +442,18 @@ public sealed partial class ArrangementView : UserControl
     public double ScrollBeats => _scrollBeats;
     public double PlayheadBeats => _playheadBeats;
     public int BeatsPerBar { get => _beatsPerBar; set { _beatsPerBar = value; Redraw(); } }
-    /// <summary>Clip-drag snap grid in beats (transport GRID cell, 1b).</summary>
-    public double SnapBeats { get => _snapBeats; set { _snapBeats = Math.Max(1.0 / 32, value); Redraw(); } }
 
-    /// <summary>Master snap on/off (the transport magnet). Off positions freely — the
-    /// same effect as holding Alt, but latched. The grid itself keeps its spacing, so
-    /// switching back resumes on the denomination the GRID cell shows.</summary>
-    public bool SnapEnabled { get => _snapEnabled; set { _snapEnabled = value; Redraw(); } }
+    /// <summary>The snap grid at the current zoom (specs/003-adaptive-snap-grid): the step
+    /// every clip edit snaps to and the finest line drawn. Resolved on demand — it is a few
+    /// comparisons and allocates nothing — so zoom, time signature and setting changes can
+    /// never leave a stale cache behind. Snap off (the transport magnet, ⌘4) keeps the lines.</summary>
+    internal ResolvedGrid SnapGridState => SnapGrid.Resolve(EditorGrids.Shared.Get(EditorKind.Arrangement), _pixelsPerBeat, _beatsPerBar);
+
+    /// <summary>The step in effect changed (zoom, time signature or the grid setting) — the
+    /// toolbar's snap chip relabels.</summary>
+    public event Action? GridChanged;
+
+    private double SnapStepBeats => SnapGridState.Snap.Beats(_beatsPerBar);
 
     /// <summary>How many clips print their name on the lane (View ▸ Clip names). The default
     /// names only the head of each run, so a repeating pattern reads as one block.</summary>
@@ -558,7 +577,7 @@ public sealed partial class ArrangementView : UserControl
         _loopDragging = true;
         _loopActive = true;
         _loopS = Math.Max(0, Snap(Math.Min(a, b)));
-        _loopE = Math.Max(_loopS + _snapBeats, Snap(Math.Max(a, b)));
+        _loopE = Math.Max(_loopS + SnapStepBeats, Snap(Math.Max(a, b)));
         Redraw();
     }
 
@@ -585,7 +604,7 @@ public sealed partial class ArrangementView : UserControl
     private (double Start, double End) SnapLoopRange(double a, double b)
     {
         double s = Math.Max(0, Snap(Math.Min(a, b)));
-        return (s, Math.Max(s + _snapBeats, Snap(Math.Max(a, b))));
+        return (s, Math.Max(s + SnapStepBeats, Snap(Math.Max(a, b))));
     }
 
     /// <summary>Loop over the beat span of the current clip selection. False if nothing selected.</summary>
@@ -625,6 +644,15 @@ public sealed partial class ArrangementView : UserControl
             if (eng.TryGetTrackMeter(id, out var m)) bar.Push(m);
             else bar.Reset();
         }
+        foreach (var (id, bar) in _footerMeters)
+        {
+            if (eng.TryGetTrackMeter(id, out var m)) bar.Push(m);
+            else bar.Reset();
+        }
+        // The master level is the engine's master meter; the master *track* is only its effect chain.
+        _masterRowMeter?.Push(eng.MasterMeter());
+        if (GetMasterVolume is { } getMaster)
+            FollowVolume(_masterRowFader, _masterRowDb, getMaster());
         int n = eng.TrackCount;
         for (int i = 0; i < n; i++)
         {
@@ -634,11 +662,22 @@ public sealed partial class ArrangementView : UserControl
             {
                 f.Value = ti.Volume;
                 if (_volDb.TryGetValue(ti.Id, out var db))
-                    db.Text = ti.Volume <= 0.0011 ? "−∞" : AudioMath.LinToDb(ti.Volume).ToString("0.0");
+                    db.Text = VolumeDbText(ti.Volume);
             }
             if (_panBars.TryGetValue(ti.Id, out var p) && !p.Dragging && Math.Abs(p.Pan - ti.Pan) > 1e-3)
                 p.Pan = ti.Pan;
+            if (_footerFaders.TryGetValue(ti.Id, out var rf))
+                FollowVolume(rf, _footerDb.GetValueOrDefault(ti.Id), ti.Volume);
         }
+    }
+
+    // Moves a footer fader and its read-out to a volume changed elsewhere (Mixer, MST, MCP,
+    // automation, project load) — unless the user is dragging it.
+    private static void FollowVolume(MiniFader? fader, TextBlock? db, double volume)
+    {
+        if (fader is null || fader.Dragging || Math.Abs(fader.Value - volume) <= 1e-3) return;
+        fader.Value = volume;
+        if (db is not null) db.Text = VolumeDbText(volume);
     }
 
     private void Zoom(double factor)
@@ -681,6 +720,8 @@ public sealed partial class ArrangementView : UserControl
         _footerLanes.InvalidateVisual();
         _overview.InvalidateVisual();  // the viewport window follows scroll+zoom
         UpdateOverviewRange();
+        var g = SnapGridState;
+        if (g != _lastGrid) { _lastGrid = g; GridChanged?.Invoke(); }
     }
 
     /// <summary>Rebuilds the track/clip model + headers from the engine. Pass
@@ -937,6 +978,12 @@ public sealed partial class ArrangementView : UserControl
         if (placed.Length > 0) SetSelection(placed);
     }
 
+    // Tell the window the primary track changed under a clip selection (devices / clip tab follow).
+    internal void AnnounceSelectedTrack()
+    {
+        if (SelTrackId > 0) TrackSelected?.Invoke(SelTrackId);
+    }
+
     /// <summary>Duplicates the whole clip selection as one block, placed right after itself
     /// (keyboard Cmd+D / context menu). The copies become the new selection. False if none.</summary>
     public bool DuplicateSelectedClip()
@@ -1043,7 +1090,10 @@ public sealed partial class ArrangementView : UserControl
     }
 
     internal double Snap(double beat)
-        => _snapEnabled && _snapBeats > 0 ? Math.Round(beat / _snapBeats) * _snapBeats : beat;
+    {
+        var g = SnapGridState;
+        return g.SnapOn ? SnapGrid.SnapBeat(beat, g.Snap.Beats(_beatsPerBar), _beatsPerBar) : beat;
+    }
 
     /// <summary>Snap unless Alt is held (Alt = free/fine positioning). Reads the live
     /// modifier state so it can be toggled mid-drag (req 1.2.1/2.4/3.1/8.2.1, 7.10).</summary>
@@ -1793,8 +1843,7 @@ public sealed partial class ArrangementView : UserControl
             VerticalAlignment = VerticalAlignment.Center, Width = 30, TextAlignment = TextAlignment.Right,
             Margin = new Thickness(6, 0, 0, 0),
         };
-        void ShowDb(double v) => db.Text = v <= 0.0011 ? "−∞"
-            : AudioMath.LinToDb(v).ToString("0.0", NotaNum.Culture);
+        void ShowDb(double v) => db.Text = VolumeDbText(v);
         ShowDb(t.Volume);
         fader.ValueChanged += v => { _engine?.SetTrackVolume(volTrackId, (float)v); ShowDb(v); };
         fader.GestureBegin += () => _engine?.BeginAutomationWrite(volTrackId, AutomationTarget.Volume, -1, -1, "");
@@ -2365,10 +2414,18 @@ public sealed partial class ArrangementView : UserControl
     private void RebuildFooterHeaders()
     {
         _footerHeaders.Children.Clear();
+        _footerMeters.Clear();
+        _footerFaders.Clear();
+        _footerDb.Clear();
         double y = 0;
         foreach (var r in _returns)
         {
-            var row = BuildSlimRow(r.Name, "", r.ColorIndex, r.Id, "Brush.SurfaceCard");
+            int id = r.Id;
+            var row = BuildSlimRow(r.Name, r.ColorIndex, id, "Brush.SurfaceCard", r.Volume,
+                v => _engine?.SetTrackVolume(id, (float)v), out var meter, out var fader, out var db);
+            _footerMeters[id] = meter;
+            _footerFaders[id] = fader;
+            _footerDb[id] = db;
             Canvas.SetLeft(row, 0);
             Canvas.SetTop(row, y);
             _footerHeaders.Children.Add(row);
@@ -2377,31 +2434,60 @@ public sealed partial class ArrangementView : UserControl
         // Master row: selectable (opens the master effect chain) via the reserved id.
         int masterId = _engine?.MasterTrackId ?? -1;
         string masterName = _engine is { } me2 && me2.GetTrackName(masterId) is { Length: > 0 } mn ? mn : "Master";
-        var master = BuildSlimRow(masterName, "", -1, masterId, "Brush.SurfaceRaised", masterSpine: true);
+        var master = BuildSlimRow(masterName, -1, masterId, "Brush.SurfaceRaised", GetMasterVolume?.Invoke() ?? 1f,
+            v => SetMasterVolume?.Invoke((float)v), out _masterRowMeter, out _masterRowFader, out _masterRowDb,
+            masterSpine: true);
         Canvas.SetLeft(master, 0);
         Canvas.SetTop(master, y);
         _footerHeaders.Children.Add(master);
         _footerHeaders.Children.Add(_footerDropRing);   // browser drop target (kept invisible until a drag)
     }
 
-    private Control BuildSlimRow(string title, string sub, int colorIndex, int trackId, string bgKey, bool masterSpine = false)
+    // A slim footer row: name and volume read-out over a mini fader, with the same vertical
+    // level meter as a track header on the right. No pan, and the fader writes no automation —
+    // returns have no visible lane down here.
+    private Control BuildSlimRow(string title, int colorIndex, int trackId, string bgKey, double volume,
+        Action<double> setVolume, out MeterBar meter, out MiniFader fader, out TextBlock db, bool masterSpine = false)
     {
         var spineBrush = masterSpine ? NotaPalette.Accent : ClipColors(colorIndex).content;
-        var name = new TextBlock { Text = title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextPrimary"), VerticalAlignment = VerticalAlignment.Center };
-        var db = new TextBlock { Text = masterSpine ? "0.0" : "−∞", FontSize = 9, Classes = { "Mono" }, Foreground = Brush("Brush.TextTertiary"), VerticalAlignment = VerticalAlignment.Center };
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var name = new TextBlock
+        {
+            Text = title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextPrimary"),
+            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var dbText = new TextBlock
+        {
+            Text = VolumeDbText(volume), FontSize = 9, Classes = { "Mono" }, Foreground = Brush("Brush.TextTertiary"),
+            VerticalAlignment = VerticalAlignment.Center, Width = 30, TextAlignment = TextAlignment.Right,
+            Margin = new Thickness(6, 0, 0, 0),
+        };
+        db = dbText;
+        fader = new MiniFader(volume) { VerticalAlignment = VerticalAlignment.Center, Default = 1.0 };
+        fader.ValueChanged += v => { setVolume(v); dbText.Text = VolumeDbText(v); };
+
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), RowDefinitions = new RowDefinitions("*,*") };
         Grid.SetColumn(name, 0);
-        Grid.SetColumn(db, 1);
+        Grid.SetColumn(dbText, 1);
+        Grid.SetRow(fader, 1);
+        Grid.SetColumnSpan(fader, 2);
         row.Children.Add(name);
-        row.Children.Add(db);
+        row.Children.Add(dbText);
+        row.Children.Add(fader);
+
+        meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 8, Margin = new Thickness(0, 6, 3, 6) };
+        DockPanel.SetDock(meter, Dock.Right);
+        var body = new DockPanel
+        {
+            LastChildFill = true,
+            Children = { meter, new Border { Padding = new Thickness(8, 4), Child = row } },
+        };
 
         var spine = new Border { Width = 3, Background = spineBrush };
-        var content = new Border { Padding = new Thickness(8, 0), Child = row };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("3,*") };
         Grid.SetColumn(spine, 0);
-        Grid.SetColumn(content, 1);
+        Grid.SetColumn(body, 1);
         grid.Children.Add(spine);
-        grid.Children.Add(content);
+        grid.Children.Add(body);
 
         bool sel = trackId > 0 && trackId == SelTrackId;
         if (sel) spine.Background = NotaPalette.Accent;   // selected: brass stripe, name stays Ink 1
@@ -2435,6 +2521,10 @@ public sealed partial class ArrangementView : UserControl
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 
+    /// <summary>A volume as the header read-outs print it: dB with one decimal, "−∞" at silence.</summary>
+    private static string VolumeDbText(double v)
+        => v <= 0.0011 ? "−∞" : AudioMath.LinToDb(v).ToString("0.0", NotaNum.Culture);
+
     private static IBrush Brush(string key) => (IBrush?)NotaPalette.ByKey(key) ?? NotaPalette.TextPrimary;
 
     // Small bordered "−"/"+" zoom chip (HANDOFF 1b ruler: 11px, bordered, radius 4).
@@ -2465,6 +2555,7 @@ public sealed partial class ArrangementView : UserControl
     private static readonly IBrush ChromeBg = NotaPalette.BgSunken; // Brush.BgSunken
     private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1); // Brush.GridBeat
     private static readonly IPen BarPen = new Pen(NotaPalette.GridBar, 1);   // Brush.GridBar
+    private static readonly IPen SubBeatPen = new Pen(NotaPalette.GridSubBeat, 1);   // finer than a beat
     // Playhead: a 1px brass line with a 7×5 flag on the ruler, no glow (almanac § timeline).
     // The brush is the palette slot itself — a SolidColorBrush built from its Color froze the
     // playhead in one theme.
@@ -2632,4 +2723,22 @@ public sealed partial class ArrangementView : UserControl
     private static IBrush Alpha(Color c, double a) => new SolidColorBrush(Color.FromArgb((byte)(a * 255), c.R, c.G, c.B));
 
     private double BeatToX(double beat) => (beat - _scrollBeats) * _pixelsPerBeat;
+
+    /// <summary>The vertical grid over a lane-wide canvas: one line per snap position at the
+    /// drawn step (SnapGrid.GridLines, the same set Snap() lands on), weighted bar › beat ›
+    /// sub-beat. Shared by the lanes and the footer rows.</summary>
+    private void DrawGrid(DrawingContext ctx, double w, double h)
+    {
+        if (_pixelsPerBeat <= 0) return;
+        double step = SnapGridState.Draw.Beats(_beatsPerBar);
+        double bar = _beatsPerBar > 0 ? _beatsPerBar : 4;
+        foreach (double b in SnapGrid.GridLines(_scrollBeats, _scrollBeats + w / _pixelsPerBeat, step, _beatsPerBar))
+        {
+            double x = BeatToX(b);
+            var pen = IsWhole(b / bar) ? BarPen : IsWhole(b) ? BeatPen : SubBeatPen;
+            ctx.DrawLine(pen, new Point(x, 0), new Point(x, h));
+        }
+
+        static bool IsWhole(double v) => Math.Abs(v - Math.Round(v)) < 1e-6;
+    }
 }

@@ -108,8 +108,27 @@ public partial class MainWindow
             e.Handled = true;
             return;
         }
+        // The floating window has no native menu, so ⌘1–⌘5 (the grid) never arrive as menu key
+        // equivalents there: run them here. Windows / Linux stop here too, so their in-window
+        // menu path below doesn't run them a second time.
+        if (meta && (e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Shift)) == 0 && GridCommandFor(e.Key) is { } grid)
+        {
+            _commands.Run(grid);
+            e.Handled = true;
+            return;
+        }
         HandleKeyDown(e);
     }
+
+    private static string? GridCommandFor(Key key) => key switch
+    {
+        Key.D1 or Key.NumPad1 => "grid.narrower",
+        Key.D2 or Key.NumPad2 => "grid.wider",
+        Key.D3 or Key.NumPad3 => "grid.triplets",
+        Key.D4 or Key.NumPad4 => "grid.snap",
+        Key.D5 or Key.NumPad5 => "grid.adaptive",
+        _ => null,
+    };
 
     // --- live play from the computer keyboard + basic shortcuts (M7-3) ---
     protected override void OnKeyDown(KeyEventArgs e) => HandleKeyDown(e);
@@ -301,8 +320,9 @@ public partial class MainWindow
             return;
         }
 
-        // Nothing above took it: the menu's shortcuts (Ctrl+S, Ctrl+Z…) on Windows / Linux.
-        if (mod && TryMenuShortcut(e))
+        // Nothing above took it: the menu's shortcuts (Ctrl+S, Ctrl+Z…) on Windows / Linux —
+        // plus bare function keys (F11 = full screen), the one modifier-less menu gesture.
+        if ((mod || e.Key is >= Key.F1 and <= Key.F12) && TryMenuShortcut(e))
         {
             e.Handled = true;
             return;

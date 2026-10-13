@@ -61,11 +61,19 @@ public sealed class ClipEditorView : UserControl
         var right = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 12,
-            Children = { ScaleControls(), HeaderDivider(), _toolsToggle },
+            Children = { SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
         };
         var header = Header(roll.TrackBrush, clipName, "MIDI", tabs, null, right);
         DockPanel.SetDock(header, Dock.Top);
         Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, grid } };
+    }
+
+    // The piano roll's snap chip: "Auto · 1/16", live with the roll's zoom; click for the grid menu.
+    private static Control SnapControl(PianoRollView roll)
+    {
+        var (button, chip) = SnapChip.Create(EditorKind.PianoRoll, () => roll.SnapGridState);
+        roll.GridChanged += chip.Refresh;
+        return button;
     }
 
     /// <summary>Follows a clip that was moved or resized in the arrangement while this editor

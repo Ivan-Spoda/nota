@@ -119,6 +119,19 @@ public partial class MainWindow : Window
         }
     }
 
+    // Fullscreen hides the custom bar: the 36-px band and its separator vanish and the
+    // workspace fills the top edge; leaving fullscreen restores them. A pure function
+    // of the current state — never of transitions — so rapid toggles converge. Maximized
+    // keeps the bar (the app launches maximized); Linux never shows it (native frame).
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        // XAML sets WindowState before the named controls exist (InitializeComponent),
+        // hence the null guard; the default bar visibility already matches non-fullscreen.
+        if (change.Property == WindowStateProperty && TitleBar is { } bar)
+            bar.IsVisible = !OperatingSystem.IsLinux() && WindowState != WindowState.FullScreen;
+    }
+
     // Custom frameless title bar (Phase 2): drag the window by its top bar; a
     // The factory drum kits ship as recipes, not audio: synthesize whatever is missing
     // (first run, or after an update changed a kit) off the UI thread, then refresh the
@@ -174,6 +187,8 @@ public partial class MainWindow : Window
         _exporter = App.Services.GetRequiredService<IAudioExporter>();
 
         Timeline.Engine = vm.Engine;
+        Timeline.GetMasterVolume = () => (float)vm.Transport.MasterVolume;   // Master row fader
+        Timeline.SetMasterVolume = v => vm.Transport.MasterVolume = v;
         Timeline.FreezeRole = FreezeRoleOf;   // live-freeze (v1.1) header badges
         Timeline.FreezeMenuItems = BuildTrackFreezeMenu;   // track context menu: Freeze / Live Freeze
         Timeline.FreezeTracksMenuItems = BuildTracksFreezeMenu;   // multi-track menu: Freeze / Unfreeze all
@@ -181,7 +196,7 @@ public partial class MainWindow : Window
         Timeline.MidiClipActivated += OpenClipEditor;
         Timeline.AudioClipActivated += OpenAudioClipEditor;
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)
-        Timeline.SampleToInstrument += (item, t) => DropBrowserItem(item, t);   // audio clip → Grain / Drum Rack / Sampler…
+        Timeline.SampleToInstrument += (item, t) => { DropBrowserItem(item, t); Timeline.Select(t, -1); };   // audio clip → Grain / Drum Rack / Sampler… (that track becomes the selection)
         Timeline.DevicesPeekRequested += t => { if (_deviceChain?.TrackId != t) ShowDevices(t); };
         Timeline.PasteBouncedRequested += (track, beat) => _ = PasteBouncedAsync(track, beat);
         Timeline.ConvertClipRequested += OnConvertClip;   // audio clip → MIDI (Convert / Slice)
@@ -298,6 +313,7 @@ public partial class MainWindow : Window
         Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;
         vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
         Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
+        InitSnapGrid();
         // Settings → Appearance can switch the waveform style while the arrangement is open.
         vm.Settings.Changed += () => Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
         Browser.SetViewModel(vm.Browser);
@@ -352,7 +368,12 @@ public partial class MainWindow : Window
 
         // Mixer lives in its own window (View → Mixer), not as a main-view tab — created here
         // once and hosted in the window when opened (see MainWindow.Mixer.cs).
-        _mixer = new MixerView(vm.Engine) { IsVisible = false };
+        _mixer = new MixerView(vm.Engine)
+        {
+            IsVisible = false,
+            GetMasterVolume = () => (float)vm.Transport.MasterVolume,
+            SetMasterVolume = v => vm.Transport.MasterVolume = v,
+        };
 
         // Modular: signal-graph view of the selected track (mockup 1a). Follows track
         // selection like the Detail device chain does.
@@ -553,12 +574,6 @@ public partial class MainWindow : Window
         SyncClipTab();   // Clip tab availability is per-context (arrangement vs session)
     }
 
-    // Toolbar Snap chip: cycle the arrangement's clip-drag snap grid.
-    private static readonly (double beats, string label)[] SnapSteps =
-    {
-        (0.25, "1/16"), (0.5, "1/8"), (1.0, "1/4"), (2.0, "1/2"), (4.0, "1 bar"),
-    };
-    private int _snapIndex = 2;   // 1/4
     private void OnPickProjectKey(object? sender, RoutedEventArgs e)
     {
         if (_vm is null) return;
@@ -640,14 +655,6 @@ public partial class MainWindow : Window
             ((Ellipse)TapDots.Children[i]).BindResource(Shape.FillProperty, i < lit ? "Brush.Accent" : "Brush.BorderStrong");
     }
 
-    private void OnCycleSnap(object? sender, RoutedEventArgs e)
-    {
-        _snapIndex = (_snapIndex + 1) % SnapSteps.Length;
-        var (beats, label) = SnapSteps[_snapIndex];
-        Timeline.SnapBeats = beats;
-        SnapLabel.Text = label;
-    }
-
     // A launched scene may carry its own tempo / signature; the engine applies it on the
     // scene's start boundary and the transport follows here.
     private void SyncSceneTempo()
@@ -703,13 +710,25 @@ public partial class MainWindow : Window
         return null;
     }
 
-    // Snap on/off. Separate from the GRID cell, which only picks the denomination:
-    // the latch is what you reach for to nudge something off-grid for a while.
+    // Snap on/off: the latch you reach for to nudge something off-grid for a while. The
+    // same switch as ⌘4 and the grid menu's "Snap to grid" (EditorGrids.Arrangement.SnapOn).
     private void OnToggleSnapEnabled(object? sender, RoutedEventArgs e)
     {
         bool on = SnapToggle.IsChecked == true;
-        Timeline.SnapEnabled = on;
+        var grids = EditorGrids.Shared;
+        grids.Set(EditorKind.Arrangement, grids.Get(EditorKind.Arrangement) with { SnapOn = on });
         if (_vm is not null) _vm.StatusText = on ? "Snap on" : "Snap off — clips position freely";
+    }
+
+    // The toolbar GRID cell and the magnet follow the arrangement's grid wherever it changes
+    // (zoom, the menu, ⌘1–⌘5).
+    private void InitSnapGrid()
+    {
+        var chip = Nota.App.SnapChip.Attach(SnapChip, SnapLabel, SnapCaption, EditorKind.Arrangement, () => Timeline.SnapGridState);
+        Timeline.GridChanged += chip.Refresh;
+        void SyncLatch() => SnapToggle.IsChecked = EditorGrids.Shared.Get(EditorKind.Arrangement).SnapOn;
+        EditorGrids.Shared.Changed += k => { if (k == EditorKind.Arrangement) SyncLatch(); };
+        SyncLatch();
     }
 
     /// <summary>Whether MIDI Learn is armed — device cards with their own Learn button

@@ -92,6 +92,9 @@ float nota_builtin_device_param_default(const NotaEngine* e, int32_t kind, int32
 int32_t nota_device_scope(const NotaEngine* e, int32_t track_id, int32_t device_index, float* out, int32_t max_samples) {
     return e ? CENG(e)->deviceScope(track_id, device_index, out, max_samples) : 0;
 }
+int32_t nota_engine_reverb_wrap_selftest(NotaEngine* e) {
+    return (e && nota::Reverb::combWrapSelfTest()) ? 1 : 0;
+}
 void nota_device_action(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t id, int32_t iarg, float farg) {
     if (e) ENG(e)->deviceAction(track_id, device_index, id, iarg, farg);
 }

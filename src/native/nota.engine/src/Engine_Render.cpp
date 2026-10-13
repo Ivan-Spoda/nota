@@ -796,7 +796,10 @@ void Engine::mixAudioClip(const AudioClip& clip, float* dst, int32_t frames, dou
     // cache's frame count (both are warpPlayLen×spb once rebuilt for the tempo).
     if (clip.warpEnabled && clip.warpCache && clip.warpCache->frames > 0) {
         const WarpCache& wc = *clip.warpCache;
-        const double clipDeviceLen = static_cast<double>(wc.frames);
+        // A stale cache (an edit's rebuild still running in the background) keeps playing,
+        // clipped to the clip's new played length so it never spills past the clip's end.
+        const double clipDeviceLen = static_cast<double>(
+            std::min<int64_t>(wc.frames, std::llround(clip.warpPlayLen() * spb)));
         lenBeats = clipDeviceLen / spb;
         const double ovStart = std::max(blockStart, startSamples);
         const double ovEnd   = std::min(blockStart + frames, startSamples + clipDeviceLen);

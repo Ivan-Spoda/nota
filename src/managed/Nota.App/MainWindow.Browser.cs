@@ -26,7 +26,7 @@ public partial class MainWindow
     private int _lastInstrumentTrackId;
 
     // The browser column's width before it was folded to its rail, restored on unfold.
-    private GridLength _browserWidth = new(288);
+    private GridLength _browserWidth = new(344);
 
     // Folded, the column hugs the rail and the splitter goes away — there's nothing to resize.
     private void OnBrowserCollapsedChanged(bool collapsed)

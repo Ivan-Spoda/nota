@@ -62,6 +62,7 @@ public static class CommandCatalog
         C("view.automation", "Toggle Automation Mode", "View", "⌘⇧A", "envelopes lanes", view: "Arrangement"),
         C("view.history", "Show Version History", "View", "", "undo history versions snapshots"),
         C("view.midiLearn", "MIDI Learn", "View", "", "map controller"),
+        C("view.fullscreen", "Toggle Full Screen", "View", "F11", "maximize immersive hide chrome"),
         C(Palette, "Command Palette", "View", "⌘⇧P", "search", hide: true),
 
         // ---- Transport --------------------------------------------------------------------
@@ -90,6 +91,13 @@ public static class CommandCatalog
         C("roll.octaveUp", "Transpose Notes Up an Octave", "Piano roll", "", "pitch shift"),
         C("roll.octaveDown", "Transpose Notes Down an Octave", "Piano roll", "", "pitch shift"),
         C("roll.removeOutOfScale", "Remove Out-of-Scale Notes", "Piano roll", "", "key fix"),
+
+        // ---- Grid (the arrangement or the piano roll — whichever was used last) -----------
+        C("grid.narrower", "Narrow Grid", "Grid", "⌘1", "finer smaller snap"),
+        C("grid.wider", "Widen Grid", "Grid", "⌘2", "coarser larger snap"),
+        C("grid.triplets", "Toggle Triplet Grid", "Grid", "⌘3", "triplet 1/8T swing"),
+        C("grid.snap", "Toggle Snap to Grid", "Grid", "⌘4", "magnet free"),
+        C("grid.adaptive", "Toggle Adaptive Grid", "Grid", "⌘5", "auto zoom fixed"),
 
         // ---- Settings ---------------------------------------------------------------------
         C("prefs.open", "Settings", "Settings", "⌘,", "preferences options"),

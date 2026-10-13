@@ -174,6 +174,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_undo_group_end")]
     internal static partial void UndoGroupEnd(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_clear_undo_history")]
+    internal static partial void ClearUndoHistory(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_reset")]
     internal static partial void Reset(IntPtr engine);
 

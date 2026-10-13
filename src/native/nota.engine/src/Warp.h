@@ -28,7 +28,26 @@ enum class WarpMode : int32_t {
 
 // A warp marker ties a source position (frames) to a musical position (beats).
 // Consecutive markers bound a segment stretched independently to its beat span.
-struct WarpMarker { double srcFrame; double beat; };
+struct WarpMarker {
+    double srcFrame; double beat;
+    bool operator==(const WarpMarker&) const = default;
+};
+
+// Everything a warp cache's audio depends on, captured when it is built. A clip whose
+// current inputs differ from its cache's holds a STALE cache: it keeps playing it (clipped
+// to the new played length) until the rebuild lands, rather than going silent.
+struct WarpInputs {
+    const SampleBuffer* sample = nullptr;
+    std::vector<WarpMarker> markers;
+    double   warpBeats = 0.0;
+    double   playStart = 0.0;
+    double   playEnd = 0.0;      // effective end (beats)
+    WarpMode mode = WarpMode::Complex;
+    float    pitch = 0.0f;
+    double   spb = 0.0;
+    double   devSR = 0.0;
+    bool operator==(const WarpInputs&) const = default;
+};
 
 // Offline stretch cache: the clip's played window rendered ONCE to
 // a device-rate interleaved-stereo buffer on the authoring thread, so the audio
@@ -42,6 +61,7 @@ struct WarpCache {
     int64_t frames = 0;           // played-window length in device frames
     double  spb = 0.0;            // device samples-per-beat this was built for
     double  devSR = 0.0;          // device sample rate this was built for
+    WarpInputs inputs;            // what it was stretched from (staleness check)
 };
 
 } // namespace nota

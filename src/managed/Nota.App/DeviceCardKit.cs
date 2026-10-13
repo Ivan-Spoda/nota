@@ -340,7 +340,8 @@ internal static class DeviceCardKit
         DockPanel.SetDock(chevron, Dock.Right);
         var name = new Border
         {
-            Width = nameWidth, Padding = new Thickness(7, 0, 6, 0),   // NaN = stretch to the picker's width Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+            Width = nameWidth, Padding = new Thickness(7, 0, 6, 0),   // NaN = stretch to the picker's width
+            Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),   // the whole field is clickable, not just the text
             Child = new DockPanel { Children = { chevron, label } },
         };
         ToolTip.SetTip(name, "Choose a preset");

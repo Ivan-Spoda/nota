@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.51.2** (plus changes in development on `main`). This document describes what is
+**0.52.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -45,6 +45,10 @@ JUCE module; the engine core is JUCE-free.
 
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
   operation.
+- **New project template**: a new project (and the workspace Nota opens with) starts with an
+  instrument track (Nota Synth), an audio track and two returns — **Reverb** (Nota Reverb)
+  and **Delay** (Nota Delay), both Wet Only — ready to send to; it opens unmodified, with
+  nothing to undo.
 - **Version history**: every save records a version inside the project. The browser's
   **History** tab draws them as a branching tree (the current one has a brass dot), each
   described by what it changed ("Added Bass · Tempo 120.00 → 124.00"); switch
@@ -79,7 +83,7 @@ Three top-level views, switched from the toolbar (**Arrangement · Session · Mo
 the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 
 - **Arrangement View** — a linear timeline, floating on the app ground as its own island:
-  place, move, trim and duplicate clips; grid and snap to bars/beats; scroll and zoom;
+  place, move, trim and duplicate clips; the snap grid (below); scroll and zoom;
   recording into the arrangement (audio and MIDI); split at the cursor or across a
   selection (Cmd/Ctrl+E cuts every track in the selection); clip scrubbing on the ruler.
   ⌘A selects every clip; moving several selected clips is one undo step.
@@ -98,10 +102,22 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
     mute/solo and level, and opens to the full control set when selected, so groups read as
     families rather than as more tracks. A track without a colour of its own takes its
     group's hue, shaded per sibling.
+  - **Return and Master rows stay pinned** under the tracks, each with a level meter, a
+    volume fader and its dB value (the Master fader is the same master volume as the
+    transport's and the Mixer's).
   - **Clip names appear where a run begins** — a clip is a colour band over its waveform,
     and the name prints only at the head of each run so a repeated pattern reads as one
     block. View ▸ Clip names cycles every clip / first of a run / none; a clip named by
     hand always shows its name.
+- **Snap grid** (the arrangement, and the clip editors — piano roll and audio — which
+  share one setting; remembered app-wide): **Auto** follows the zoom so you snap to the
+  lines you see — finer as you zoom in, whole bars zoomed out — in **Narrow / Medium /
+  Wide** density; or a fixed step from 1/32 to 4 bars (its label dims when it is finer
+  than the drawn lines). **Triplets** in both modes. The toolbar's GRID cell and the piano
+  roll's header chip open a menu with every option, as does the audio clip editor's header
+  (trim brackets, warp markers and envelope points snap); ⌘1 / ⌘2 narrow / widen (in Auto,
+  the density), ⌘3 triplets, ⌘4 snap on / off, ⌘5 Auto ↔ fixed (also Edit → Grid), acting
+  on the editor used last. Hold ⌥ to drag freely; clip edges still attract a dragged clip.
 - **Session View** — a clip grid (tracks × scenes) with an inspector: named, coloured clips
   with note / waveform previews and a progress pie on the clip's own clock; selection apart
   from launching, keyboard editing (arrows, Return, ⌘C/X/V, ⌘D, ⌘I, F2, Delete) and drag
@@ -163,8 +179,9 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
 ## MIDI and virtual instruments
 
 - **MIDI clip**: notes (pitch, start, length, velocity).
-- **Piano Roll**: draw, move, stretch and delete notes; quantization; grid length; a
-  velocity editor; transposing the selection.
+- **Piano Roll**: draw, move, stretch and delete notes on the snap grid; **QUANTIZE** with
+  its own step (1/32 … 1/2, triplets; independent of the zoom) and strength; a velocity
+  editor; transposing the selection.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
   - ⌘D duplicates notes over whatever they land on, like clips in the arrangement.
@@ -307,7 +324,11 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   The first use offers to download the model.
 - **Warp / time-stretch**: **Complex** and **Complex Pro** modes (the latter with formant
   preservation, correct even when the sample rate and the device rate differ), plus
-  transient detection. A grid-snap toggle governs trimming a warped clip.
+  transient detection. Trim brackets, warp markers and envelope points snap to the clip
+  editors' snap grid. Warping runs in the background (the track shows "Processing…" and a
+  re-warped clip plays its previous version until the new one is ready), so long files
+  don't stall the app. The clip editor redraws the visible waveform at screen resolution,
+  down to single samples, and its ruler thins or adds bars, beats and 16ths with the zoom.
 - **Changing the sample rate** does not break third-party plugins or warped clips — the
   caches are rebuilt once when the rate changes.
 
@@ -826,7 +847,10 @@ and user presets, automation, persistence and cloning.
     in its header too.
   - Dropping an instrument onto an existing track **replaces the instrument** in place
     (clips, devices and volume are kept); dropping onto empty space creates a new track.
-    Racks are not replaced in place.
+    Racks are not replaced in place. An instrument preset dropped onto an instrument track
+    loads into that track's instrument (switching it if needed; the effects stay).
+  - A drop selects the track it lands on (a newly created one included), in the
+    arrangement and the session view.
 - **Preset preview**: the same player sits under the Instruments, Audio Effects, MIDI
   Effects and Presets tabs and plays the selected factory preset, saved preset, drum kit or
   built-in device (its default sound). These tabs have their own **Auto**, off by default:
@@ -903,7 +927,9 @@ and user presets, automation, persistence and cloning.
   window — including the custom-drawn arrangement, piano roll, mixer and device cards.
 - **A single frameless window style**: centred title, drag by the header, the macOS
   traffic lights in a left inset (Windows gets its own title bar; Linux uses the system
-  frame).
+  frame). **Full screen** — the macOS green button, or View → Toggle Full Screen (F11)
+  on Windows and Linux — hides the title bar and its separator so the workspace fills the
+  screen edge to edge; leaving full screen brings the bar back. Maximized keeps the bar.
 - **What's New** — a window showing changelog entries newer than `LastSeenVersion`, once
   after the first launch on a new version.
 - **Self-update** — the start screen's banner announces a newer GitHub release. **Update**

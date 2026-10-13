@@ -565,7 +565,7 @@ private:
         const int sz = (int)chorusBuf_.size(); if (sz < 4) { outL = l; outR = r; return; }
         chorusBuf_[chorusW_] = (l + r) * 0.5f;
         const double rate = expMap(get(FxChorusRate), 0.1, 6.0); chorusPh_ += rate / sampleRate_; if (chorusPh_ >= 1.0) chorusPh_ -= 1.0;
-        auto tap = [&](double phase) { double d = (0.008 + 0.006 * std::sin(kTwoPi * (phase - std::floor(phase)))) * sampleRate_; double rp = chorusW_ - d; while (rp < 0) rp += sz; int i0 = (int)rp; int i1 = (i0 + 1) % sz; float f = (float)(rp - i0); return chorusBuf_[i0] + (chorusBuf_[i1] - chorusBuf_[i0]) * f; };
+        auto tap = [&](double phase) { double d = (0.008 + 0.006 * std::sin(kTwoPi * (phase - std::floor(phase)))) * sampleRate_; double rp = chorusW_ - d; while (rp < 0) rp += sz; int i0 = (int)rp; float f = (float)(rp - i0); if (i0 >= sz) i0 -= sz; int i1 = (i0 + 1) % sz; return chorusBuf_[i0] + (chorusBuf_[i1] - chorusBuf_[i0]) * f; };
         float a = 0.0f, b = 0.0f;
         // Taps sit evenly around the LFO cycle; odd ones go left, even ones right.
         for (int k = 0; k < voices; ++k) { float t = tap(chorusPh_ + (double)k / voices); if (k % 2 == 0) a += t; else b += t; }

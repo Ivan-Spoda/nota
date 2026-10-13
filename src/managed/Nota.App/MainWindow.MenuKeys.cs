@@ -39,7 +39,7 @@ public partial class MainWindow
                     item.Click += (_, _) => _commands.Run(id);
                     // Settings… keeps ⌘, on the app menu (App.axaml) on macOS; one key, one item.
                     bool appMenuOwnsIt = OperatingSystem.IsMacOS() && id == "prefs.open";
-                    if (Commands.IsChord(cmd.Gesture) && !appMenuOwnsIt && Commands.Parse(cmd.Gesture) is { } g)
+                    if (Commands.CanMenuGesture(cmd.Gesture) && !appMenuOwnsIt && Commands.Parse(cmd.Gesture) is { } g)
                     {
                         item.Gesture = g;
                         if (!OperatingSystem.IsMacOS()) _menuShortcuts.Add(item);

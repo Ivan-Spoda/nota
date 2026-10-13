@@ -184,6 +184,8 @@ public sealed class DeviceInsertService
                 return t > 0 ? new InsertResult { Ok = true, TrackId = t, CreatedTrack = true, Status = $"Added {item.Name} (track {t})" }
                              : InsertResult.Fail($"Couldn't load {item.Name}.");
             });
+        // A preset on a plain instrument track loads into its instrument, like a bare instrument.
+        if (item.Kind == BrowserItemKind.Preset) return ApplyPreset(item, new InsertTarget(trackId, Beat: beat, InPlace: true));
         return Group(() => RouteToTrack(item, trackId));
     }
 
@@ -379,6 +381,15 @@ public sealed class DeviceInsertService
                 PresetLanded = (t, PresetChain.Instrument, -1, item.Name, factoryId),
             };
         }
+        // …and a preset file (a user preset, a Mosaic pack preset) the same way.
+        if (fp is null && !target.NewTrack && target.InPlace && CanReplaceInstrument(t)
+            && _presets?.ApplyInstrumentInPlace(_engine, item.Path, t, out bool fileSwapped) is { } fw)
+            return new InsertResult
+            {
+                Ok = fw.Length == 0, TrackId = t, InstrumentReplaced = fileSwapped, ShowDevices = true,
+                Status = fw.Length > 0 ? fw : $"Applied preset {item.Name}",
+                PresetLanded = (t, PresetChain.Instrument, -1, item.Name, ""),
+            };
 
         // Apply doesn't say where the preset landed, so diff the chain around it: a new track
         // (instrument preset) or one more device / MIDI effect on the target (appended last).

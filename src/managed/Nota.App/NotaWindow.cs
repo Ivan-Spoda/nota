@@ -140,5 +140,15 @@ public abstract class NotaWindow : Window
         BeginMoveDrag(e);
     }
 
+    // Fullscreen hides the shared bar: dialogs join the main window's full-bleed look,
+    // leaving fullscreen restores it. (A subclass's own functional toolbar — the device
+    // window's preset bar — draws itself and stays.) Linux never builds the bar at all.
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == WindowStateProperty && _chromeBar is { } bar)
+            bar.IsVisible = WindowState != WindowState.FullScreen;
+    }
+
     private IBrush? Res(string key) => this.TryFindResource(key, out var v) && v is IBrush b ? b : null;
 }

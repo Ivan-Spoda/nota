@@ -93,6 +93,9 @@ public partial class MainWindow
     private async void OnOpenedRecoveryCheck(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        // The launch workspace starts from the same template as File → New.
+        Nota.Infrastructure.ProjectTemplate.ApplyDefault(Engine);
+        RefreshAfterLoad();
         MarkProjectClean();   // the fresh startup project counts as unmodified
 
         // What's New shows once per new app version, ahead of the launcher.

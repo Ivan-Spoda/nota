@@ -167,7 +167,7 @@ public sealed class MidiToolsView : UserControl
     private MidiToolContext Context() => new()
     {
         LengthBeats = _roll.LengthBeats,
-        Grid = _roll.Grid,
+        Grid = _roll.Grids.Quantize.Beats(_roll.BeatsPerBar),   // like Quantize: never the zoom's step
         ScaleOn = _roll.ScaleOn,
         ScaleRoot = _roll.ScaleRoot,
         ScaleMask = MidiScales.MaskAt(_roll.ScaleIndex),

@@ -996,6 +996,10 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘⇧E", "Export audio"),
             ("⌘,", "Settings"),
         }),
+        ("WINDOW", new[]
+        {
+            ("F11", "Enter / leave full screen — the title bar hides in full screen"),
+        }),
         ("COMMAND PALETTE", new[]
         {
             ("⌘⇧P", "Open / close the command palette — from any window, even while typing"),
@@ -1035,6 +1039,14 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘J", "Consolidate the selection into one clip per track"),
             ("0", "Deactivate / activate the selected clip(s)"),
             ("Delete", "Delete the selected clip / range"),
+        }),
+        ("GRID (ARRANGEMENT OR CLIP EDITOR — WHICHEVER YOU USED LAST)", new[]
+        {
+            ("⌘1   ⌘2", "Narrow / widen the grid · in Auto, change the density"),
+            ("⌘3", "Triplet grid on / off"),
+            ("⌘4", "Snap to grid on / off"),
+            ("⌘5", "Switch between the adaptive (Auto) and a fixed grid"),
+            ("⌥ while dragging", "Move freely, ignoring the grid"),
         }),
         ("TRACKS (AFTER A CLICK IN THE TRACK HEADERS)", new[]
         {

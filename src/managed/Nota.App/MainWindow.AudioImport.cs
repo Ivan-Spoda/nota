@@ -8,8 +8,8 @@
 //      goes (instantly when the analysis cache already knows the file) — then detects tempo;
 //   3. back on the UI thread the decoded buffer is placed (no disk I/O) and — if the sample
 //      index calls it a loop (or a long take with a tempo) — warped to the project tempo, and
-//      optionally transposed to the project key; the warp cache builds in small steps so the
-//      UI keeps drawing. A one-shot is never warped;
+//      optionally transposed to the project key; the warp cache builds on the engine's
+//      worker thread so the UI keeps drawing. A one-shot is never warped;
 //   4. the track turns opaque and is selected.
 
 using System;
@@ -54,6 +54,7 @@ public partial class MainWindow
             LengthBeats = 4, Label = $"{name} · Processing…",   // real length arrives with the header
         };
         Timeline.AddPendingImport(pending);
+        Timeline.Select(t, -1);   // the track it lands on (a new one included) is selected right away
         _session?.Refresh();
         _vm.StatusText = $"Importing {name}…";
 
@@ -99,7 +100,7 @@ public partial class MainWindow
             if (warpBpm > 0 || semis != 0)
             {
                 // Warp with the tempo the index / worker measured, deferring the (heavy) stretch
-                // so it can be built in slices below instead of in one UI-thread block. The
+                // to the engine's background build below instead of one UI-thread block. The
                 // transpose rides the same deferred build (a warped clip keeps its length).
                 Engine.SetDeferWarpBuild(true);
                 try
@@ -214,20 +215,32 @@ public partial class MainWindow
         }
     }
 
-    // Build the deferred warp cache in slices on the UI thread, yielding at Background
-    // priority between them so input and rendering always go first.
+    // Build the deferred warp cache on the engine's worker thread, polling for progress. The
+    // UI thread only installs the finished cache, so a long file no longer stutters the app.
     private async Task BuildImportWarpAsync(string name, Func<bool> alive)
     {
         long total = Engine.WarpBuildRemaining;
-        long remaining = total;
-        while (remaining > 0 && alive())
+        await PollWarpBuildAsync(alive, remaining =>
         {
-            remaining = Engine.WarpBuildStep(48000);
             double frac = total > 0 ? Math.Clamp(1.0 - (double)remaining / total, 0.0, 1.0) : 1.0;
-            if (_vm is not null) _vm.StatusText = $"Warping {name}… {frac * 100:0} %";
-            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            if (_vm is not null) _vm.StatusText = $"Warping {name}… {frac * 100:0}\u2009%";
+        });
+    }
+
+    // Drive the background warp build until every stale cache is rebuilt (or alive() turns
+    // false). Several loops may run at once (an import + an editor edit): each poll is cheap
+    // and idempotent, so they simply share the work.
+    private async Task PollWarpBuildAsync(Func<bool>? alive = null, Action<long>? progress = null)
+    {
+        long remaining;
+        while ((remaining = Engine.WarpBuildPoll()) > 0 && (alive?.Invoke() ?? true))
+        {
+            progress?.Invoke(remaining);
+            await Task.Delay(WarpPollMs);
         }
     }
+
+    private const int WarpPollMs = 15;
 
     private bool TrackExists(int trackId)
     {

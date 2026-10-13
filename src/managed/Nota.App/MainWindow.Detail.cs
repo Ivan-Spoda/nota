@@ -345,7 +345,7 @@ public partial class MainWindow
         DetailDevicesBtn.IsChecked = true;
         DetailPatternBtn.IsChecked = false;
         DetailClipBtn.IsChecked = false;
-        ShowDetail(332, honorPersist: false);   // Devices: natural card-fitting height (island: +12 gutter under it)
+        ShowDetail(338, honorPersist: false);   // Devices: natural card-fitting height (island: +12 gutter under it, +6 header top inset)
     }
 
     private void OpenClipEditor(int trackId, int clipIndex)
@@ -369,6 +369,7 @@ public partial class MainWindow
         bool slot = SessionClip.SceneOf(clipIndex) >= 0;
         _audioEditor = new AudioClipEditorView(Engine, trackId, clipIndex,
             TrackBrush(trackId), slot ? () => _session?.Refresh() : () => Timeline.Refresh());
+        _audioEditor.WarpBuildRequested = () => _ = PollWarpBuildAsync();
         _audioEditorTrackId = trackId;
         _audioEditorClipIndex = clipIndex;
     }
@@ -392,6 +393,7 @@ public partial class MainWindow
         if (_vm is null) return;
         var roll = new PianoRollView
         {
+            BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement
             Commit = notes =>
             {
                 // The roll can outlive its clip: the target track/clip may have been
@@ -593,6 +595,7 @@ public partial class MainWindow
         SyncClipTab();                 // a Drum Rack slot lights the Pattern tab up
         var roll = new PianoRollView
         {
+            BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement
             Commit = notes =>
             {
                 var arr = new NotaNote[notes.Count];

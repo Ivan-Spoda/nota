@@ -104,6 +104,16 @@ int32_t nota_clip_get_warp_full_peaks(const NotaEngine* e, int32_t track_id, int
     if (!e) return 0;
     return CENG(e)->getClipWarpFullPeaks(track_id, clip_index, out_min_max, max_points);
 }
+int32_t nota_clip_get_warp_peaks_range(const NotaEngine* e, int32_t track_id, int32_t clip_index,
+                                       double beat0, double beat1, float* out_min_max, int32_t max_points) {
+    if (!e) return 0;
+    return CENG(e)->getClipWarpPeaksRange(track_id, clip_index, beat0, beat1, out_min_max, max_points);
+}
+int32_t nota_clip_get_source_peaks_range(const NotaEngine* e, int32_t track_id, int32_t clip_index,
+                                         double frame0, double frame1, float* out_min_max, int32_t max_points) {
+    if (!e) return 0;
+    return CENG(e)->getClipSourcePeaksRange(track_id, clip_index, frame0, frame1, out_min_max, max_points);
+}
 
 // ---- Instrument tracks, MIDI clips & notes (M2) ---------------------------
 
@@ -385,6 +395,9 @@ void nota_engine_set_defer_warp_build(NotaEngine* e, int32_t defer) {
 }
 int64_t nota_engine_warp_build_step(NotaEngine* e, int32_t max_frames) {
     return e ? ENG(e)->warpBuildStep(max_frames) : 0;
+}
+int64_t nota_engine_warp_build_poll(NotaEngine* e) {
+    return e ? ENG(e)->warpBuildPoll() : 0;
 }
 int64_t nota_engine_warp_build_remaining(const NotaEngine* e) {
     return e ? CENG(e)->warpBuildRemainingFrames() : 0;

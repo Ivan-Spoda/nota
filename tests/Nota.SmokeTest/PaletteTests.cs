@@ -262,7 +262,47 @@ internal static class PaletteTests
         yield return (pr.Ok && eng.TrackCount == count0 && eng.TrackInstrumentKind(k) == 5 && Chain(k) == "0,3",
             "an instrument preset loads in place, swapping the instrument (palette)");
         var dropped = svc.ApplyPreset(presetRow, new InsertTarget(k));
-        yield return (dropped.CreatedTrack, "…while a dropped one still starts its own track");
+        yield return (dropped.CreatedTrack, "…while one not asked in place still starts its own track");
+
+        foreach (var x in PresetDrops(eng, factory, volt, aurora, Track, Chain)) yield return x;
+    }
+
+    // Dropping a preset on the arrangement (bug preset-drop-new-track): on a plain instrument
+    // track it loads into that track's instrument — factory or file preset, same kind or not;
+    // on empty space it still starts a track.
+    private static IEnumerable<(bool, string)> PresetDrops(NotaEngine eng, FactoryPresetCatalog factory,
+        BrowserItem volt, BrowserItem aurora, Func<int> track, Func<int, string> chain)
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "nota-preset-drop-" + Environment.ProcessId);
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var store = new PresetStore();
+            var svc = new DeviceInsertService(eng, factory, store, null);
+            BrowserItem Row(FactoryPresetInfo p) => new() { Name = p.DisplayName, Kind = BrowserItemKind.Preset, Path = "factory:" + p.Id };
+            var auroraPresets = factory.All().Where(p => p.IsInstrument && p.BuiltinKind == 5).ToList();
+
+            int t = track(); int n0 = eng.TrackCount;
+            var r1 = svc.DropOnArrangement(Row(auroraPresets[0]), t, 0);
+            var r2 = svc.DropOnArrangement(Row(auroraPresets[1]), t, 0);
+            yield return (r1.Ok && r2.Ok && !r1.CreatedTrack && !r2.CreatedTrack && eng.TrackCount == n0
+                          && eng.TrackInstrumentKind(t) == 5 && chain(t) == "0,3" && r1.InstrumentReplaced && !r2.InstrumentReplaced,
+                "a factory preset dropped on an instrument track loads there; a second one replaces it");
+
+            // A user preset file of another instrument: saved from a Volt, dropped on the Aurora track.
+            int v = svc.CreateInstrumentTrack(volt, 0);
+            store.Save(eng, v, -1, "Drop Test", dir);
+            string file = Directory.EnumerateFiles(dir, "*" + PresetService.Extension).First();
+            var userRow = new BrowserItem { Name = "Drop Test", Kind = BrowserItemKind.Preset, Path = file };
+            int n1 = eng.TrackCount;
+            var r3 = svc.DropOnArrangement(userRow, t, 0);
+            yield return (r3.Ok && !r3.CreatedTrack && r3.InstrumentReplaced && eng.TrackCount == n1 && eng.TrackInstrumentKind(t) == 6 && chain(t) == "0,3",
+                $"a preset file dropped on an instrument track swaps its instrument in place ({r3.Status})");
+
+            var r4 = svc.DropOnArrangement(Row(auroraPresets[0]), -1, 8);
+            yield return (r4.CreatedTrack && eng.TrackCount == n1 + 1, "a preset dropped on empty space still starts a track");
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
     }
 
     // Source checks: the menu names only catalog commands, every command has a handler, and

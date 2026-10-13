@@ -219,6 +219,10 @@ public interface IAudioEngine : IDisposable
     long WarpBuildStep(int maxFrames);
     /// <summary>Frames of warped audio still needing a cache (progress denominator).</summary>
     long WarpBuildRemaining { get; }
+    /// <summary>Background warp build: installs a cache a worker finished (if its clip is
+    /// unchanged), then starts the next clip needing one on a worker. Never blocks — poll it
+    /// from a timer until it returns 0. Clips keep playing their previous cache meanwhile.</summary>
+    long WarpBuildPoll();
     /// <summary>Replaces a warped clip's source↔beat markers (≥2).</summary>
     void SetClipWarpMarkers(int trackId, int clipIndex, double[] srcFrames, double[] beats);
     /// <summary>Reads a warped clip's markers into the buffers; returns the total count.</summary>
@@ -347,6 +351,10 @@ public interface IAudioEngine : IDisposable
     int GetClipSourcePeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints);
     /// <summary>Peaks over the full warped material (ignores the trim window) for the warped-clip Start/End brackets.</summary>
     int GetClipWarpFullPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints);
+    /// <summary>Peaks over warped beats [beat0, beat1] of the full material, file order (≤ 8192 points) — the zoomed clip editor's detail.</summary>
+    int GetClipWarpPeaksRange(int trackId, int clipIndex, double beat0, double beat1, float[] outMinMax, int maxPoints);
+    /// <summary>Peaks over source frames [frame0, frame1) of the whole sample (≤ 8192 points) — the zoomed clip editor's detail.</summary>
+    int GetClipSourcePeaksRange(int trackId, int clipIndex, double frame0, double frame1, float[] outMinMax, int maxPoints);
 
     // --- Instrument tracks, MIDI clips & notes -----------------------------
     int AddInstrumentTrack();
@@ -813,6 +821,8 @@ public interface IAudioEngine : IDisposable
     /// <see cref="EndUndoGroup"/> undo as one step. Nests.</summary>
     void BeginUndoGroup();
     void EndUndoGroup();
+    /// <summary>Forget the undo/redo history; the current state becomes the baseline.</summary>
+    void ClearUndoHistory();
 
     // --- Project load (M7-6) -----------------------------------------------
     void Reset();

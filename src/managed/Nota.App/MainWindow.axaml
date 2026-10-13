@@ -55,6 +55,18 @@
             <NativeMenuItem Header="Paste Bounced Audio" app:Commands.Id="edit.pasteBounced"/>
             <NativeMenuItem Header="Copy Clips to Session / Arrangement" app:Commands.Id="edit.copyToOtherView"/>
             <NativeMenuItem Header="Delete" app:Commands.Id="edit.delete"/>
+            <NativeMenuItemSeparator/>
+            <NativeMenuItem Header="Grid">
+              <NativeMenuItem.Menu>
+                <NativeMenu>
+                  <NativeMenuItem Header="Narrow Grid" app:Commands.Id="grid.narrower"/>
+                  <NativeMenuItem Header="Widen Grid" app:Commands.Id="grid.wider"/>
+                  <NativeMenuItem Header="Triplet Grid" app:Commands.Id="grid.triplets"/>
+                  <NativeMenuItem Header="Snap to Grid" app:Commands.Id="grid.snap"/>
+                  <NativeMenuItem Header="Adaptive Grid" app:Commands.Id="grid.adaptive"/>
+                </NativeMenu>
+              </NativeMenuItem.Menu>
+            </NativeMenuItem>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
@@ -70,6 +82,7 @@
             <NativeMenuItem Header="Toggle detail panel" app:Commands.Id="view.toggleDetail"/>
             <NativeMenuItem Header="Toggle overview" app:Commands.Id="view.toggleOverview"/>
             <NativeMenuItem Header="Toggle sections" app:Commands.Id="view.toggleSections"/>
+            <NativeMenuItem Header="Toggle Full Screen" app:Commands.Id="view.fullscreen"/>
             <NativeMenuItemSeparator/>
             <!-- Header text is matched from code to keep this checkmark in step with the
                  transport bar's Follow button — see MainWindow.SetFollowPlayhead. -->
@@ -233,12 +246,13 @@
               <TextBlock Classes="CellLabel" Text="KEY" HorizontalAlignment="Center"/>
             </StackPanel>
           </Button>
-          <!-- Clip snap grid: click to cycle -->
-          <Button x:Name="SnapChip" Classes="cell" Click="OnCycleSnap" ToolTip.Tip="Cycle the clip snap grid">
+          <!-- Clip snap grid (SnapChip.cs): the step in effect, live with the zoom in Auto;
+               click for the grid menu. SnapChip sizes the value to its widest label. -->
+          <Button x:Name="SnapChip" Classes="cell">
             <StackPanel Spacing="2">
               <TextBlock x:Name="SnapLabel" Classes="Mono" Text="1/4" FontSize="14" LineHeight="16"
                          MinWidth="36" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
-              <TextBlock Classes="CellLabel" Text="GRID" HorizontalAlignment="Center"/>
+              <TextBlock x:Name="SnapCaption" Classes="CellLabel" Text="GRID" HorizontalAlignment="Center"/>
             </StackPanel>
           </Button>
         </StackPanel>
@@ -423,27 +437,30 @@
         <RowDefinition Height="0"/>
       </Grid.RowDefinitions>
 
-      <!-- Left browser (240) + main area (fills). Browser and arrangement are both islands:
-           they float on the app ground with an even gutter, so the splitter between them
-           carries no line of its own — it is a 2px transparent grab strip inside that gutter. -->
+      <!-- Left browser + main area (fills). Browser and arrangement are both islands:
+           they float on the app ground with an even 12px gutter, so the splitter between them
+           carries no line and takes no space of its own — it is a transparent grab strip laid
+           over that gutter (negative margin; MinWidth=0 overrides the theme's 6px floor). -->
       <Grid x:Name="BrowserGrid" Grid.Row="0">
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="288" MinWidth="160" MaxWidth="480"/>
+          <ColumnDefinition Width="344" MinWidth="160" MaxWidth="480"/>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
-        <app:BrowserView x:Name="Browser" Grid.Column="0" Margin="12,12,10,12"/>
-        <GridSplitter x:Name="BrowserSplitter" Grid.Column="1" Width="2" Background="Transparent"
-                      ResizeDirection="Columns"/>
+        <app:BrowserView x:Name="Browser" Grid.Column="0" Margin="12,12,12,12"/>
+        <GridSplitter x:Name="BrowserSplitter" Grid.Column="1" Width="12" MinWidth="0" Margin="-12,0,0,0"
+                      Background="Transparent" ResizeDirection="Columns"/>
         <Panel x:Name="MainContent" Grid.Column="2">
           <app:ArrangementView x:Name="Timeline" Margin="0,12,12,12"/>
         </Panel>
       </Grid>
 
-      <!-- Drag handle to resize the Detail panel (only shown when it is open). -->
+      <!-- Drag handle to resize the Detail panel (only shown when it is open). Like the
+           browser splitter it lies over the arrangement's 12px bottom gutter instead of
+           adding its own height. -->
       <GridSplitter x:Name="DetailSplitter"
                     Grid.Row="1"
-                    Height="2"
+                    Height="12" MinHeight="0" Margin="0,-12,0,0"
                     IsVisible="False"
                     HorizontalAlignment="Stretch" ResizeDirection="Rows"
                     Background="Transparent"/>
@@ -456,7 +473,7 @@
               BorderThickness="1" CornerRadius="{StaticResource Radius.Panel}">
         <DockPanel>
           <!-- Header: mode tabs · track chip (routing/PDC) · Freeze · | · pop out · close -->
-          <Grid DockPanel.Dock="Top" Height="32" Margin="8,0,10,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+          <Grid DockPanel.Dock="Top" Height="32" Margin="8,6,10,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
             <Border Classes="segmented" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal" Spacing="2">
                 <ToggleButton x:Name="DetailDevicesBtn" Classes="seg" Content="Devices" Click="OnDetailDevices"/>

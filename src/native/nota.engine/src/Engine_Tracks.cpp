@@ -151,6 +151,40 @@ int64_t warpCacheFrames(const AudioClip& c, double spb, double devSR) {
     return std::llround(c.warpPlayLen() * spb);
 }
 
+// What a cache built for c right now would be stretched from (see WarpInputs).
+WarpInputs warpInputsOf(const AudioClip& c, double spb, double devSR) {
+    WarpInputs in;
+    in.sample = c.sample.get();
+    in.markers = c.warpMarkers;
+    in.warpBeats = c.warpMarkers.size() >= 2 ? c.warpMarkers.back().beat : c.warpBeats;
+    in.playStart = c.warpPlayStart;
+    in.playEnd = c.warpPlayEndEff();
+    in.mode = c.warpMode;
+    in.pitch = c.pitchSemitones;
+    in.spb = spb;
+    in.devSR = devSR;
+    return in;
+}
+
+// Stretch `frames` device frames of the played window described by `in` into `out`
+// (interleaved stereo). The stream primes once on the first chunk, then runs seamlessly
+// (drift-free feed) to the end. Gain is 1 (applied at read time). Stops early — returning
+// false — when `cancel` is raised; `done` (optional) tracks progress for a worker build.
+bool renderWarpWindow(const WarpInputs& in, const SampleBuffer& sample, float* out, int64_t frames,
+                      const std::atomic<bool>* cancel = nullptr, std::atomic<int64_t>* done = nullptr) {
+    ClipWarpStream st;
+    st.configure(sample.channels, in.mode, in.pitch, sample.sourceSampleRate, in.devSR);
+    const double warpOffset = in.playStart * in.spb;
+    for (int64_t off = 0; off < frames; off += kWarpBuildChunk) {
+        if (cancel && cancel->load(std::memory_order_relaxed)) return false;
+        const int32_t n = static_cast<int32_t>(std::min<int64_t>(kWarpBuildChunk, frames - off));
+        st.render(out + off * 2, n, warpOffset + static_cast<double>(off),
+                  in.markers, in.warpBeats, sample, in.spb, in.devSR, 1.0f);
+        if (done) done->store(off + n, std::memory_order_relaxed);
+    }
+    return true;
+}
+
 // Build a warped clip's offline stretch cache, or clear it when off.
 // Runs the streaming stretcher ONCE over the whole played window on the authoring
 // thread and captures the device-rate output, so the audio thread just copies from
@@ -168,20 +202,11 @@ void buildWarpCache(AudioClip& c, double spb, double devSR) {
     cache->frames = frames;
     cache->spb = spb;
     cache->devSR = devSR;
+    cache->inputs = warpInputsOf(c, spb, devSR);
     cache->samples.assign(static_cast<size_t>(frames) * 2, 0.0f);
-
-    ClipWarpStream st;
-    st.configure(c.sample->channels, c.warpMode, c.pitchSemitones, c.sample->sourceSampleRate, devSR);
-    // Render the played window [warpPlayStart, warpPlayEndEff] in contiguous chunks: the
-    // stream primes once on the first chunk, then runs seamlessly (drift-free feed) to the
-    // end — exactly the audio the old realtime path produced, minus the RT cost. Gain is 1
-    // here (applied at read time), so gain changes don't invalidate the cache.
-    const double warpOffset = c.warpPlayStart * spb;
-    for (int64_t off = 0; off < frames; off += kWarpBuildChunk) {
-        const int32_t n = static_cast<int32_t>(std::min<int64_t>(kWarpBuildChunk, frames - off));
-        st.render(cache->samples.data() + off * 2, n, warpOffset + static_cast<double>(off),
-                  c.warpMarkers, c.warpBeats, *c.sample, spb, devSR, 1.0f);
-    }
+    // The played window [warpPlayStart, warpPlayEndEff] — exactly the audio the old realtime
+    // path produced, minus the RT cost. Gain changes don't invalidate the cache.
+    renderWarpWindow(cache->inputs, *c.sample, cache->samples.data(), frames);
     c.warpCache = std::move(cache);
 }
 
@@ -224,13 +249,42 @@ void clampWarpPlay(AudioClip& c) {
 }
 } // namespace
 
-// Build (or clear) a clip's warp cache — unless the load path has asked to defer it.
+// Build (or clear) a clip's warp cache — unless the caller has asked to defer it.
 // During project load `deferWarpBuild_` is set so Apply's many warp edits stay cheap;
-// the caches are then filled incrementally by warpBuildStep with a progress bar, so a
+// the caches are then filled by warpBuildStep / warpBuildPoll with a progress bar, so a
 // project with hundreds of warped clips opens at once instead of freezing for ~a minute.
+// Editor edits defer too: the clip keeps its now-stale cache (played clipped to the new
+// length) until the background build replaces it, instead of the UI freezing on a long file.
 void Engine::configureClipWarp(AudioClip& c, double spb, double devSR) {
-    if (deferWarpBuild_) { c.warpCache = nullptr; return; }   // filled later by warpBuildStep
+    if (!c.warpEnabled) { c.warpCache = nullptr; return; }
+    if (deferWarpBuild_) return;   // stale (or no) cache until warpBuildStep / warpBuildPoll
     buildWarpCache(c, spb, devSR);
+}
+
+bool Engine::warpNeedsBuild(const AudioClip& c) const {
+    const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
+    if (warpCacheFrames(c, spb, devSR) <= 0) return false;
+    return !c.warpCache || !(c.warpCache->inputs == warpInputsOf(c, spb, devSR));
+}
+
+const AudioClip* Engine::nextWarpBuildTarget(int32_t& trackId, int32_t& clipIndex) const {
+    if (!authoring_) return nullptr;
+    for (auto& t : authoring_->tracks) {
+        if (t->type() != TrackType::Audio) continue;
+        for (size_t i = 0; i < t->clips.size(); ++i)
+            if (warpNeedsBuild(t->clips[i])) {
+                trackId = t->id(); clipIndex = static_cast<int32_t>(i);
+                return &t->clips[i];
+            }
+        for (size_t sc = 0; sc < t->sessionSlots.size(); ++sc) {
+            const SessionSlot& sl = t->sessionSlots[sc];
+            if (sl.hasClip && warpNeedsBuild(sl.audio)) {
+                trackId = t->id(); clipIndex = sessionClipIndex(static_cast<int32_t>(sc));
+                return &sl.audio;
+            }
+        }
+    }
+    return nullptr;
 }
 
 // --- incremental warp-cache build (managed-driven, with a progress bar) --------------
@@ -249,9 +303,8 @@ const AudioClip* Engine::warpBuildTargetClip() const {
     const AudioClip* cp = audioClipRef(*t, wb_.clipIndex);   // an arrangement clip or a session slot's
     if (!cp) return nullptr;
     const AudioClip& c = *cp;
-    if (!c.warpEnabled || c.warpCache) return nullptr;
-    if (!wb_.cache || warpCacheFrames(c, transport_.samplesPerBeat(), transport_.sampleRate()) != wb_.cache->frames)
-        return nullptr;
+    if (!wb_.cache || !warpNeedsBuild(c)) return nullptr;
+    if (!(warpInputsOf(c, transport_.samplesPerBeat(), transport_.sampleRate()) == wb_.cache->inputs)) return nullptr;
     return &c;
 }
 
@@ -264,13 +317,14 @@ int64_t Engine::warpBuildRemainingFrames() const {
     for (auto& t : authoring_->tracks) {
         if (t->type() != TrackType::Audio) continue;
         for (auto& c : t->clips)
-            if (c.warpEnabled && !c.warpCache) sum += warpCacheFrames(c, spb, devSR);
+            if (warpNeedsBuild(c)) sum += warpCacheFrames(c, spb, devSR);
         for (auto& sl : t->sessionSlots)
-            if (sl.hasClip && sl.audio.warpEnabled && !sl.audio.warpCache) sum += warpCacheFrames(sl.audio, spb, devSR);
+            if (sl.hasClip && warpNeedsBuild(sl.audio)) sum += warpCacheFrames(sl.audio, spb, devSR);
     }
     // The in-progress clip is still un-cached above, so its full length was counted —
     // subtract what's already rendered so the bar reflects real progress.
     if (warpBuildTargetClip()) sum -= wb_.offset;
+    if (wj_ && !wj_->cancel.load(std::memory_order_relaxed)) sum -= wj_->done.load(std::memory_order_relaxed);
     return std::max<int64_t>(0, sum);
 }
 
@@ -282,32 +336,19 @@ int64_t Engine::warpBuildStep(int32_t maxFrames) {
     const double devSR = transport_.sampleRate();
     if (spb <= 0.0 || devSR <= 0.0) return 0;
     if (maxFrames < kWarpBuildChunk) maxFrames = kWarpBuildChunk;
+    cancelWarpJob();   // the synchronous path owns the build from here
 
     int32_t budget = maxFrames;
     while (budget > 0) {
-        // Idle: find the next warp clip without a cache and start building it.
+        // Idle: find the next warp clip needing a cache and start building it.
         if (!wb_.building) {
-            int32_t tid = -1, ci = -1; const AudioClip* target = nullptr;
-            for (auto& t : authoring_->tracks) {
-                if (t->type() != TrackType::Audio) continue;
-                for (size_t i = 0; i < t->clips.size(); ++i) {
-                    const AudioClip& c = t->clips[i];
-                    if (c.warpEnabled && !c.warpCache && warpCacheFrames(c, spb, devSR) > 0) {
-                        target = &c; tid = t->id(); ci = static_cast<int32_t>(i); break;
-                    }
-                }
-                for (size_t sc = 0; !target && sc < t->sessionSlots.size(); ++sc) {
-                    const SessionSlot& sl = t->sessionSlots[sc];
-                    if (sl.hasClip && sl.audio.warpEnabled && !sl.audio.warpCache && warpCacheFrames(sl.audio, spb, devSR) > 0) {
-                        target = &sl.audio; tid = t->id(); ci = sessionClipIndex(static_cast<int32_t>(sc));
-                    }
-                }
-                if (target) break;
-            }
+            int32_t tid = -1, ci = -1;
+            const AudioClip* target = nextWarpBuildTarget(tid, ci);
             if (!target) break;   // nothing left to build
             const int64_t frames = warpCacheFrames(*target, spb, devSR);
             wb_.cache = std::make_shared<WarpCache>();
             wb_.cache->frames = frames; wb_.cache->spb = spb; wb_.cache->devSR = devSR;
+            wb_.cache->inputs = warpInputsOf(*target, spb, devSR);
             wb_.cache->samples.assign(static_cast<size_t>(frames) * 2, 0.0f);
             wb_.stream = std::make_unique<ClipWarpStream>();
             wb_.stream->configure(target->sample->channels, target->warpMode, target->pitchSemitones,
@@ -348,6 +389,61 @@ int64_t Engine::warpBuildStep(int32_t maxFrames) {
 }
 
 void Engine::setDeferWarpBuild(bool defer) { deferWarpBuild_ = defer; }
+
+void Engine::cancelWarpJob() {
+    if (!wj_) return;
+    wj_->cancel.store(true, std::memory_order_relaxed);
+    if (wj_->thread.joinable()) wj_->thread.join();
+    wj_.reset();
+}
+
+// Background warp build. Each call (from the UI's poll loop): if the worker finished,
+// install its cache — only if the clip still has the inputs it was built from, else drop
+// it — then start the next clip needing a build on a fresh worker. A clip edited while its
+// build runs cancels that build early. Returns frames still remaining (0 = all built).
+int64_t Engine::warpBuildPoll() {
+    if (!authoring_) return 0;
+    const double spb = transport_.samplesPerBeat();
+    const double devSR = transport_.sampleRate();
+    if (spb <= 0.0 || devSR <= 0.0) return 0;
+
+    if (wj_) {
+        const AudioClip* c = nullptr;
+        if (auto t = findTrackAuthoring(wj_->trackId); t && t->type() == TrackType::Audio)
+            c = audioClipRef(*t, wj_->clipIndex);
+        const bool valid = c && warpNeedsBuild(*c)
+                           && warpInputsOf(*c, spb, devSR) == wj_->cache->inputs;
+        if (!valid) wj_->cancel.store(true, std::memory_order_relaxed);
+        if (valid && !wj_->finished.load(std::memory_order_acquire)) return warpBuildRemainingFrames();
+        if (wj_->thread.joinable()) wj_->thread.join();
+        if (valid && !wj_->cancel.load(std::memory_order_relaxed)) {
+            auto nt = cloneTrack(*findTrackAuthoring(wj_->trackId));
+            audioClipRef(*nt, wj_->clipIndex)->warpCache = std::const_pointer_cast<const WarpCache>(wj_->cache);
+            republishWithTrackRaw(wj_->trackId, nt);   // no undo entry — a cache isn't an edit
+        }
+        wj_.reset();
+    }
+
+    int32_t tid = -1, ci = -1;
+    const AudioClip* target = nextWarpBuildTarget(tid, ci);
+    if (!target) return 0;
+    auto job = std::make_unique<WarpJob>();
+    job->trackId = tid; job->clipIndex = ci;
+    job->sample = target->sample;   // keeps the buffer alive for the worker
+    job->cache = std::make_shared<WarpCache>();
+    job->cache->frames = warpCacheFrames(*target, spb, devSR);
+    job->cache->spb = spb; job->cache->devSR = devSR;
+    job->cache->inputs = warpInputsOf(*target, spb, devSR);
+    WarpJob* j = job.get();
+    job->thread = std::thread([j] {
+        WarpCache& wc = *j->cache;
+        wc.samples.assign(static_cast<size_t>(wc.frames) * 2, 0.0f);
+        renderWarpWindow(wc.inputs, *j->sample, wc.samples.data(), wc.frames, &j->cancel, &j->done);
+        j->finished.store(true, std::memory_order_release);
+    });
+    wj_ = std::move(job);
+    return warpBuildRemainingFrames();
+}
 
 // Rebuild every warped clip's offline stretch cache for the given tempo + device rate.
 // The stretched audio depends on both (spb sets the played length; the device rate sets
@@ -804,12 +900,12 @@ int32_t Engine::trackReturnIndex(int32_t id) const {
 // marker map (time-stretch preserves the amplitude envelope). Shared by the played
 // window (getClipPeaks) and the full-material view (getClipWarpFullPeaks).
 static int32_t warpPeaksRange(const AudioClip& clip, float* out, int32_t maxPoints,
-                              double beat0, double beat1) {
+                              double beat0, double beat1, int32_t cap = 2048) {
     if (!out || maxPoints <= 0 || !clip.sample) return 0;
     const auto& m = clip.warpMarkers;
     if (m.size() < 2) return 0;
     const SampleBuffer& sb = *clip.sample;
-    const int32_t buckets = std::min<int32_t>(maxPoints, 2048);
+    const int32_t buckets = std::min<int32_t>(maxPoints, cap);
     const double span = beat1 - beat0;
     if (!(span > 0.0)) return 0;
     auto srcAtBeat = [&](double beat) -> double {
@@ -917,6 +1013,45 @@ int32_t Engine::getClipWarpFullPeaks(int32_t trackId, int32_t clipIndex,
     const AudioClip& clip = (*audioClipRef(*t, clipIndex));
     if (!(clip.warpEnabled && clip.warpBeats > 0.0)) return 0;
     return warpPeaksRange(clip, outMinMax, maxPoints, 0.0, clip.warpBeats);
+}
+
+// The clip editor's zoomed-in detail: peaks over just the visible slice, so zooming
+// re-resolves the waveform instead of magnifying the whole-clip overview into blocks.
+constexpr int32_t kRangePeaksCap = 8192;
+
+int32_t Engine::getClipWarpPeaksRange(int32_t trackId, int32_t clipIndex, double beat0, double beat1,
+                                      float* outMinMax, int32_t maxPoints) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || !audioClipRef(*t, clipIndex)) return 0;
+    const AudioClip& clip = (*audioClipRef(*t, clipIndex));
+    if (!(clip.warpEnabled && clip.warpBeats > 0.0)) return 0;
+    beat0 = std::clamp(beat0, 0.0, clip.warpBeats);
+    beat1 = std::clamp(beat1, 0.0, clip.warpBeats);
+    return warpPeaksRange(clip, outMinMax, maxPoints, beat0, beat1, kRangePeaksCap);
+}
+
+int32_t Engine::getClipSourcePeaksRange(int32_t trackId, int32_t clipIndex, double frame0, double frame1,
+                                        float* outMinMax, int32_t maxPoints) const {
+    if (!outMinMax || maxPoints <= 0) return 0;
+    auto t = findTrackAuthoring(trackId);
+    if (!t || !audioClipRef(*t, clipIndex)) return 0;
+    const AudioClip& clip = (*audioClipRef(*t, clipIndex));
+    if (!clip.sample) return 0;
+    const SampleBuffer& sb = *clip.sample;
+    const double total = static_cast<double>(sb.frames);
+    frame0 = std::clamp(frame0, 0.0, total);
+    frame1 = std::clamp(frame1, 0.0, total);
+    if (!(frame1 > frame0)) return 0;
+    const int32_t buckets = std::min(maxPoints, kRangePeaksCap);
+    const double per = (frame1 - frame0) / buckets;
+    for (int32_t b = 0; b < buckets; ++b) {
+        const int64_t f0 = static_cast<int64_t>(std::floor(frame0 + per * b));
+        const int64_t f1 = std::max<int64_t>(f0 + 1, static_cast<int64_t>(std::floor(frame0 + per * (b + 1))));
+        float mn, mx;
+        sb.peakRange(f0, f1, mn, mx);
+        outMinMax[b * 2] = mn; outMinMax[b * 2 + 1] = mx;
+    }
+    return buckets;
 }
 
 // --- arrangement geometry (M4) ---------------------------------------------
@@ -1720,7 +1855,7 @@ AudioClip Engine::consolidateAudioClips(const std::vector<AudioClip>& clips, dou
         if (ce <= s + eps || cs >= e - eps) continue;
         src.push_back(c);
         // A deferred (project-load) warp cache isn't built yet; the renderer would skip it.
-        if (src.back().warpEnabled && !src.back().warpCache) buildWarpCache(src.back(), spb, devSR);
+        if (warpNeedsBuild(src.back())) buildWarpCache(src.back(), spb, devSR);
     }
     std::sort(src.begin(), src.end(), [](const AudioClip& x, const AudioClip& y) { return x.startBeat < y.startBeat; });
 

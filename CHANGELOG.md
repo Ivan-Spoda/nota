@@ -14,9 +14,120 @@ Changes accumulate under `## [Unreleased]` as they merge into `main`, **without*
 `[Unreleased]` is promoted to a dated version, `VERSION` is bumped, a `vX.Y.Z` git tag is
 created, and the build-and-publish run starts.
 
+This file is the working log and is never rewritten for publication. The published text —
+the GitHub release and the news posts — comes from the curated, summarised
+`release-notes/X.Y.Z.en.md` and `release-notes/X.Y.Z.ru.md`.
+
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
+
+## [0.52.1] — 2026-10-13
+
+### Added
+- **Full screen without the title bar:** switching the window to full screen hides the
+  title bar and its separator — the workspace fills the screen edge to edge, and the bar
+  comes back when you leave full screen. The window stays as it was in normal and
+  maximized states. On Windows and Linux a new **View → Toggle Full Screen** command
+  (shortcut **F11**) enters and leaves full screen; on macOS the green button does it.
+- **Adaptive snap grid:** the arrangement and the piano roll now snap to the grid you see.
+  In **Auto** (the new default) the step follows the zoom — zoom in for eighths and
+  sixteenths, zoom out and clips move by whole bars — with **Narrow / Medium / Wide**
+  density. A fixed step (1/32 … 4 bars) stays put at any zoom; when it is finer than the
+  drawn lines, its label dims. **Triplets** work in both modes and both editors. New
+  shortcuts act on the editor you used last: **⌘1 / ⌘2** narrow / widen the grid (in Auto,
+  the density), **⌘3** triplets, **⌘4** snap on / off, **⌘5** Auto ↔ fixed (Ctrl on
+  Windows and Linux; also under **Edit → Grid**). The settings are remembered app-wide,
+  one for the arrangement and one shared by the clip editors. Holding **⌥ / Alt** while
+  dragging now moves notes freely in the piano roll too.
+- **Snap grid in the audio clip editor:** the trim brackets, warp markers and clip-envelope
+  points snap to the grid drawn in the waveform, with the same chip, menu and shortcuts as
+  the piano roll (they share one setting). Warp markers follow snap on / off and ⌥ — they
+  used to stick to whole beats.
+- **Levels and volume on Return and Master rows:** the Return and Master rows at the
+  bottom of the arrangement now have a level meter, like the one on every track, and a
+  volume fader with its dB value. Turn up a send and watch the return's meter move, or
+  lower a return or the whole mix without opening the Mixer. Double-click a fader to set
+  it back to 0 dB.
+
+### Changed
+- **New projects come ready to play:** a new project — and the workspace Nota opens with —
+  now starts with an instrument track, an audio track and two return tracks: **Reverb**
+  (Nota Reverb) and **Delay** (Nota Delay), both set to Wet Only, so turning up a send
+  adds space or echoes straight away. The new project is unmodified and has nothing to
+  undo; the tracks are ordinary tracks you can edit or delete.
+- **Grid controls:** clicking the toolbar's GRID cell (and the new grid chip in the piano
+  roll's header) opens a menu with every grid option instead of cycling through five
+  values. The arrangement now draws sub-beat lines when zoomed in. The audio clip editor's
+  Snap switch is replaced by the grid chip. The piano roll's GRID
+  section is now **QUANTIZE**: Quantize and the clip tools use their own step (1/16 by
+  default, triplets available), which no longer changes with the zoom. Press **⌘5** to go
+  back to a fixed grid.
+- **Drops select their track:** dropping an instrument, effect, preset, sample or MIDI file
+  from the browser selects the track it landed on — a newly created track included — in
+  both the arrangement and the session view. Moving clips to another track, or dropping a
+  clip onto a Sampler / Drum Rack / Grain track, selects the destination track too.
+- **Clearer device selection:** the selected device is outlined by a ring just outside the
+  card instead of on its edge, so it no longer crowds the device name or the preset picker.
+  The Devices / Pattern / Clip tabs sit a little lower, clear of the panel's top edge.
+- **Tighter panel gutters, wider browser:** the resize handles between the browser, the
+  arrangement and the Devices panel no longer add space of their own, so the gaps between
+  the panels match the window's outer margin. The whole gap can now be grabbed to resize.
+  The browser also opens wider by default.
+
+### Fixed
+- **Return and Master rows show the real volume:** a Return row always read −∞ and the
+  Master row always read 0.0, whatever the actual volume. They now show the current
+  volume in dB.
+- **Master volume set in the Mixer is kept:** the Mixer's Master fader started at 0 dB in
+  every project, its changes didn't show in the transport's master control and weren't
+  saved with the project. The Mixer, the transport and the arrangement's Master row now
+  share one master volume, and it's saved.
+- **No more clicks when you move filter knobs fast:** quickly turning Freq or Morph on Auto
+  Filter, or Freq, Gain or Q on EQ-8 and Dynamic EQ-8, could make a click. Steep automation
+  on these knobs could too. The knobs now glide to the new value over a few milliseconds,
+  so the sound changes smoothly. A knob you leave alone sounds exactly as before.
+- **Plug-in search in Downloads no longer crashes:** typing a search that matched nothing
+  and then erasing it with Backspace threw an error instead of bringing the list back.
+- **Long audio files no longer stall the app:** after dropping a long file (a multi-minute
+  FLAC, say) onto the arrangement, the app stuttered for as long as it took to time-stretch
+  the clip to the project tempo. Warping now runs in the background, so the app stays smooth
+  while the track says "Processing…".
+- **Editing a long clip's tempo no longer freezes:** clicking the BPM tag in the clip editor
+  froze the app for seconds on a long warped clip, because even a plain click re-warped the
+  whole file. A click now does nothing, and a double-click opens the BPM field at once. A real
+  tempo, marker, trim, pitch or warp-mode change re-warps in the background, and the clip
+  keeps playing its previous version until the new one is ready.
+- **Readable clip-editor ruler on long clips:** bar numbers no longer pile on top of each
+  other. The ruler labels every 2nd, 4th, 8th… bar as needed and adds beats and 16ths as
+  you zoom in. The grid through the waveform thins out the same way. The seconds ruler for
+  unwarped clips counts in minutes on long files and in milliseconds up close.
+- **The clip editor's waveform sharpens as you zoom:** zooming in used to magnify a coarse
+  overview into wide blocks. The visible part is now redrawn at screen resolution, and long
+  clips zoom all the way in to individual samples.
+- **Nota Reverb no longer fires a loud, looping metallic burst:** after a few minutes of
+  playback the reverb could suddenly ring at full level and keep ringing. The cause was a
+  rare off-by-one read just past the end of a reverb delay line, which pulled a garbage
+  value into the tail. The read now always stays inside the line. Nota Delay and the
+  Wavetable synth's chorus had the same rare edge case and are fixed too.
+- **The preset picker opens from anywhere on it:** the preset field in a device header only
+  responded to a click on the preset's name. The whole field opens the list again.
+- **The preset picker stays put:** a device's type and voice count (Consort's "DUO 1/2",
+  "POLY 12/16") now sit left of the preset picker, so the picker no longer shifts when the
+  count changes width.
+- **Sample-pack presets open in the browser:** under Nota Mosaic → Packs, a pack wouldn't
+  expand, so its presets couldn't be seen or dragged. Packs now expand to their presets like
+  any other preset folder.
+- **A preset dropped on an instrument track loads there:** dragging a second instrument
+  preset onto a track in the Arrangement used to add another track. It now loads into that
+  track's instrument and switches the instrument if the preset is for a different one. This
+  works for factory presets, your own presets and sample-pack presets, and the track's effects
+  stay. A preset dropped on empty space still starts a new track.
+- **Plug-ins that change their inputs or outputs no longer crash Nota:** some VST3
+  plug-ins add audio inputs or outputs while they run — Reaktor 6 does when you switch
+  between Play, Patch and Build. Nota used to crash the moment that happened. The plug-in
+  now keeps playing; outputs Nota doesn't use are ignored. This is also the likely cause of
+  crashes reported on Windows when adding a plug-in such as DecentSampler.
 
 ## [0.51.2] — 2026-10-11
 

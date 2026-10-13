@@ -8,9 +8,13 @@
 
 using System;
 using System.Linq;
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Application.Palette;
 using Nota.Presentation;
 
@@ -81,6 +85,7 @@ public partial class MainWindow
         });
         B("view.history", () => Browser.ShowHistory());
         B("view.midiLearn", ToggleMidiLearn);
+        B("view.fullscreen", ToggleFullscreen);
         r.Bind(CommandCatalog.Palette, (c, _) => TogglePalette(c.Window as Avalonia.Controls.Window));
 
         // ---- Transport
@@ -108,6 +113,14 @@ public partial class MainWindow
 
         // ---- Piano roll: the clip open in the editor
         Availability Roll(PaletteContext c) => Need(c.HasOpenMidiClip, "Open a MIDI clip first");
+        // ---- Grid: the editor used last (piano roll or arrangement), status line names it
+        void G(string id, Func<GridSetting, GridSetting> step) => B(id, () => StepGrid(step));
+        G("grid.narrower", SnapGrid.Narrower);
+        G("grid.wider", SnapGrid.Wider);
+        G("grid.triplets", SnapGrid.ToggleTriplets);
+        G("grid.snap", SnapGrid.ToggleSnap);
+        G("grid.adaptive", SnapGrid.ToggleAdaptive);
+
         B("roll.quantize", () => { if (_editorRoll is { } roll) { roll.Quantize(1.0); if (_vm is not null) _vm.StatusText = "Quantized notes"; } }, Roll);
         B("roll.octaveUp", () => _editorRoll?.TransposeBy(12), Roll);
         B("roll.octaveDown", () => _editorRoll?.TransposeBy(-12), Roll);
@@ -144,6 +157,25 @@ public partial class MainWindow
         win.Show(this);
     }
 
+    // View ▸ Toggle Full Screen. The state to return to is remembered on the way in —
+    // the app usually runs maximized, so leaving fullscreen must not un-maximize.
+    // macOS-native entry (the green button) restores natively and never reads this.
+    private WindowState? _stateBeforeFullscreen;
+
+    private void ToggleFullscreen()
+    {
+        if (WindowState == WindowState.FullScreen)
+        {
+            WindowState = _stateBeforeFullscreen ?? WindowState.Maximized;
+            _stateBeforeFullscreen = null;
+        }
+        else
+        {
+            _stateBeforeFullscreen = WindowState == WindowState.Normal ? WindowState.Normal : WindowState.Maximized;
+            WindowState = WindowState.FullScreen;
+        }
+    }
+
     // Edit ▸ Lock Envelopes: the engine flag and the menu checkmark move together.
     private void ToggleLockEnvelopes()
     {
@@ -153,5 +185,35 @@ public partial class MainWindow
         if (MenuItemFor("edit.lockEnvelopes") is { } mi) mi.IsChecked = locked;
         _vm.StatusText = locked ? "Envelopes locked — clip moves keep automation in place"
                                 : "Envelopes follow clips";
+    }
+
+    // The grid shortcuts act on the clip editor (piano roll or audio — they share one setting)
+    // when the detail area (docked or floating) was used last and one is open in it; otherwise
+    // on the arrangement.
+    private EditorKind GridTarget()
+    {
+        bool clipOpen = (_editorRoll is { } roll && _clipEditor is not null && roll.IsEffectivelyVisible)
+                        || _audioEditor is { IsEffectivelyVisible: true };
+        bool detailLast = _detailWasLastFocused || _detailWindow?.IsActive == true;
+        return clipOpen && detailLast ? EditorKind.PianoRoll : EditorKind.Arrangement;
+    }
+
+    private void StepGrid(Func<GridSetting, GridSetting> step)
+    {
+        // Typing in a field: the macOS menu would still fire ⌘1–⌘5 — leave the grid alone.
+        // The command palette's own field is the exception: running the command from there is
+        // the point.
+        var focused = (_detailWindow?.IsActive == true ? _detailWindow.FocusManager : FocusManager)?.GetFocusedElement() as Visual;
+        bool typing = focused?.FindAncestorOfType<TextBox>(includeSelf: true) is not null
+                      || focused?.FindAncestorOfType<NumericUpDown>(includeSelf: true) is not null;
+        if (typing && focused?.FindAncestorOfType<CommandPaletteView>() is null) return;
+        var kind = GridTarget();
+        var grids = EditorGrids.Shared;
+        grids.Set(kind, step(grids.Get(kind)));
+        var r = kind == EditorKind.Arrangement ? Timeline.SnapGridState
+            : _audioEditor is { IsEffectivelyVisible: true } audio ? audio.SnapGridState
+            : _editorRoll?.SnapGridState ?? Timeline.SnapGridState;
+        string label = r.SnapOn ? SnapGrid.Label(grids.Get(kind), r) : "Snap off";
+        if (_vm is not null) _vm.StatusText = $"{(kind == EditorKind.PianoRoll ? "Clip editor" : "Arrangement")} grid: {label}";
     }
 }

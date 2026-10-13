@@ -14,8 +14,10 @@
 //
 // RBJ biquads. A 12 dB/oct cut is one biquad at the band's Q (the original EQ-8); 24 and 48
 // dB/oct are Butterworth cascades of two / four sections whose last, sharpest section carries
-// the resonance (Q / 0.707). Coefficients are recomputed per block from atomic params, so
-// setParam stays lock-free; a band whose slope or channel changes starts from a clean state.
+// the resonance (Q / 0.707). Coefficients come from atomic params, so setParam stays
+// lock-free; a band whose slope or channel changes starts from a clean state. Freq, Gain (×
+// Scale) and Q glide (~20 ms, re-built every kCtrl samples while moving) so a fast knob move
+// or automation step doesn't click; a band that just came on starts at its set values.
 //
 // Params are the device's raw units and APPEND ONLY: 0..39 are the original layout (8 bands ×
 // On, Type, Freq, Gain, Q), then 40..47 "n Slope" (0 = 12, 1 = 24, 2 = 48 dB/oct), 48..55 "n
@@ -130,15 +132,22 @@ public:
 
         // Per-band config + coefficient cascades, once per block.
         bool on[kBands];
-        int  ty[kBands], ch[kBands], nSec[kBands];
+        int  ty[kBands], ch[kBands], sl[kBands], nSec[kBands];
+        double tF[kBands], tG[kBands], tQ[kBands];     // glide targets: log2 Hz, dB, log2 Q
+        bool moving = false;
         Coeffs c[kBands][kMaxSec];
         for (int b = 0; b < kBands; ++b) {
             on[b] = bandOn(b);
             if (!on[b]) { cfgKey_[b] = -1; continue; }
             ty[b] = typeOf(b);
             ch[b] = channelOf(b);
-            nSec[b] = cascade(c[b], ty[b], slopeOf(b), sr, clampd(bp(b, Freq), 20.0, sr * 0.49),
-                              clampd(bp(b, Gain), -18.0, 18.0) * scale, clampd(bp(b, Q), 0.1, 18.0));
+            sl[b] = slopeOf(b);
+            tF[b] = std::log2(clampd(bp(b, Freq), 20.0, sr * 0.49));
+            tG[b] = clampd(bp(b, Gain), -18.0, 18.0) * scale;
+            tQ[b] = std::log2(clampd(bp(b, Q), 0.1, 18.0));
+            if (!primed_ || cfgKey_[b] < 0) { glF_[b] = tF[b]; glG_[b] = tG[b]; glQ_[b] = tQ[b]; }   // fresh: no glide in
+            moving |= glMoving_[b] = glF_[b] != tF[b] || glG_[b] != tG[b] || glQ_[b] != tQ[b];
+            nSec[b] = cascade(c[b], ty[b], sl[b], sr, std::exp2(glF_[b]), glG_[b], std::exp2(glQ_[b]));
             // A band whose cascade length or channel changes starts clean (its old state means
             // something else); a type or frequency move keeps it, as the original EQ-8 did.
             const int key = nSec[b] * 10 + ch[b];
@@ -153,13 +162,17 @@ public:
             if (moved) {
                 for (int i = 0; i < kAutoKeys; ++i) autoKey_[i] = get(i);
                 autoSr_ = sr;
-                autoDb_ = clampd(-averageDb(on, ty, ch, c, sr), -12.0, 12.0);
+                Coeffs ct[kBands][kMaxSec];   // measured at the targets, not mid-glide
+                for (int b = 0; b < kBands; ++b)
+                    if (on[b]) cascade(ct[b], ty[b], sl[b], sr, std::exp2(tF[b]), tG[b], std::exp2(tQ[b]));
+                autoDb_ = clampd(-averageDb(on, ty, ch, ct, sr), -12.0, 12.0);
             }
         }
         const double autoTarget = autoOn ? std::pow(10.0, autoDb_ / 20.0) : 1.0;
         const double outTarget = std::pow(10.0, clampd(get(Output), -12.0, 12.0) / 20.0);
         if (!primed_) { autoCur_ = autoTarget; outCur_ = outTarget; primed_ = true; }
         const double glide = 1.0 - std::exp(-1.0 / (0.02 * sr));   // ~20 ms, click-free
+        const double glideC = 1.0 - std::exp(-(double)kCtrl / (0.02 * sr));   // the same, per control step
 
         float inPk = 0.0f, outPk = 0.0f;
         uint32_t w = ringW_.load(std::memory_order_relaxed);
@@ -168,6 +181,20 @@ public:
             double l = buf[i * 2], r = buf[i * 2 + 1];
             inPk = std::max(inPk, (float)std::max(std::fabs(l), std::fabs(r)));
             if (ringOk) ring_[0][w & ringMask_] = (float)(0.5 * (l + r));
+
+            // Gliding bands: step toward the targets and re-build the cascade every kCtrl samples.
+            if (moving && --ctrl_ <= 0) {
+                ctrl_ = kCtrl;
+                moving = false;
+                for (int b = 0; b < kBands; ++b) {
+                    if (!on[b] || !glMoving_[b]) continue;
+                    glF_[b] = settle(glF_[b] + (tF[b] - glF_[b]) * glideC, tF[b], 1e-5);
+                    glG_[b] = settle(glG_[b] + (tG[b] - glG_[b]) * glideC, tG[b], 1e-4);
+                    glQ_[b] = settle(glQ_[b] + (tQ[b] - glQ_[b]) * glideC, tQ[b], 1e-5);
+                    cascade(c[b], ty[b], sl[b], sr, std::exp2(glF_[b]), glG_[b], std::exp2(glQ_[b]));
+                    moving |= glMoving_[b] = glF_[b] != tF[b] || glG_[b] != tG[b] || glQ_[b] != tQ[b];
+                }
+            }
 
             for (int b = 0; b < kBands; ++b) {
                 if (!on[b]) continue;
@@ -343,6 +370,7 @@ public:
 private:
     static constexpr double kPi = 3.14159265358979323846;
     static constexpr int kMaxSec = 4;
+    static constexpr int kCtrl = 16;              // control-rate cascade re-build while a band glides
     static constexpr int kAutoKeys = Scale + 1;   // band params, slopes, channels and Scale shape the curve
 
     struct Coeffs { double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0; };
@@ -376,6 +404,7 @@ private:
     }
 
     static double clampd(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
+    static double settle(double v, double target, double eps) { return std::fabs(v - target) < eps ? target : v; }
     static float db(float lin) { return lin > 1e-6f ? 20.0f * std::log10(lin) : -120.0f; }
     static Coeffs norm(double b0, double b1, double b2, double a0, double a1, double a2) {
         return {b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
@@ -518,6 +547,9 @@ private:
     double autoSr_ = -1.0, autoDb_ = 0.0;
     double autoCur_ = 1.0, outCur_ = 1.0;          // smoothed auto / output gains
     bool   primed_ = false;
+    double glF_[kBands] = {}, glG_[kBands] = {}, glQ_[kBands] = {};   // gliding Freq (log2 Hz) / Gain (dB) / Q (log2)
+    bool   glMoving_[kBands] = {};
+    int    ctrl_ = 0;                              // samples to the next glide step
 
     // Meters (audio thread) and their published values.
     float inPk_ = 0.0f, outPk_ = 0.0f;
