@@ -18,7 +18,8 @@
 // upward expansion, a Lift that cuts is downward expansion). The detector reaches full
 // engagement 6 dB past the threshold. Only shelves and bells take dynamic gain. Dynamics (a
 // master switch) parks every band on its static gain at once — an A/B of what the dynamics do.
-// Solo auditions one band alone.
+// Solo auditions one band alone. Freq, Gain and Q glide (~20 ms) so a fast knob move or an
+// automation step doesn't click; a band that just came on starts at its set values.
 //
 // Params are the device's raw units (not 0..1) and APPEND ONLY: 0..79 are the eight bands
 // (10 fields each: On, Type, Freq, Gain, Q, Mode, Thr, Rng, Atk, Rel), 80 Output, 81
@@ -117,6 +118,7 @@ public:
         for (auto& ch : s_) for (auto& st : ch) st = {};
         for (auto& st : detState_) st = {};
         for (int b = 0; b < kBands; ++b) { detEnv_[b] = 0.0; dynDb_[b] = 0.0; lvlDisp_[b] = -120.0; }
+        primed_ = false;
         inPk_ = outPk_ = 0.0f;
         fftN_ = sr_ > 50000.0 ? 8192 : 4096;
         size_t ring = 1;
@@ -151,14 +153,16 @@ public:
         bool   on[kBands], dyn[kBands], hasGain[kBands], ext[kBands];
         int    mode[kBands], type[kBands];
         double f0[kBands], gStat[kBands], q[kBands], thr[kBands], range[kBands], atkC[kBands], relC[kBands];
+        double tF[kBands], tG[kBands], tQ[kBands];     // glide targets: log2 Hz, dB, log2 Q
+        bool glMoving[kBands] = {}, moving = false;
         Coeffs det[kBands];
         for (int b = 0; b < kBands; ++b) {
             on[b]      = bp(b, On) > 0.5f;
             type[b]    = typeOf(b);
             hasGain[b] = (type[b] == LowShelf || type[b] == Bell || type[b] == HighShelf);
-            f0[b]      = clampd(bp(b, Freq), 20.0, sr * 0.49);
-            gStat[b]   = clampd(bp(b, Gain), -18.0, 18.0);
-            q[b]       = clampd(bp(b, Q), 0.1, 18.0);
+            tF[b]      = std::log2(clampd(bp(b, Freq), 20.0, sr * 0.49));
+            tG[b]      = clampd(bp(b, Gain), -18.0, 18.0);
+            tQ[b]      = std::log2(clampd(bp(b, Q), 0.1, 18.0));
             mode[b]    = modeOf(b);
             thr[b]     = clampd(bp(b, Thresh), -60.0, 6.0);
             range[b]   = clampd(bp(b, Range), -18.0, 18.0);
@@ -167,12 +171,21 @@ public:
             atkC[b]    = 1.0 - std::exp(-1.0 / (atkMs * 0.001 * sr));
             relC[b]    = 1.0 - std::exp(-1.0 / (relMs * 0.001 * sr));
             ext[b]     = sc && (allExt || get(KeyBase + b) >= 0.5f);
-            det[b]     = bandpass(sr, f0[b], std::max(q[b], 0.5));
         }
         // Solo: audition a single band (mute the rest, force the soloed one on).
         const int solo = std::clamp(static_cast<int>(std::lround(get(Solo))), 0, kBands) - 1;
         if (solo >= 0)
             for (int b = 0; b < kBands; ++b) on[b] = (b == solo);
+        // Freq / Gain / Q glide toward the knobs; a band that just came on starts at its values.
+        for (int b = 0; b < kBands; ++b) {
+            if (on[b] && (!primed_ || !wasOn_[b])) { glF_[b] = tF[b]; glG_[b] = tG[b]; glQ_[b] = tQ[b]; }
+            wasOn_[b] = on[b];
+            if (on[b]) moving |= glMoving[b] = glF_[b] != tF[b] || glG_[b] != tG[b] || glQ_[b] != tQ[b];
+            f0[b] = std::exp2(glF_[b]); gStat[b] = glG_[b]; q[b] = std::exp2(glQ_[b]);
+            det[b] = bandpass(sr, f0[b], std::max(q[b], 0.5));
+        }
+        primed_ = true;
+        const double glideC = 1.0 - std::exp(-(double)kCtrl / (kGlideS * sr));   // per control step
         for (int b = 0; b < kBands; ++b) {
             dyn[b] = dynMaster && on[b] && hasGain[b] && mode[b] != DynOff;
             if (!dyn[b]) dynDb_[b] = 0.0;                        // parked bands read flat
@@ -191,9 +204,26 @@ public:
         const bool ringOk = !ring_.empty();
 
         int ctrl = 0;
+        bool glStepped[kBands] = {};
         for (int32_t i = 0; i < frames; ++i) {
             const float l = buf[i * 2], r = buf[i * 2 + 1];
             inPk = std::max(inPk, std::max(std::fabs(l), std::fabs(r)));
+
+            // --- gliding bands: step Freq / Gain / Q (refreshed with the dynamic gain below) ---
+            const bool step = ctrl <= 1;
+            if (step && moving) {
+                moving = false;
+                for (int b = 0; b < kBands; ++b) {
+                    if (!on[b] || !glMoving[b]) continue;
+                    glF_[b] = settle(glF_[b] + (tF[b] - glF_[b]) * glideC, tF[b], 1e-5);
+                    glG_[b] = settle(glG_[b] + (tG[b] - glG_[b]) * glideC, tG[b], 1e-4);
+                    glQ_[b] = settle(glQ_[b] + (tQ[b] - glQ_[b]) * glideC, tQ[b], 1e-5);
+                    f0[b] = std::exp2(glF_[b]); gStat[b] = glG_[b]; q[b] = std::exp2(glQ_[b]);
+                    det[b] = bandpass(sr, f0[b], std::max(q[b], 0.5));
+                    moving |= glMoving[b] = glF_[b] != tF[b] || glG_[b] != tG[b] || glQ_[b] != tQ[b];
+                    glStepped[b] = true;
+                }
+            }
 
             // --- detection + per-band dynamic gain ---
             const double self = 0.5 * (l + r);
@@ -216,7 +246,7 @@ public:
             if (--ctrl <= 0) {
                 ctrl = kCtrl;
                 for (int b = 0; b < kBands; ++b)
-                    if (dyn[b]) cf[b] = coeffs(type[b], sr, f0[b], gStat[b] + dynDb_[b], q[b]);
+                    if (dyn[b] || glStepped[b]) { cf[b] = coeffs(type[b], sr, f0[b], gStat[b] + dynDb_[b], q[b]); glStepped[b] = false; }
             }
 
             // --- apply cascade, both channels ---
@@ -411,6 +441,7 @@ public:
 private:
     static constexpr double kPi = 3.14159265358979323846;
     static constexpr int kCtrl = 16;         // control-rate coeff refresh (samples)
+    static constexpr double kGlideS = 0.02;  // Freq / Gain / Q glide time constant
     static constexpr double kKneeDb = 6.0;   // detection range from threshold to full engagement
 
     struct Coeffs { double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0; };
@@ -449,6 +480,7 @@ private:
     }
 
     static double clampd(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
+    static double settle(double v, double target, double eps) { return std::fabs(v - target) < eps ? target : v; }
     static float db(float lin) { return lin > 1e-6f ? 20.0f * std::log10(lin) : -120.0f; }
     static Coeffs normC(double b0, double b1, double b2, double a0, double a1, double a2) {
         return {b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
@@ -547,6 +579,9 @@ private:
     State  detState_[kBands] = {};             // detector bandpass state (mono)
     double detEnv_[kBands] = {};               // detector envelope (linear)
     double dynDb_[kBands] = {};                // smoothed dynamic gain per band (dB)
+    double glF_[kBands] = {}, glG_[kBands] = {}, glQ_[kBands] = {};   // gliding Freq (log2 Hz) / Gain (dB) / Q (log2)
+    bool   wasOn_[kBands] = {};                // band was on last block (a fresh band doesn't glide in)
+    bool   primed_ = false;
     double lvlDisp_[kBands] = {};              // peak-held detector level (dB)
     std::atomic<float> gr_[kBands];            // published momentary gain (dB)
     std::atomic<float> lvlA_[kBands];          // published detector level (dBFS)

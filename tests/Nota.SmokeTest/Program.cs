@@ -215,6 +215,14 @@ if (args.Length >= 1 && args[0] == "--tap")
     Console.WriteLine(failures == 0 ? "TAP PASSED" : $"TAP FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Filter knob glide alone: `--glide`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--glide")
+{
+    Console.WriteLine("-- filter knob glide --");
+    foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "GLIDE PASSED" : $"GLIDE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Snap grid alone: `--grid`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--grid")
 {
@@ -14523,6 +14531,9 @@ foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- snap grid --");
 foreach (var (ok, label) in SnapGridTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- filter knob glide --");
+foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);
 
 // --- command palette: descriptors, golden queries, context table, undo, speed ---
 Console.WriteLine("-- command palette --");

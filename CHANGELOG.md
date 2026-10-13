@@ -64,6 +64,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   The browser also opens wider by default.
 
 ### Fixed
+- **No more clicks when you move filter knobs fast:** quickly turning Freq or Morph on Auto
+  Filter, or Freq, Gain or Q on EQ-8 and Dynamic EQ-8, could make a click. Steep automation
+  on these knobs could too. The knobs now glide to the new value over a few milliseconds,
+  so the sound changes smoothly. A knob you leave alone sounds exactly as before.
 - **Plug-in search in Downloads no longer crashes:** typing a search that matched nothing
   and then erasing it with Backspace threw an error instead of bringing the list back.
 - **Long audio files no longer stall the app:** after dropping a long file (a multi-minute
