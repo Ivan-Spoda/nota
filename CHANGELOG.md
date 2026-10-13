@@ -34,6 +34,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   track's instrument and switches the instrument if the preset is for a different one. This
   works for factory presets, your own presets and sample-pack presets, and the track's effects
   stay. A preset dropped on empty space still starts a new track.
+- **Plug-ins that change their inputs or outputs no longer crash Nota:** some VST3
+  plug-ins add audio inputs or outputs while they run — Reaktor 6 does when you switch
+  between Play, Patch and Build. Nota used to crash the moment that happened. The plug-in
+  now keeps playing; outputs Nota doesn't use are ignored. This is also the likely cause of
+  crashes reported on Windows when adding a plug-in such as DecentSampler.
 
 ## [0.51.2] — 2026-10-11
 

@@ -3,7 +3,7 @@
 - **Slug**: plugin-add-crash-windows
 - **Created**: 2026-10-13
 - **Source**: pasted text (user comment + screenshot of the Visual Studio JIT "Unhandled exception" dialog)
-- **Verdict**: likely valid, needs reproduction
+- **Verdict**: valid (macOS repro with Reaktor 6 VST3; Windows report consistent)
 - **Severity**: high
 
 ## Report (verbatim or summarized)
@@ -16,6 +16,14 @@
 > P.S скачал 0.51.1 - там так же. Работает только худо-бедно 0.50.1
 
 Screenshot: VS JIT debugger dialog "Исключение не обработано", the `vcruntime140.dll` write AV at 0x20.
+
+### Second report (maintainer, macOS, 0.51.2, 2026-10-13)
+
+Reaktor 6 **VST3** (AU version is fine): drag onto the arrangement → open the plugin GUI → click any of the
+Play / Patch / Build mode buttons → Nota crashes. Crash report: `EXC_BAD_ACCESS (SIGSEGV) KERN_INVALID_ADDRESS at
+0x0`, **triggered by thread 20 `com.apple.audio.IOThread.client`** (the audio thread); the main thread is at the same
+moment inside Reaktor `project::close` → `openProject` → `ReaktorGUI::restoreWindows` (the mode switch reloads Reaktor's
+project, which makes it reconfigure its buses).
 
 ## Symptom
 
@@ -58,6 +66,29 @@ so the codecs are ruled out.
 
 ## Root Cause Hypothesis
 
+**Updated after the macOS repro — high confidence on the mechanism.**
+
+`PluginInstrument` / `PluginEffect` hand the plugin a `juce::AudioBuffer` that *refers to* exactly `nc` channels of
+`storage_` (`PluginHost.cpp:653-657`, `:805-807`). `storage_` is sized once in `prepare()` / `setSampleRate()`
+(`PluginHost.cpp:723`: `max(2, totalOutputs)` — inputs are ignored for instruments; `:772` for effects). JUCE's VST3
+wrapper maps each bus channel with `buffer.getWritePointer(ch)` (`juce_VST3Common.h:1059`); for `ch >= nc` a referring
+`AudioBuffer` returns `channels[nc] == nullptr` (`juce_AudioSampleBuffer.h:1231`, the bounds check is a `jassert` only).
+So whenever the plugin's current layout needs more channels than `storage_` holds, the plugin receives a null channel
+pointer and writes through it.
+
+A VST3 plugin can change its layout at any time: `IComponentHandler::restartComponent(kIoChanged)` → JUCE
+`restartComponentOnMessageThread` → `releaseResources()` + `prepareToPlay()` with the plugin's new bus arrangement
+(`juce_VST3PluginFormatImpl.h:3512-3530`). Nota is not told (our `audioProcessorChanged` is empty) and keeps the old
+`storage_`. Reaktor's mode switch reloads its project and does exactly that → null write on the audio thread at 0x0
+(macOS), and null + small offsets on Windows (`read 0x8` in the plugin, `write 0x20` in a CRT memcpy/memset) —
+consistent with the DecentSampler report. An instrument whose *input* bus is wider than its output (ignored at `:723`)
+can hit the same thing right at insert.
+
+The original hypothesis below is kept for the record; the 0.50.1 → 0.51 "regression" is likely incidental (this code and
+JUCE are unchanged between those tags).
+
+Original hypothesis:
+
 **Low confidence.** The faulting frames are inside DecentSampler and the CRT, so Nota is most likely driving the plugin
 into an invalid state rather than corrupting memory itself. The regression window (0.50.1 → 0.51.1) contains two
 plugin-facing changes: (a) the rewritten insert flow in `DeviceInsertService` (undo grouping, placement/replace), and
@@ -72,7 +103,14 @@ on the reporter's machine — it would appear without any PDBs. Still, the insta
 
 ## Proposed Remediation
 
-**Preferred**:
+**Preferred (updated)**: never hand the plugin a buffer narrower than its layout. In `render()` / `process()`, build
+the referring buffer with `kMaxChans` channel pointers: the first `nc` point into `storage_`, the rest at one
+per-instance, preallocated scratch channel (`maxBlock_` floats, zeroed each block). Allocation-free, lock-free, and
+immune to the race between reading the layout and JUCE re-preparing it on the message thread; extra channels are
+silent in and discarded out. Also size `storage_` by `max(2, totalIn, totalOut)` for instruments. Test with Reaktor 6
+VST3 locally (mode switch), plus a smoke-level guard if a test plugin with a variable layout is available.
+
+**Original proposal (superseded)**:
 1. Reproduce on a Windows x64 box with DecentSampler 1.x: add it via browser drag, double-click, palette, and as a
    replace-in-place, on 0.50.1 and 0.51.2; capture a full dump (`procdump -e -ma Nota.App.exe` or WER LocalDumps) and
    open it with JUCE + nota_engine symbols from a local RelWithDebInfo build to get the real stack.
