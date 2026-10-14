@@ -790,9 +790,10 @@ NOTA_API NotaResult nota_engine_poll(NotaEngine* engine);
 
 /* ---- Undo / redo (M6-6) -------------------------------------------------- */
 /* Undo/redo of structural edits (tracks, clips, notes, device chains, session
- * slots). Restores a retained Graph snapshot. Returns NOTA_OK if a step was
- * applied, NOTA_ERR_UNKNOWN if there was nothing to undo/redo. Atomic params
- * (volume/pan/mute/bypass/device params) and transport are not covered. */
+ * slots) — restores a retained Graph snapshot — and of volume / pan / master volume
+ * steps made through mix gestures (009). Returns NOTA_OK if a step was applied,
+ * NOTA_ERR_UNKNOWN if there was nothing to undo/redo. Mute, solo, sends, bypass,
+ * device params and the transport are not covered. */
 NOTA_API NotaResult nota_engine_undo(NotaEngine* engine);
 NOTA_API NotaResult nota_engine_redo(NotaEngine* engine);
 NOTA_API int32_t    nota_engine_can_undo(const NotaEngine* engine);
@@ -805,6 +806,69 @@ NOTA_API void       nota_engine_undo_group_end(NotaEngine* engine);
  * becomes the baseline (e.g. a freshly built default project). Open undo groups are
  * closed. Message thread only. No-op for a null engine. */
 NOTA_API void       nota_engine_clear_undo_history(NotaEngine* engine);
+
+/* ---- Mix undo (009) ------------------------------------------------------ */
+/* Volume / pan / master volume changes become undo steps through gestures. A gesture
+ * records its targets' values at begin and, at end, pushes ONE undo step with the values
+ * that changed (none changed → no step). If a structural checkpoint was pushed during the
+ * gesture (automation recording) the step merges into it. The plain setters never record:
+ * automation playback, loads and internal edits make no steps. Message thread only. */
+#define NOTA_MIX_TRACK_VOLUME  0
+#define NOTA_MIX_TRACK_PAN     1
+#define NOTA_MIX_MASTER_VOLUME 2
+
+typedef struct NotaMixTarget {
+    int32_t kind;      /* NOTA_MIX_* */
+    int32_t track_id;  /* ignored for NOTA_MIX_MASTER_VOLUME */
+} NotaMixTarget;
+
+/* Returns a handle > 0, or 0 if no target is valid. */
+NOTA_API int32_t nota_mix_gesture_begin(NotaEngine* engine, const NotaMixTarget* targets, int32_t count);
+/* Ends the gesture; unknown / already-ended handles are ignored. */
+NOTA_API void    nota_mix_gesture_end(NotaEngine* engine, int32_t handle);
+
+/* ---- Stereo measurements (008) ------------------------------------------- */
+/* What each track, return and the master sends to the master, post-fader and post-pan,
+ * averaged over ~300 ms: level, where it sits (balance on the pan scale: a mono source
+ * panned to p measures p), how wide it is (1 - correlation, clamped 0..1) and the
+ * correlation. Groups are not measured. Message thread; lock-free reads. */
+typedef struct NotaStereoMeasure {
+    int32_t track_id;     /* a track / return id, or nota_engine_master_track_id() */
+    float   level_db;     /* RMS of the pair, dBFS; -200 for silence */
+    float   balance;      /* -1 (left) .. +1 (right) */
+    float   width;        /* 0 (mono) .. 1 (unrelated or anti-phase) */
+    float   correlation;  /* -1 .. +1; 0 when either side is silent */
+} NotaStereoMeasure;
+
+/* Fills up to cap rows (tracks and returns in track order, the master last) and returns
+ * the number available (call again with a bigger buffer if it exceeds cap). */
+NOTA_API int32_t nota_engine_stereo_measures(const NotaEngine* engine, NotaStereoMeasure* out, int32_t cap);
+
+/* Device-free: a mix step whose track no longer exists is passed over by undo/redo.
+ * Clears the history. Returns 1 on success. */
+NOTA_API int32_t nota_engine_mix_undo_selftest(NotaEngine* engine);
+
+/* The master volume (linear), as set by nota_engine_set_master_volume or undo/redo. */
+NOTA_API float   nota_engine_master_volume(const NotaEngine* engine);
+
+/* ---- Pan law (006) ------------------------------------------------------- */
+/* How a track's or return's pan is applied to a stereo signal. Project-wide, part of
+ * the graph snapshot (undo/redo restore it). BALANCE (the default, and every project
+ * before format v21): the opposite channel is attenuated. STEREO: the whole image
+ * moves — the far channel is folded into the near side, a mono fold at full pan.
+ * Identical for mono material and at centre. Groups, clip pan envelopes and rack-chain
+ * pans are not affected. */
+#define NOTA_PAN_LAW_BALANCE 0
+#define NOTA_PAN_LAW_STEREO  1
+
+/* Set the law. checkpoint = 1: one undo step (user edit); 0: no undo entry (project
+ * load / new-project baseline). A change while playing crossfades over 10 ms.
+ * NOTA_ERR_INVALID_ARG for an unknown law; NOTA_OK (no-op, no undo step) if unchanged.
+ * Message thread only. */
+NOTA_API NotaResult nota_engine_set_pan_law(NotaEngine* engine, int32_t law, int32_t checkpoint);
+
+/* Current law (authoring graph). NOTA_PAN_LAW_BALANCE for a null engine. */
+NOTA_API int32_t    nota_engine_pan_law(const NotaEngine* engine);
 
 /* ---- Project load (M7-6) ------------------------------------------------- */
 /* Clear the session to an empty project: stop transport, drop all tracks,
@@ -1622,6 +1686,14 @@ NOTA_API void nota_encoder_discard(NotaEncoder* enc);
  * ARCHITECTURE.md § Plugin hosting). MUST be called from the main/UI thread. JUCE init
  * is idempotent; repeated calls just re-show the window. Temporary entry point. */
 NOTA_API NotaResult nota_pluginhost_open_test_window(void);
+
+/* Services JUCE's message loop: plugin editor windows (X11 events, repaints) and
+ * hosted plugins' timers / async work registered through the host IRunLoop. Only
+ * needed on Linux, where JUCE's loop is not shared with the app's run loop; a
+ * no-op (returns 0) on macOS / Windows, before any plugin is instantiated, and off
+ * the message (UI) thread. Non-blocking; call often (~10 ms) from the UI thread.
+ * Returns the number of message batches dispatched. */
+NOTA_API int32_t nota_pluginhost_pump(void);
 
 /* ---- Plugin scanning & catalog (M3-1, FR-33/NFR-5) ----------------------- */
 /* Scans installed plugins out-of-process, AudioUnit first then VST3. Each

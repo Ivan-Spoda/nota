@@ -5,7 +5,8 @@
 // per track (+ returns + master): name with a 2px colour top, I/O rows, A/B
 // sends, a pan knob, a 190px vertical fader with a stereo meter, a dB read-out
 // and M/S/Arm. All strips ride the existing engine ops (vol/pan/mute/solo/send/
-// meter); meters are pushed each UI tick by MainWindow. Crossfader is M7+.
+// meter); meters are pushed each UI tick by MainWindow. Crossfader is M7+. The footer
+// also shows and switches the project pan law (specs/006).
 
 using System;
 using System.Collections.Generic;
@@ -17,8 +18,12 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Editing;
 
 namespace Nota.App;
+
+/// <summary>The Mixer window's two views (specs/008).</summary>
+public enum MixerViewMode { Strips, StereoMap }
 
 public sealed class MixerView : UserControl
 {
@@ -50,11 +55,31 @@ public sealed class MixerView : UserControl
     public Action<float>? SetMasterVolume { get; set; }
     private VFader? _masterFader;
     private DragNumber? _masterDb;
+    // Project pan law (specs/006): the footer's PAN LAW control, its hint, the OLDER PROJECT
+    // badge and a BAL badge on every group strip — all re-synced from the engine, so undo/redo
+    // and project load show up without a rebuild.
+    public Func<bool>? IsOlderProject { get; set; }
+    private Action<int>? _setLawSegment;
+    private TextBlock? _lawHint;
+    private Control? _olderBadge;
+    private readonly List<Control> _balBadges = new();
+    private PanLaw? _shownLaw;
+    private bool _shownOlder;
+
+    // Strips or the Stereo Map beside a narrower strip column (specs/008). The strips scroller
+    // is one instance moved between the two layouts.
+    private readonly ScrollViewer _stripsScroller;
+    private readonly ContentControl _main = new();
+    private MixerViewMode _view = MixerViewMode.Strips;
+    /// <summary>The Stereo Map, created the first time the view is shown.</summary>
+    public StereoMapView? Map { get; private set; }
+    /// <summary>Called once when the map is created, to wire its callbacks.</summary>
+    public Action<StereoMapView>? MapCreated { get; set; }
 
     public MixerView(IAudioEngine engine)
     {
         _engine = engine;
-        var scroller = new ScrollViewer
+        _stripsScroller = new ScrollViewer
         {
             Content = _row,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -64,8 +89,38 @@ public sealed class MixerView : UserControl
         var footer = Footer();
         DockPanel.SetDock(footer, Dock.Bottom);
         dock.Children.Add(footer);
-        dock.Children.Add(scroller);
+        dock.Children.Add(_main);
         Content = dock;
+        ApplyView();
+    }
+
+    public MixerViewMode View
+    {
+        get => _view;
+        set { if (_view == value) return; _view = value; ApplyView(); }
+    }
+
+    private void ApplyView()
+    {
+        // Detach the scroller from whichever layout held it before re-parenting.
+        if (_stripsScroller.Parent is Panel p) p.Children.Remove(_stripsScroller);
+        else if (_stripsScroller.Parent is ContentControl c) c.Content = null;
+        if (Map?.Parent is Panel mp) mp.Children.Remove(Map);
+        _main.Content = null;
+
+        if (_view == MixerViewMode.Strips)
+        {
+            _stripsScroller.MaxWidth = double.PositiveInfinity;
+            _main.Content = _stripsScroller;
+            return;
+        }
+        if (Map is null) { Map = new StereoMapView(_engine) { MinWidth = 520 }; MapCreated?.Invoke(Map); }
+        _stripsScroller.MaxWidth = 440;
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Margin = new Thickness(8) };
+        grid.Children.Add(Map);
+        Grid.SetColumn(_stripsScroller, 1);
+        grid.Children.Add(_stripsScroller);
+        _main.Content = grid;
     }
 
     public void Refresh()
@@ -74,6 +129,7 @@ public sealed class MixerView : UserControl
         _meters.Clear();
         _sendSections.Clear();
         _ioSections.Clear();
+        _balBadges.Clear();
         int returns = _engine.ReturnTrackCount;
         int n = _engine.TrackCount;
         for (int i = 0; i < n; i++)
@@ -83,6 +139,8 @@ public sealed class MixerView : UserControl
             _row.Children.Add(Strip(ti, c, returns));
         }
         _row.Children.Add(MasterStrip());
+        _shownLaw = null;   // the strips are new: repaint the law state onto them
+        SyncPanLaw();
     }
 
     /// <summary>Pushes fresh meter readings to every strip (called at the UI clock).</summary>
@@ -99,6 +157,7 @@ public sealed class MixerView : UserControl
             double v = get();
             if (Math.Abs(f.Value - v) > 1e-3) { f.SetValueExternal(v); db.Value = LinToDb(v); }
         }
+        SyncPanLaw();   // undo/redo or a load elsewhere may have changed it
     }
 
     // ---- strips -----------------------------------------------------------
@@ -129,7 +188,7 @@ public sealed class MixerView : UserControl
             col.Children.Add(sends);
         }
 
-        col.Children.Add(PanRow(id, ti.Pan));
+        col.Children.Add(PanRow(id, ti.Pan, ti.IsGroup));
         col.Children.Add(FaderRow(id, ti.Volume, color, out var db, out var meter));
         _meters.Add((id, meter));
         col.Children.Add(db);
@@ -167,7 +226,7 @@ public sealed class MixerView : UserControl
         };
     }
 
-    // ---- footer: section toggles + crossfader placeholder ----------------
+    // ---- footer: section toggles + pan law + crossfader placeholder -------
 
     private Control Footer()
     {
@@ -179,12 +238,19 @@ public sealed class MixerView : UserControl
             Children = { new TextBlock { Text = "Show", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, sendsToggle, ioToggle },
         };
 
+        var divider = new Border { Width = 1, Height = 20, Background = BorderDef, VerticalAlignment = VerticalAlignment.Center };
+        var leftSide = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 14, VerticalAlignment = VerticalAlignment.Center,
+            Children = { left, divider, PanLawGroup() },
+        };
+
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        grid.Children.Add(left);
+        grid.Children.Add(leftSide);
         var xf = Crossfader();
         Grid.SetColumn(xf, 2);
         grid.Children.Add(xf);
-        return new Border { Height = 34, Background = MasterBg, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(12, 0), Child = grid };
+        return new Border { Height = 44, Background = MasterBg, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(12, 0), Child = grid };
     }
 
     private Border SectionToggle(string label, bool initial, Action<bool> set)
@@ -196,6 +262,65 @@ public sealed class MixerView : UserControl
         void Paint() { b.Background = on ? NotaPalette.AccentSubtle : MasterBg; b.BorderBrush = on ? NotaPalette.BorderBrass : BorderStrong; t.Foreground = on ? NotaPalette.AccentHover : TextSecondary; }
         b.PointerPressed += (_, e) => { e.Handled = true; on = !on; set(on); Paint(); };
         Paint();
+        return b;
+    }
+
+    // PAN LAW: the project's pan law as shell segments, a one-line hint, and the OLDER PROJECT
+    // badge for projects made before the law existed (they keep Balance until switched).
+    private Control PanLawGroup()
+    {
+        var label = new TextBlock { Text = "PAN LAW", FontSize = 10, FontWeight = FontWeight.Bold, LetterSpacing = 1.4, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var seg = ClipEditorKit.Segments(new[] { "Stereo", "Balance" }, _engine.PanLaw == PanLaw.Stereo ? 0 : 1, i =>
+        {
+            var law = i == 0 ? PanLaw.Stereo : PanLaw.Balance;
+            if (_engine.PanLaw != law) _engine.SetPanLaw(law);   // one undo step
+            SyncPanLaw();
+        }, out var set);
+        seg.VerticalAlignment = VerticalAlignment.Center;
+        _setLawSegment = set;
+        if (seg.Child is Panel buttons)
+        {
+            string[] tips = { "Panning moves the whole stereo image; nothing is dropped", "Panning attenuates the opposite channel (legacy behaviour)" };
+            for (int i = 0; i < buttons.Children.Count && i < tips.Length; i++) ToolTip.SetTip(buttons.Children[i], tips[i]);
+        }
+        _lawHint = new TextBlock { FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        _olderBadge = Tag("OLDER PROJECT", 9, 1.6, 18, "Projects saved before stereo pan law open with Balance so existing mixes do not change");
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center,
+            Children = { label, seg, _lawHint, _olderBadge },
+        };
+    }
+
+    // Repaints the law state (segment, hint, badges) when the engine's law or the
+    // older-project mark changed since the last call.
+    private void SyncPanLaw()
+    {
+        var law = _engine.PanLaw;
+        bool older = IsOlderProject?.Invoke() == true;
+        if (law == _shownLaw && older == _shownOlder) return;
+        _shownLaw = law;
+        _shownOlder = older;
+        bool stereo = law == PanLaw.Stereo;
+        _setLawSegment?.Invoke(stereo ? 0 : 1);
+        if (_lawHint is not null)
+            _lawHint.Text = stereo ? "Pan moves the whole image of stereo tracks and returns"
+                                   : "Pan attenuates the opposite channel, as in earlier versions";
+        if (_olderBadge is not null) _olderBadge.IsVisible = older && !stereo;
+        foreach (var b in _balBadges) b.IsVisible = stereo;
+    }
+
+    // A small mono tag in a hairline frame (OLDER PROJECT, BAL), with a tooltip.
+    private static Border Tag(string text, double size, double tracking, double height, string tip)
+    {
+        var t = new TextBlock { Text = text, FontSize = size, LetterSpacing = tracking, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        var b = new Border
+        {
+            Height = height, Padding = new Thickness(size >= 9 ? 6 : 3, 0), BorderBrush = BorderDef, BorderThickness = new Thickness(1),
+            CornerRadius = NotaRadius.Badge, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left, Child = t,
+        };
+        ToolTip.SetTip(b, tip);
         return b;
     }
 
@@ -314,17 +439,31 @@ public sealed class MixerView : UserControl
         return new Border { Height = 42, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(7, 5), Child = body };
     }
 
-    private Control PanRow(int id, float pan)
+    private Control PanRow(int id, float pan, bool isGroup = false)
     {
         var knob = new PanKnob(pan);
-        knob.PanChanged += p => _engine.SetTrackPan(id, (float)p);
+        // One undo step per gesture (specs/009); opened before the automation write so a
+        // recorded lane and the value undo together, closed after it.
+        var undo = new MixGesture(_engine, MixTarget.Pan(id));
+        knob.GestureBegin += undo.Begin;
+        Action<double> setPan = p => _engine.SetTrackPan(id, (float)p);
+        knob.PanChanged += p => undo.Change(p, setPan);
         if (id > 0)   // M9-C: record pan moves (master pan isn't an automation target)
         {
             knob.GestureBegin += () => _engine.BeginAutomationWrite(id, AutomationTarget.Pan, -1, -1, "");
             knob.GestureEnd   += () => _engine.EndAutomationWrite(id, AutomationTarget.Pan, -1, -1, "");
             MidiLearn.Bind(knob, MidiTarget.TrackPan(id), "Track Pan");
         }
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = { knob, Mono("PAN", TextTertiary) } };
+        knob.GestureEnd += undo.End;
+        Control label = Mono("PAN", TextTertiary);
+        if (isGroup)   // groups keep their unity-centre balance whatever the project law (specs/006)
+        {
+            var bal = Tag("BAL", 7, 0.84, 11, "Groups keep a unity-centre balance so grouping stays level-transparent");
+            bal.IsVisible = _engine.PanLaw == PanLaw.Stereo;
+            _balBadges.Add(bal);
+            label = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { label, bal } };
+        }
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = { knob, label } };
         return new Border { Height = 38, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 0, 0, 1), Child = row };
     }
 
@@ -347,13 +486,21 @@ public sealed class MixerView : UserControl
         ToolTip.SetTip(dbNum, "Set the gain — drag, or double-click to type");
         void SetVolume(double v) { if (id < 0) SetMasterVolume?.Invoke((float)v); else _engine.SetTrackVolume(id, (float)v); }
         if (id < 0) { _masterFader = fader; _masterDb = dbNum; }
-        fader.ValueChanged += v => { SetVolume(v); dbNum.Value = LinToDb(v); };
-        dbNum.ValueChanged += d => { double v = DbToLin(d); SetVolume(v); fader.SetValueExternal(v); };
+        // One undo step per drag of the fader or the dB number, and per reset / typed value
+        // (specs/009). Opened before the automation write, closed after it.
+        var undo = new MixGesture(_engine, id < 0 ? MixTarget.Master : MixTarget.Volume(id));
+        fader.GestureBegin += undo.Begin;
+        dbNum.GestureBegin += undo.Begin;
+        Action<double> setVol = SetVolume;
+        fader.ValueChanged += v => { undo.Change(v, setVol); dbNum.Value = LinToDb(v); };
+        dbNum.ValueChanged += d => { double v = DbToLin(d); undo.Change(v, setVol); fader.SetValueExternal(v); };
         if (id > 0)   // M9-C: record volume moves (master volume isn't a track target)
         {
             fader.GestureBegin += () => _engine.BeginAutomationWrite(id, AutomationTarget.Volume, -1, -1, "");
             fader.GestureEnd   += () => _engine.EndAutomationWrite(id, AutomationTarget.Volume, -1, -1, "");
         }
+        fader.GestureEnd += undo.End;
+        dbNum.GestureEnd += undo.End;
         MidiLearn.Bind(fader, id > 0 ? MidiTarget.TrackVolume(id) : MidiTarget.MasterVolume, id > 0 ? "Track Volume" : "Master Volume");
         db = dbNum;
 

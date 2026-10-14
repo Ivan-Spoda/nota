@@ -255,6 +255,30 @@ if (args.Length >= 1 && args[0] == "--returns")
     Console.WriteLine(failures == 0 ? "RETURNS PASSED" : $"RETURNS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Stereo Map measurements alone: `--stereomap`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--stereomap")
+{
+    Console.WriteLine("-- stereo map --");
+    foreach (var (ok, label) in StereoMeasureTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "STEREOMAP PASSED" : $"STEREOMAP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Volume / pan undo alone: `--mixundo`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--mixundo")
+{
+    Console.WriteLine("-- mix undo --");
+    foreach (var (ok, label) in MixUndoTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MIXUNDO PASSED" : $"MIXUNDO FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// The project pan law alone: `--panlaw`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--panlaw")
+{
+    Console.WriteLine("-- pan law --");
+    foreach (var (ok, label) in PanLawTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PANLAW PASSED" : $"PANLAW FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // What Nota Mosaic makes of a real library: `--mosaic-dump <file.sfz | folder>`.
 if (args.Length >= 2 && args[0] == "--mosaic-dump")
 {
@@ -14586,6 +14610,21 @@ foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- return delete --");
 foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- pan law --");
+foreach (var (ok, label) in PanLawTests.Run()) Check(ok, label);
+
+// The Linux JUCE message pump (.specify/bugs/linux-plugin-black-window): exported on every
+// platform and a safe no-op before any hosted plugin exists (the app ticks it on Linux).
+Console.WriteLine("-- plugin host pump --");
+Check(NotaEngine.PumpPluginHost() == 0 && NotaEngine.PumpPluginHost() == 0,
+    "plugin host pump: exported, non-blocking no-op with no plugin loaded");
+
+Console.WriteLine("-- mix undo --");
+foreach (var (ok, label) in MixUndoTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- stereo map --");
+foreach (var (ok, label) in StereoMeasureTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- filter knob glide --");
 foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);
