@@ -22,6 +22,26 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Note length and velocity from the keyboard:** in the piano roll, **⇧← / ⇧→** shorten
+  or lengthen every selected note by one grid step (starts stay put), and **⌥↑ / ⌥↓**
+  raise or lower their velocity by 10 — **⌥⇧↑ / ⌥⇧↓** by 1. Each press is one undo step.
+
+### Changed
+- **Notes replace the notes they land on:** a note moved, stretched, drawn or pasted onto
+  a note of the same pitch no longer stacks on top of it. The note underneath is cut where
+  the new one starts, or removed if its start is covered. This happens when you let the
+  selection go (click elsewhere, Esc, switch clips, save); until then the notes underneath
+  stay whole and the part that will go is drawn faint with a dashed edge.
+- **⌘V in the piano roll always pastes on top of the copied notes,** selected, whatever the
+  transport is doing — then move the copy off with the arrows or the mouse. Previously
+  paste jumped to the playback cursor while the song played.
+
+### Fixed
+- **Return tracks can be deleted in the arrangement:** the Return row's context menu has
+  Delete track, and Delete / Backspace removes a selected Return, in one undo step. The
+  Returns that stay keep sounding, and every track's sends stay on the same Returns.
+
 ## [0.52.1] — 2026-10-13
 
 ### Added

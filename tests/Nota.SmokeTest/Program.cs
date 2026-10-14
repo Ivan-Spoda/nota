@@ -231,12 +231,28 @@ if (args.Length >= 1 && args[0] == "--grid")
     Console.WriteLine(failures == 0 ? "GRID PASSED" : $"GRID FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Piano-roll note editing alone: `--notes`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--notes")
+{
+    Console.WriteLine("-- note editing --");
+    foreach (var (ok, label) in NoteEditingTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "NOTES PASSED" : $"NOTES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Default project template alone: `--template`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--template")
 {
     Console.WriteLine("-- default project template --");
     foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "TEMPLATE PASSED" : $"TEMPLATE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Deleting a return track alone: `--returns`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--returns")
+{
+    Console.WriteLine("-- return delete --");
+    foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "RETURNS PASSED" : $"RETURNS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // What Nota Mosaic makes of a real library: `--mosaic-dump <file.sfz | folder>`.
@@ -14562,8 +14578,14 @@ foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
 Console.WriteLine("-- snap grid --");
 foreach (var (ok, label) in SnapGridTests.Run()) Check(ok, label);
 
+Console.WriteLine("-- note editing --");
+foreach (var (ok, label) in NoteEditingTests.Run()) Check(ok, label);
+
 Console.WriteLine("-- default project template --");
 foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- return delete --");
+foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- filter knob glide --");
 foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);

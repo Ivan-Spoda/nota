@@ -51,6 +51,7 @@ public partial class MainWindow
     private async Task DoExportAsync()
     {
         if (_vm is null) return;
+        _editorRoll?.SettlePlacement();   // render what the user sees once the notes are let go
 
         double endBeats = ProjectEndBeats();
         if (endBeats <= 0.0)
@@ -290,6 +291,9 @@ public partial class MainWindow
     private async Task<bool> DoSaveAsync(bool saveAs, string? note = null)
     {
         if (_vm is null) return false;
+        // Notes still being placed in the piano roll overwrite what they cover now, so a saved
+        // project never keeps them stacked (specs/007-midi-note-editing).
+        _editorRoll?.SettlePlacement();
 
         string? dir = _projectPath;
         if (saveAs || dir is null)

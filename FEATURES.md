@@ -184,7 +184,15 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   editor; transposing the selection.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
-  - ⌘D duplicates notes over whatever they land on, like clips in the arrangement.
+  - Notes replace the same-pitch notes they land on instead of stacking: moved, stretched,
+    drawn or pasted notes cut or remove what they cover once the selection is let go
+    (click elsewhere, Esc, another clip, save); until then the part that will go is drawn
+    faint with a dashed edge. ⌘D duplicates notes over whatever they land on, like clips
+    in the arrangement.
+  - ⌘C / ⌘V pastes the copy selected, on top of the copied notes, ready to move off with
+    the arrows or the mouse.
+  - Keyboard: ←/→ move by the grid, ↑/↓ by a semitone (⇧ an octave), ⇧←/⇧→ shorten or
+    lengthen by the grid, ⌥↑/⌥↓ change velocity by 10 (⌥⇧ by 1).
   - **Remove out of scale** (next to the Scale key and mode) deletes every note outside the
     scale in one undo step.
   - Zoomed out, the area past the clip's end is darkened and marked with a line.

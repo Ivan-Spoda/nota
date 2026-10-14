@@ -26,10 +26,14 @@ public sealed partial class ArrangementView
         => _tracks.Where(t => IsTrackMultiSelected(t.Id)).Select(t => t.Id).ToList();
 
     /// <summary>True when the pointer event landed in the track-header column (the header
-    /// cards or the empty column below them) — MainWindow routes the track keys there.</summary>
+    /// cards, the empty column below them, or the return/master headers in the footer) —
+    /// MainWindow routes the track keys there.</summary>
     internal bool IsInTrackHeaders(PointerEventArgs e)
     {
-        if (e.Source is not Visual v || !v.GetSelfAndVisualAncestors().Contains(_scroller)) return false;
+        if (e.Source is not Visual v) return false;
+        var chain = v.GetSelfAndVisualAncestors();
+        if (chain.Contains(_footerHeaders)) return true;
+        if (!chain.Contains(_scroller)) return false;
         double x = e.GetPosition(_headers).X;
         return x >= 0 && x < HeaderW;
     }
@@ -90,7 +94,14 @@ public sealed partial class ArrangementView
 
     public bool DuplicateSelectedTracks() => DuplicateTracks(SelectedTrackIds());
 
-    public bool DeleteSelectedTracks() => DeleteTracks(SelectedTrackIds());
+    /// <summary>Delete over the headers: the selected rows, or the selected return (a return
+    /// is only ever selected on its own, from the footer).</summary>
+    public bool DeleteSelectedTracks()
+    {
+        var ids = SelectedTrackIds();
+        if (ids.Count == 0 && _returns.Any(r => r.Id == SelTrackId)) ids.Add(SelTrackId);
+        return DeleteTracks(ids);
+    }
 
     private bool CutTracks(IReadOnlyList<int> ids)
     {

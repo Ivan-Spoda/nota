@@ -343,6 +343,7 @@ public sealed partial class PianoRollView
         {
             var sel = _o._selection.Where(i => i >= 0 && i < _o._notes.Count && Spans(i, beat)).ToList();
             if (sel.Count > 0) return sel;
+            _o.SettlePlacement();   // the selection changes below, and this lane never takes focus
             int pick = -1;
             for (int i = 0; i < _o._notes.Count; i++)
                 if (Spans(i, beat) && (pick < 0 || _o._notes[i].Pitch > _o._notes[pick].Pitch)) pick = i;

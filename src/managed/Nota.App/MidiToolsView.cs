@@ -183,6 +183,9 @@ public sealed class MidiToolsView : UserControl
     private void Preview()
     {
         if (_tool is null) { _roll.CancelPreview(); PaintResult(null); return; }
+        // A tool must not build on notes still stacked under a pending placement: let it go
+        // first (its Changed re-reads the working set through OnRollChanged).
+        if (!_roll.Previewing) _roll.SettlePlacement();
         var result = MidiToolRunner.Apply(_tool, _source, _scope, SettingsFor(_tool), Context(), _blend);
         _suppressResync = true;
         _roll.ShowPreview(result);
