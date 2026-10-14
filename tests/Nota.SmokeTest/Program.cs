@@ -2457,7 +2457,8 @@ Console.WriteLine("-- Nota Pentad --");
         int active = se.InstrumentVoiceCount(ta);
         se.StopTransport();
         double budget = 128 / 44.1;
-        Check(active == 16 && totalMs / blocks < budget * 0.5, $"Nota Pentad stress: 16-voice unison ×4 OS avg {totalMs / blocks:0.000} ms, worst {worstMs:0.000} ms per 128-frame block (budget {budget:0.00} ms)");
+        var (pentadOk, pentadLabel) = TimingBudget.Check(active == 16, totalMs / blocks < budget * 0.5, $"Nota Pentad stress: 16-voice unison ×4 OS avg {totalMs / blocks:0.000} ms, worst {worstMs:0.000} ms per 128-frame block (budget {budget:0.00} ms)");
+        Check(pentadOk, pentadLabel);
     }
 
     // Automation: a plugin-param lane drives the cutoff during playback.
@@ -2732,7 +2733,8 @@ Console.WriteLine("-- Nota Consort --");
         for (int i = 0; i < blocks; i++) se.RenderOffline(blk, 128);
         sw.Stop();
         double budget = 128 / 44.1, avg = sw.Elapsed.TotalMilliseconds / blocks;
-        Check(se.InstrumentVoiceCount(ta) == 16 && avg < budget * 0.5, $"Nota Consort stress: 16 voices ×4 OS avg {avg:0.000} ms per 128-frame block (budget {budget:0.00} ms)");
+        var (consortOk, consortLabel) = TimingBudget.Check(se.InstrumentVoiceCount(ta) == 16, avg < budget * 0.5, $"Nota Consort stress: 16 voices ×4 OS avg {avg:0.000} ms per 128-frame block (budget {budget:0.00} ms)");
+        Check(consortOk, consortLabel);
         se.StopTransport();
     }
     // Factory presets: every named param is a real Consort id, each applies in place and sounds.

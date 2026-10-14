@@ -296,7 +296,7 @@ internal static class KeysTests
                 for (int i = 0; i < blocks; i++) e.RenderOffline(blk, 128, Sr);
                 sw.Stop();
                 double budget = 128 * 1000.0 / Sr, avg = sw.Elapsed.TotalMilliseconds / blocks;
-                yield return (e.InstrumentVoiceCount(tr) == 64 && avg < budget * 0.5,
+                yield return TimingBudget.Check(e.InstrumentVoiceCount(tr) == 64, avg < budget * 0.5,
                     $"Nota Keys stress: 64 Clav voices + FX avg {avg:0.000} ms per 128-frame block (budget {budget:0.00} ms, {e.InstrumentVoiceCount(tr)} voices)");
             }
         }

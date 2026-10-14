@@ -140,7 +140,7 @@ internal static class DesignTokenCheck
                               : $"geometry drift: {string.Join("; ", drift)}");
 
         // Every Radius/Control/Space key a style or view names must exist.
-        var used = Directory.EnumerateFiles(app, "*.*", SearchOption.AllDirectories)
+        var used = Files(app, "*.*", SearchOption.AllDirectories)
             .Where(f => (f.EndsWith(".cs") || f.EndsWith(".axaml")) && !f.Contains("/obj/") && !f.Contains("/bin/"))
             .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"(?:StaticResource |"")(?<key>(?:Radius|Control|Space)\.\w+)[}""]")
                                   .Select(m => m.Groups["key"].Value))
@@ -150,9 +150,9 @@ internal static class DesignTokenCheck
                              : $"references to undefined geometry keys: {string.Join(", ", used)}");
 
         // The view layer stays literal-free, flat and shadowless.
-        var views = Directory.EnumerateFiles(app, "*.cs", SearchOption.AllDirectories)
+        var views = Files(app, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains("/obj/") && !f.Contains("/bin/") && !f.Contains("/Theme/"))
-            .Select(f => (Path: Path.GetRelativePath(app, f), Text: File.ReadAllText(f))).ToArray();
+            .Select(f => (Path: Rel(app, f), Text: File.ReadAllText(f))).ToArray();
         string[] Offenders(string pattern) => views.Where(v => Regex.IsMatch(v.Text, pattern)).Select(v => v.Path).OrderBy(p => p).ToArray();
 
         var radiusLiterals = Offenders(@"new CornerRadius\(\s*[0-9]");
@@ -190,9 +190,9 @@ internal static class DesignTokenCheck
             files.Length == 0 ? "all eight Geist weights are bundled" : $"missing font files: {string.Join(", ", files)}");
         yield return (File.Exists(Path.Combine(root, "LICENSES/OFL-1.1-Geist.txt")), "the Geist OFL licence ships with the fonts");
 
-        var views = Directory.EnumerateFiles(app, "*.*", SearchOption.AllDirectories)
+        var views = Files(app, "*.*", SearchOption.AllDirectories)
             .Where(f => (f.EndsWith(".cs") || f.EndsWith(".axaml")) && !f.Contains("/obj/") && !f.Contains("/bin/") && !f.Contains("/Theme/"))
-            .Select(f => (Path: Path.GetRelativePath(app, f), Text: File.ReadAllText(f))).ToArray();
+            .Select(f => (Path: Rel(app, f), Text: File.ReadAllText(f))).ToArray();
 
         // A family named by string resolves to whatever the OS has; FontFamily.Default
         // hides the choice. Both must go through NotaFonts.
@@ -226,7 +226,7 @@ internal static class DesignTokenCheck
 
         const string icons = "■□▶▷◀◁●○◆◇★☆✓✔✗✕✖✎❄☰⧉‹›▾▴▸◂▼▲⏵⏸⏹⏺⟳⊘─┄▩⠿＋▤";
         var offenders = new List<string>();
-        foreach (var f in Directory.EnumerateFiles(app, "*.*", SearchOption.AllDirectories)
+        foreach (var f in Files(app, "*.*", SearchOption.AllDirectories)
                      .Where(f => (f.EndsWith(".cs") || f.EndsWith(".axaml")) && !f.Contains("/obj/") && !f.Contains("/bin/")))
         {
             int n = 0;
@@ -236,7 +236,7 @@ internal static class DesignTokenCheck
                 var code = f.EndsWith(".cs") ? line.Split("//")[0] : Regex.Replace(line, "<!--.*?-->", "");
                 foreach (Match m in Regex.Matches(code, "\"((?:[^\"\\\\]|\\\\.)*)\""))
                     if (m.Groups[1].Value.IndexOfAny(icons.ToCharArray()) >= 0)
-                        offenders.Add($"{Path.GetRelativePath(app, f)}:{n}");
+                        offenders.Add($"{Rel(app, f)}:{n}");
             }
         }
         yield return (offenders.Count == 0,
@@ -274,7 +274,7 @@ internal static class DesignTokenCheck
             ("vowel-dropped parameter label", new("\"(FDBK|FEEDB|FB|ATK|DEC|SUS|REL|LVL|DET|SPR|QNT|PIT|TRANSP|AMT|VOL|POS|EMPH|RESON)\"")),
         };
         var hits = rules.ToDictionary(r => r.Name, _ => new List<string>());
-        foreach (var f in Directory.EnumerateFiles(app, "*.cs", SearchOption.AllDirectories)
+        foreach (var f in Files(app, "*.cs", SearchOption.AllDirectories)
                      .Where(f => !f.Contains("/obj/") && !f.Contains("/bin/") && !f.EndsWith("NotaNum.cs")))
         {
             int n = 0;
@@ -285,7 +285,7 @@ internal static class DesignTokenCheck
                 // Only what reaches the screen: the string literals on the line.
                 var literals = string.Join("\n", Regex.Matches(code, "\"((?:[^\"\\\\]|\\\\.)*)\"").Select(m => m.Value));
                 foreach (var (name, re) in rules)
-                    if (re.IsMatch(name.StartsWith("invariant") ? code : literals)) hits[name].Add($"{Path.GetRelativePath(app, f)}:{n}");
+                    if (re.IsMatch(name.StartsWith("invariant") ? code : literals)) hits[name].Add($"{Rel(app, f)}:{n}");
             }
         }
         foreach (var (name, _) in rules)
@@ -299,8 +299,8 @@ internal static class DesignTokenCheck
         var root = RepoRoot();
         if (root is null) { yield return (false, "repo root located"); yield break; }
         var app = Path.Combine(root, "src/managed/Nota.App");
-        var views = Directory.EnumerateFiles(Path.Combine(app, "Controls"), "*.cs")
-            .Select(f => (Path: Path.GetRelativePath(app, f), Text: File.ReadAllText(f))).ToArray();
+        var views = Files(Path.Combine(app, "Controls"), "*.cs")
+            .Select(f => (Path: Rel(app, f), Text: File.ReadAllText(f))).ToArray();
         // Deliberate exception: MixBar is a level strip, not a graph window.
         var exempt = new HashSet<string> { "Controls/MixBar.cs" };
         string[] Offenders(string pattern) => views.Where(v => !exempt.Contains(v.Path) && Regex.IsMatch(v.Text, pattern)).Select(v => v.Path).OrderBy(p => p).ToArray();
@@ -320,7 +320,7 @@ internal static class DesignTokenCheck
         var meter = File.ReadAllText(Path.Combine(app, "Controls/MeterBar.cs"));
         yield return (Regex.IsMatch(meter, @"ChannelW = 11, Step = 5"), "level meter channels are 11px with a 5px step");
 
-        var arr = string.Concat(Directory.EnumerateFiles(app, "ArrangementView*.cs").Select(File.ReadAllText));
+        var arr = string.Concat(Files(app, "ArrangementView*.cs").Select(File.ReadAllText));
         yield return (!arr.Contains("PlayheadGlow") && Regex.IsMatch(arr, @"PlayheadPen = new Pen\(PlayheadBrush, 1\)"),
             "the arrangement playhead is a 1px brass line with no glow");
     }
@@ -353,11 +353,11 @@ internal static class DesignTokenCheck
             ("brush snapshotting a theme colour", new(@"new (?:[\w.]+\.)?SolidColorBrush\(\s*(?:NotaPalette\.\w+(?:\.Color)?\s*[,)]|[\w.]*TrackColor(?:ForIndex)?\(|NotaPalette\.(?:TrackColors|ReturnColors)\[)|static readonly (?:I?Solid\w*Brush|IBrush)(?:\[\])?\s+\w+\s*=\s*new (?:[\w.]+\.)?SolidColorBrush\((?!Color\.FromArgb\(0x[0-9A-Fa-f]{2}, 0x00, 0x00, 0x00\))|static readonly Color(?:\[\])?\s+\w+\s*=.*NotaPalette"), null),
         };
         var hits = rules.ToDictionary(r => r.Name, _ => new List<string>());
-        foreach (var f in Directory.EnumerateFiles(app, "*.*", SearchOption.AllDirectories)
+        foreach (var f in Files(app, "*.*", SearchOption.AllDirectories)
                      .Where(f => (f.EndsWith(".cs") || f.EndsWith(".axaml")) && !f.Contains("/obj/") && !f.Contains("/bin/")
                               && !f.EndsWith("Theme/NotaPalette.cs") && !f.EndsWith("Theme/NotaTheme.axaml")))
         {
-            var rel = Path.GetRelativePath(app, f);
+            var rel = Rel(app, f);
             int n = 0;
             foreach (var line in File.ReadLines(f))
             {
@@ -386,7 +386,7 @@ internal static class DesignTokenCheck
         // Physical instruments keep their wider layouts. (Plug-ins are S 260 / L 700.)
         var exempt = new HashSet<string> { "GenericParamDeviceBody.cs", "GenericMidiBody.cs",
             "BassInstrumentCard.cs", "PhysicalInstrumentCard.cs" };
-        var off = Directory.EnumerateFiles(Path.Combine(app, "DeviceCards"), "*.cs", SearchOption.AllDirectories)
+        var off = Files(Path.Combine(app, "DeviceCards"), "*.cs", SearchOption.AllDirectories)
             .Where(f => !exempt.Contains(Path.GetFileName(f)))
             .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"public double (?:Card)?Width => (?<w>[0-9]+);")
                 .Where(m => m.Groups["w"].Value != "700").Select(m => $"{Path.GetFileName(f)} ({m.Groups["w"].Value})"))
@@ -425,6 +425,13 @@ internal static class DesignTokenCheck
         if (hex.Length == 8 && hex.StartsWith("FF", StringComparison.Ordinal)) hex = hex[2..];
         return hex;
     }
+
+    // The rules match paths written with '/' ("/obj/", "Theme/NotaPalette.cs"); Windows
+    // hands back '\', so every path is normalised on the way in.
+    private static IEnumerable<string> Files(string dir, string pattern, SearchOption option = SearchOption.TopDirectoryOnly)
+        => Directory.EnumerateFiles(dir, pattern, option).Select(f => f.Replace('\\', '/'));
+
+    private static string Rel(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');
 
     /// <summary>Walk up from the test binary until the solution file appears.</summary>
     private static string? RepoRoot()
