@@ -77,9 +77,11 @@ internal static class AppUpdaterTests
     // ---- what is updatable ---------------------------------------------------------------
     private static IEnumerable<(bool, string)> Targets(string tmp)
     {
-        var bundle = Path.Combine(tmp, "Apps", "Nota.app");
-        Directory.CreateDirectory(Path.Combine(bundle, "Contents", "MacOS"));
-        var exe = Path.Combine(bundle, "Contents", "MacOS", "Nota.App");
+        // A macOS process path always uses '/'; build it that way on Windows too, where
+        // Path.Combine would join with '\' and hide the ".app/Contents/MacOS/" marker.
+        var bundle = Path.Combine(tmp, "Apps", "Nota.app").Replace('\\', '/');
+        Directory.CreateDirectory(bundle + "/Contents/MacOS");
+        var exe = bundle + "/Contents/MacOS/Nota.App";
         yield return (AppUpdater.InstallTarget(OSPlatform.OSX, exe, null) == bundle,
             "macOS: the .app bundle the process runs from is the target");
         yield return (AppUpdater.InstallTarget(OSPlatform.OSX, "/private/var/folders/x/AppTranslocation/ABC/d/Nota.app/Contents/MacOS/Nota.App", null) is null
