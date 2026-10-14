@@ -393,6 +393,7 @@ public sealed partial class PianoRollView : UserControl
     public void SetNotes(IEnumerable<NotaNote> notes, double lengthBeats)
     {
         _previewBackup = null;
+        _placementPending = false;   // a reload (undo, recording, another clip) is the truth now
         _notes.Clear();
         _notes.AddRange(notes);
         _lengthBeats = Math.Max(1, lengthBeats);
@@ -460,6 +461,7 @@ public sealed partial class PianoRollView : UserControl
     /// selects the copies. Returns false if nothing was selected. Undoable (one Commit).</summary>
     public bool DuplicateSelection()
     {
+        SettlePlacement();
         var sel = _selection.Where(i => i >= 0 && i < _notes.Count).ToList();
         if (sel.Count == 0) return false;
         double minStart = double.MaxValue, maxEnd = double.MinValue;
@@ -469,28 +471,17 @@ public sealed partial class PianoRollView : UserControl
         var copies = new List<NotaNote>(sel.Count);
         foreach (int i in sel) { var n = _notes[i]; n.StartBeat = Math.Min(n.StartBeat + shift, cap); copies.Add(n); }
         // Like a duplicated clip in the arrangement, the copies overwrite what they land on
-        // instead of stacking: a note of the same pitch that starts under a copy goes, and
-        // one that runs into a copy is cut where the copy starts.
-        var kept = new List<NotaNote>(_notes.Count);
-        foreach (var n in _notes)
-        {
-            var m = n;
-            bool drop = false;
-            foreach (var c in copies)
-            {
-                if (c.Pitch != m.Pitch) continue;
-                double cs = c.StartBeat, ce = c.StartBeat + c.LengthBeats;
-                if (m.StartBeat >= cs - 1e-9 && m.StartBeat < ce - 1e-9) { drop = true; break; }
-                if (m.StartBeat < cs && m.StartBeat + m.LengthBeats > cs + 1e-9) m.LengthBeats = cs - m.StartBeat;
-            }
-            if (!drop) kept.Add(m);
-        }
-        _notes.Clear();
-        _notes.AddRange(kept);
+        // straight away, with the same rule a settled placement uses (NoteOverwrite).
         int baseIdx = _notes.Count;
         _notes.AddRange(copies);
+        var placed = Enumerable.Range(baseIdx, copies.Count).ToList();
+        var settled = new List<NotaNote>(_notes.Count);
+        var placedOut = new List<int>(copies.Count);
+        NoteOverwrite.Settle(_notes, placed, settled, placedOut);
+        _notes.Clear();
+        _notes.AddRange(settled);
         _selection.Clear();
-        for (int k = 0; k < copies.Count; k++) _selection.Add(baseIdx + k);
+        _selection.UnionWith(placedOut);
         Invalidate();
         CommitNotes();
         Changed?.Invoke();
@@ -501,6 +492,7 @@ public sealed partial class PianoRollView : UserControl
     public bool DeleteSelection()
     {
         if (_selection.Count == 0) return false;
+        _placementPending = false;   // the placed notes are what goes
         foreach (int i in _selection.OrderByDescending(x => x))
             if (i >= 0 && i < _notes.Count) _notes.RemoveAt(i);
         _selection.Clear();
@@ -518,6 +510,7 @@ public sealed partial class PianoRollView : UserControl
     public bool RemoveOutOfScaleNotes()
     {
         if (!HasOutOfScaleNotes) return false;
+        SettlePlacement();
         _notes.RemoveAll(n => !InScale(n.Pitch));
         _selection.Clear();
         Invalidate();
@@ -550,6 +543,9 @@ public sealed partial class PianoRollView : UserControl
     /// <summary>Puts a tool's result on screen and in the engine without touching undo.</summary>
     public void ShowPreview(IReadOnlyList<NotaNote> notes)
     {
+        // The tool computed its result from the notes as they stand, so a pending placement
+        // is part of what it replaces; settling now would only reshuffle stale indices.
+        _placementPending = false;
         _previewBackup ??= new List<NotaNote>(_notes);
         _notes.Clear();
         _notes.AddRange(notes);
@@ -601,6 +597,7 @@ public sealed partial class PianoRollView : UserControl
     public void ApplyPreview()
     {
         if (_previewBackup is null) return;
+        _placementPending = false;
         var original = _previewBackup;
         _selection.Clear();
         Invalidate();
@@ -627,6 +624,7 @@ public sealed partial class PianoRollView : UserControl
     /// <summary>Moves note starts toward the Quantize step (its own value, never the zoom's).</summary>
     public void Quantize(double strength)
     {
+        SettlePlacement();
         double qStep = Grids.Quantize.Beats(_beatsPerBar);
         for (int i = 0; i < _notes.Count; i++)
         {
@@ -642,6 +640,7 @@ public sealed partial class PianoRollView : UserControl
 
     public void TransposeBy(int semis)
     {
+        SettlePlacement();
         for (int i = 0; i < _notes.Count; i++)
         {
             var n = _notes[i];
@@ -680,12 +679,14 @@ public sealed partial class PianoRollView : UserControl
     /// <summary>Copies then deletes the selection. Undoable.</summary>
     public bool CutSelection() => CopySelection() && DeleteSelection();
 
-    /// <summary>Pastes the clipboard — anchored at the playback cursor when visible, else at
-    /// the copied notes' original position — and selects the pasted notes. Undoable.</summary>
+    /// <summary>Pastes the clipboard on top of the copied notes' original position (whatever
+    /// the transport is doing) and selects the copies, ready to be moved off with the arrows or
+    /// the mouse. The copies overwrite nothing until they are let go (SettlePlacement). Undoable.</summary>
     public bool PasteClipboard()
     {
         if (s_clipboard.Count == 0) return false;
-        double anchor = _playheadBeat >= 0 ? SnapBeat(_playheadBeat) : s_clipAnchor;
+        SettlePlacement();
+        double anchor = s_clipAnchor;
         int baseIdx = _notes.Count;
         foreach (var c in s_clipboard)
         {
@@ -699,6 +700,7 @@ public sealed partial class PianoRollView : UserControl
         if (_notes.Count == baseIdx) return false;
         _selection.Clear();
         for (int k = baseIdx; k < _notes.Count; k++) _selection.Add(k);
+        _placementPending = true;
         Invalidate(); CommitNotes(); Changed?.Invoke();
         return true;
     }
@@ -728,8 +730,85 @@ public sealed partial class PianoRollView : UserControl
         if (maxP + dp > MaxPitch) dp = MaxPitch - maxP;
         if (Math.Abs(db) < 1e-9 && dp == 0) return false;
         foreach (int i in sel) { var n = _notes[i]; n.StartBeat += db; n.Pitch += dp; _notes[i] = n; }
+        _placementPending = true;
         Invalidate(); CommitNotes(); Changed?.Invoke();
         if (dp != 0) EnsurePitchVisible(dp > 0 ? maxP + dp : minP + dp);
+        return true;
+    }
+
+    /// <summary>Lengthens (dir +1) or shortens (dir −1) every selected note by one grid step,
+    /// keeping starts; never below the minimum length or past the clip end. Undoable.</summary>
+    public bool ResizeSelection(int dir)
+    {
+        if (_selection.Count == 0) return false;
+        double step = SnapGridState.SnapOn ? SnapStep : MinNoteLen;
+        if (!NoteOverwrite.ResizeBy(_notes, _selection, dir * step, MinNoteLen, _lengthBeats)) return false;
+        _placementPending = true;
+        Invalidate(); CommitNotes(); Changed?.Invoke();
+        return true;
+    }
+
+    /// <summary>Moves every selected note's velocity by <paramref name="steps127"/> MIDI steps
+    /// (clamped to 1–127). Not a placement: nothing gets overwritten. Undoable.</summary>
+    public bool NudgeVelocity(int steps127)
+    {
+        bool changed = false;
+        foreach (int i in _selection)
+        {
+            if (i < 0 || i >= _notes.Count) continue;
+            var n = _notes[i];
+            float v = NoteOverwrite.VelocityBy(n.Velocity, steps127);
+            if (v == n.Velocity) continue;
+            n.Velocity = v;
+            _notes[i] = n;
+            changed = true;
+        }
+        if (!changed) return false;
+        Invalidate(); CommitNotes(); Changed?.Invoke();
+        return true;
+    }
+
+    // ---- pending placement (specs/007-midi-note-editing) -------------------------
+    // Notes moved, stretched, drawn or pasted overwrite same-pitch notes they land on, but
+    // only once the selection is let go: until then the notes underneath stay whole and are
+    // drawn marked, so a pasted copy can be walked off its original with the arrows.
+    private bool _placementPending;
+
+    // The selection as a list for the per-frame overwrite marks (Fate is allocation-free over a
+    // list); rebuilt only when the selection changed since the last frame.
+    private readonly List<int> _placedForRender = new();
+    private IReadOnlyList<int> PlacedForRender()
+    {
+        if (_placedForRender.Count != _selection.Count || !_placedForRender.TrueForAll(_selection.Contains))
+        {
+            _placedForRender.Clear();
+            _placedForRender.AddRange(_selection);
+        }
+        return _placedForRender;
+    }
+
+    /// <summary>Applies a pending placement: the selected notes overwrite the same-pitch notes
+    /// they cover (NoteOverwrite). Its own undo step. Called whenever the selection is let go —
+    /// selection change, focus loss, whole-clip edits, and by the host before save/export.
+    /// Returns true when notes were cut or removed (indices may have shifted).</summary>
+    public bool SettlePlacement()
+    {
+        if (!_placementPending) return false;
+        _placementPending = false;
+        if (_selection.Count == 0) return false;
+        var placed = _selection.Where(i => i >= 0 && i < _notes.Count).ToList();
+        var settled = new List<NotaNote>(_notes.Count);
+        var placedOut = new List<int>(placed.Count);
+        NoteOverwrite.Settle(_notes, placed, settled, placedOut);
+        bool changed = settled.Count != _notes.Count;
+        for (int i = 0; !changed && i < settled.Count; i++)
+            changed = settled[i].LengthBeats != _notes[i].LengthBeats;
+        if (!changed) return false;
+        _notes.Clear();
+        _notes.AddRange(settled);
+        _selection.Clear();
+        _selection.UnionWith(placedOut);
+        Invalidate(); CommitNotes(); Changed?.Invoke();
         return true;
     }
 
@@ -994,7 +1073,15 @@ public sealed partial class PianoRollView : UserControl
         private double _autoVelY;
         private Point _lastGrid;
 
-        public NoteGrid(PianoRollView o) { _o = o; Focusable = true; }
+        private readonly List<Rect> _doomed = new();   // per-frame scratch for the overwrite marks
+
+        public NoteGrid(PianoRollView o)
+        {
+            _o = o;
+            Focusable = true;
+            // Leaving the grid (another panel, another clip, a dialog) lets the placement go.
+            LostFocus += (_, _) => _o.SettlePlacement();
+        }
 
         private double Ppb => _o.PixelsPerBeat;
         private double BeatToX(double b) => _o.BeatToX(b);
@@ -1051,7 +1138,21 @@ public sealed partial class PianoRollView : UserControl
                     var c = _o._trackColor;
                     double a = 0.45 + 0.55 * Math.Clamp(n.Velocity, 0, 1);
                     if (!_o.InScale(n.Pitch)) a *= 0.4;   // out-of-scale notes read faint
-                    ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r, 2);
+                    // A pending placement covers part of this note: the part settling will cut
+                    // (or all of it, when it goes) reads faint behind a dashed track-colour edge.
+                    var fate = _o._placementPending && _o._selection.Count > 0
+                        ? NoteOverwrite.Fate(i, notes, _o.PlacedForRender()) : default;
+                    if (fate.Kind == NoteFateKind.Kept)
+                        ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r, 2);
+                    else
+                    {
+                        double keepW = fate.Kind == NoteFateKind.Cut ? Math.Min(r.Width, fate.CutLength * ppb) : 0;
+                        if (keepW > 0)
+                            ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r.WithWidth(keepW), 2);
+                        var doomed = new Rect(r.X + keepW, r.Y, Math.Max(1, r.Width - keepW), r.Height);
+                        ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a * 0.25), c.R, c.G, c.B)), doomed, 2);
+                        _doomed.Add(doomed);   // its dashed edge goes on top of the notes covering it
+                    }
                 }
                 if (n.ExprId > 0 || _o._expr.Editing(i)) DrawExpression(ctx, i, n, r, sel, ppb);
                 // Resize-edge affordance: a bright bar on the edge a drag would trim.
@@ -1061,6 +1162,14 @@ public sealed partial class PianoRollView : UserControl
                     bool left = _drag == Mode.ResizeLeft || (_drag == Mode.None && _hoverLeft);
                     ctx.FillRectangle(EdgeHighlight, new Rect(left ? x : x + r.Width - 2.5, y + 1, 2.5, RowH - 3));
                 }
+            }
+            // The dashed edges of what a pending placement will cut, drawn over the placed notes
+            // so a note hidden under a pasted copy still shows that it is there and will go.
+            if (_doomed.Count > 0)
+            {
+                var pen = new Pen(new SolidColorBrush(_o._trackColor), 1, DashStyle.Dash);
+                foreach (var d in _doomed) ctx.DrawRectangle(null, pen, d.Deflate(0.5), 2, 2);
+                _doomed.Clear();
             }
             _o.DrawOutsideClip(ctx, w, h);
             if (_o._playheadBeat >= 0)
@@ -1158,6 +1267,10 @@ public sealed partial class PianoRollView : UserControl
             _free = (e.KeyModifiers & KeyModifiers.Alt) != 0;
             bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
             int hit = HitTest(p, out int edge);
+            // Any press that changes the selection lets a pending placement go first; settling
+            // can cut or remove notes, so hit-test again on the settled notes.
+            bool keepsSelection = e.ClickCount != 2 && !shift && hit >= 0 && _o._selection.Contains(hit);
+            if (!keepsSelection && _o.SettlePlacement()) hit = HitTest(p, out edge);
 
             // Double-click: add a note on empty space, delete one under the cursor.
             if (e.ClickCount == 2)
@@ -1168,6 +1281,7 @@ public sealed partial class PianoRollView : UserControl
                     var nt = new NotaNote(YToPitch(p.Y), Math.Max(0, Snap(XToBeat(p.X))), _o.MinNoteLen, 0.8f);
                     _o._notes.Add(nt);
                     _o._selection.Clear(); _o._selection.Add(_o._notes.Count - 1);
+                    _o._placementPending = true;   // a drawn note overwrites what it lands on
                 }
                 _o.Invalidate(); _o.CommitNotes(); _o.Changed?.Invoke();
                 e.Handled = true;
@@ -1343,6 +1457,7 @@ public sealed partial class PianoRollView : UserControl
             _orig.Clear();
             if (was != Mode.Marquee && _dragMoved)
             {
+                _o._placementPending = true;   // overwrites once the selection is let go
                 // Live path: undo was seeded on the first move; push the final state (no undo).
                 // No live path (session): fall back to a single committing push.
                 if (_o.CommitLive is not null && _liveStarted) _o.CommitLive(_o._notes);
@@ -1421,14 +1536,27 @@ public sealed partial class PianoRollView : UserControl
             if (!meta && (e.Key == Key.Delete || e.Key == Key.Back)) { if (_o.DeleteSelection()) e.Handled = true; return; }
             if (!meta && e.Key == Key.Escape && _o._selection.Count > 0)
             {
+                _o.SettlePlacement();
                 _o._selection.Clear(); _o.Invalidate(); _o.Changed?.Invoke(); e.Handled = true; return;
             }
             // Arrow keys nudge the selection: ←/→ by the grid in time, ↑/↓ by a semitone
             // (Shift = an octave). The move auto-scrolls to keep pitch-shifted notes in view.
+            // ⇧←/⇧→ shorten/lengthen by the grid; ⌥↑/⌥↓ change velocity by 10 (⌥⇧ by 1).
+            bool alt = (e.KeyModifiers & KeyModifiers.Alt) != 0;
             if (!meta && _o._selection.Count > 0)
             {
-                switch (e.Key)
+                if (alt)
                 {
+                    switch (e.Key)
+                    {
+                        case Key.Up:   if (_o.NudgeVelocity(shift ? 1 : 10)) e.Handled = true; return;
+                        case Key.Down: if (_o.NudgeVelocity(shift ? -1 : -10)) e.Handled = true; return;
+                    }
+                }
+                else switch (e.Key)
+                {
+                    case Key.Left when shift:  if (_o.ResizeSelection(-1)) e.Handled = true; return;
+                    case Key.Right when shift: if (_o.ResizeSelection(+1)) e.Handled = true; return;
                     case Key.Left:  if (_o.MoveSelection(0, -_o.SnapStep)) e.Handled = true; return;
                     case Key.Right: if (_o.MoveSelection(0, +_o.SnapStep)) e.Handled = true; return;
                     case Key.Up:    if (_o.MoveSelection(shift ? 12 : 1, 0)) e.Handled = true; return;
@@ -1437,6 +1565,7 @@ public sealed partial class PianoRollView : UserControl
             }
             if (meta && e.Key == Key.A)
             {
+                _o.SettlePlacement();
                 _o._selection.Clear();
                 for (int i = 0; i < _o._notes.Count; i++) _o._selection.Add(i);
                 _o.Invalidate(); _o.Changed?.Invoke(); e.Handled = true; return;
@@ -1532,6 +1661,13 @@ public sealed partial class PianoRollView : UserControl
             int hit = Nearest(p);
             if (hit < 0) return;
             bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+            // The lane never takes focus, so a stem that changes the selection lets a pending
+            // placement go here; settling can shift indices, so find the stem again.
+            if ((shift || !_o._selection.Contains(hit)) && _o.SettlePlacement())
+            {
+                hit = Nearest(p);
+                if (hit < 0) return;
+            }
             if (shift) _o._selection.Add(hit);
             else if (!_o._selection.Contains(hit)) { _o._selection.Clear(); _o._selection.Add(hit); }
             _grabbed.Clear();
