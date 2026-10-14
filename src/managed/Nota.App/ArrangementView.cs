@@ -2509,7 +2509,8 @@ public sealed partial class ArrangementView : UserControl
     }
 
     // Context menu for a send/return or the master row: rename + colour (the same edits
-    // regular tracks get; returns/master have no clips to copy/duplicate).
+    // regular tracks get; returns/master have no clips to copy/duplicate), and Delete for a
+    // return (the master stays).
     private void ShowFooterMenu(Control anchor, int trackId)
     {
         if (_engine is null) return;
@@ -2518,6 +2519,11 @@ public sealed partial class ArrangementView : UserControl
         rename.Click += (_, _) => PromptRenameTrack(anchor, trackId);
         flyout.Items.Add(rename);
         flyout.Items.Add(BuildColorSubmenu(new[] { trackId }));
+        if (_returns.Any(r => r.Id == trackId))
+        {
+            flyout.Items.Add(new Separator());
+            flyout.Items.Add(MenuKit.Item("Delete track", GlyphKind.Trash, () => DeleteTracks(new[] { trackId }), MenuKit.DeleteKey));
+        }
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 

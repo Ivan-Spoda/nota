@@ -22,6 +22,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- **Return tracks can be deleted in the arrangement:** the Return row's context menu has
+  Delete track, and Delete / Backspace removes a selected Return, in one undo step. The
+  Returns that stay keep sounding, and every track's sends stay on the same Returns.
+
 ## [0.52.1] — 2026-10-13
 
 ### Added

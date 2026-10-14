@@ -1217,6 +1217,7 @@ private:
     std::shared_ptr<Track> deepCloneTrack(const Track& src, int32_t newId);
     // The tracks in ids plus every descendant of a group among them, in engine order.
     std::vector<std::shared_ptr<Track>> expandTrackSet(const int32_t* ids, int32_t n) const;
+    void compactReturns(Graph& g) const;   // renumber return buses 0..n-1 + remap sends (after a delete)
     // Publishes fresh deep clones of src (returns skipped) after afterId, or before the
     // returns when afterId isn't a regular track. Group links inside the set follow the
     // copies; a member whose group is outside the set keeps it (keepParent) or joins rootParent.

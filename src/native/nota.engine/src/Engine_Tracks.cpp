@@ -2715,6 +2715,7 @@ bool Engine::removeTrack(int32_t trackId) {
     g->tracks.reserve(authoring_->tracks.size());
     for (auto& t : authoring_->tracks)
         if (t->id() != trackId) g->tracks.push_back(t);
+    if (rt->type() == TrackType::Return) compactReturns(*g);
     publish(std::move(g));
     recomputePdc();
     return true;
@@ -2866,6 +2867,40 @@ std::vector<std::shared_ptr<Track>> Engine::expandTrackSet(const int32_t* ids, i
     return out;
 }
 
+// Deleting a return leaves a hole in the bus slots, but the renderer only runs buses
+// 0..count-1 and addReturnTrack hands out slot `count` — so the survivors move down to
+// 0..n-1 (in track order) and every send follows its bus; sends to a deleted bus go.
+// Changed tracks are cloned, never edited in place: the old graph is the undo snapshot.
+void Engine::compactReturns(Graph& g) const {
+    int32_t remap[kMaxReturns];
+    std::fill(std::begin(remap), std::end(remap), -1);
+    int32_t n = 0;
+    for (auto& t : g.tracks) {
+        if (t->type() != TrackType::Return) continue;
+        const int32_t old = t->returnIndex();
+        if (old >= 0 && old < kMaxReturns) remap[old] = n++;
+    }
+    for (auto& t : g.tracks) {
+        if (t->type() == TrackType::Return) {
+            const int32_t old = t->returnIndex();
+            const int32_t idx = (old >= 0 && old < kMaxReturns) ? remap[old] : -1;
+            if (idx < 0 || idx == old) continue;
+            auto nt = cloneTrack(*t);
+            nt->setReturnIndex(idx);
+            t = std::move(nt);
+            continue;
+        }
+        float sends[kMaxReturns] = {};
+        for (int32_t b = 0; b < kMaxReturns; ++b) if (remap[b] >= 0) sends[remap[b]] = t->send(b);
+        bool changed = false;
+        for (int32_t b = 0; b < kMaxReturns; ++b) if (sends[b] != t->send(b)) changed = true;
+        if (!changed) continue;
+        auto nt = cloneTrack(*t);
+        for (int32_t b = 0; b < kMaxReturns; ++b) nt->setSend(b, sends[b]);
+        t = std::move(nt);
+    }
+}
+
 std::vector<int32_t> Engine::insertTrackClones(const std::vector<std::shared_ptr<Track>>& src,
                                                int32_t afterId, int32_t rootParent, bool keepParent) {
     std::map<int32_t, int32_t> remap;   // source id -> copy id
@@ -2920,7 +2955,9 @@ bool Engine::removeTracks(const int32_t* ids, int32_t n) {
     auto set = expandTrackSet(ids, n);
     if (set.empty()) return false;
     std::set<int32_t> drop;
+    bool anyReturn = false;
     for (auto& t : set) {
+        anyReturn |= t->type() == TrackType::Return;
         // Plugin windows shouldn't outlive the track (it survives in undo history, so only hide).
         if (t->instrument) t->instrument->closeEditor();
         for (auto& d : t->devices) if (d) d->closeEditor();
@@ -2934,6 +2971,7 @@ bool Engine::removeTracks(const int32_t* ids, int32_t n) {
     g->tracks.reserve(authoring_->tracks.size());
     for (auto& t : authoring_->tracks)
         if (!drop.count(t->id())) g->tracks.push_back(t);
+    if (anyReturn) compactReturns(*g);
     publish(std::move(g));
     recomputePdc();
     return true;
