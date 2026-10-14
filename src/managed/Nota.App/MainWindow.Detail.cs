@@ -391,6 +391,9 @@ public partial class MainWindow
     private void BuildClipEditor(int trackId, int clipIndex)
     {
         if (_vm is null) return;
+        // The editor being replaced lets its pending placement go into its own clip first (it
+        // may never have had focus to lose, e.g. after a menu paste).
+        _editorRoll?.SettlePlacement();
         var roll = new PianoRollView
         {
             BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement
@@ -593,6 +596,9 @@ public partial class MainWindow
         _sessionSlotTrack = trackId;   // so the Pattern tab can target this slot
         _sessionSlotScene = scene;
         SyncClipTab();                 // a Drum Rack slot lights the Pattern tab up
+        // The editor being replaced lets its pending placement go into its own clip first (it
+        // may never have had focus to lose, e.g. after a menu paste).
+        _editorRoll?.SettlePlacement();
         var roll = new PianoRollView
         {
             BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement

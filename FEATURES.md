@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.52.1** (plus changes in development on `main`). This document describes what is
+**0.53.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -44,7 +44,10 @@ JUCE module; the engine core is JUCE-free.
 ## Project and transport
 
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
-  operation.
+  operation — including volume, pan and master-volume moves from any source (Mixer, track
+  headers, Session mixer, **MST**, Nota Remote, a MIDI controller, MCP), one step per move;
+  a recorded automation pass undoes with its value. Mute, solo and sends are not in the
+  history; automation playback, opening a project and freezing add no steps.
 - **New project template**: a new project (and the workspace Nota opens with) starts with an
   instrument track (Nota Synth), an audio track and two returns — **Reverb** (Nota Reverb)
   and **Delay** (Nota Delay), both Wet Only — ready to send to; it opens unmodified, with
@@ -159,6 +162,19 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   pasted tracks land after the selected track, in its group.
 - **Per track**: volume, pan (bipolar bar), mute, solo, arm (ready to record).
   Double-click resets to the default.
+- **Pan law** (per project, in the Mixer footer: **PAN LAW** Stereo / Balance): under
+  Stereo, panning a stereo track or return moves its whole image — at full pan both
+  channels play from one side; under Balance the opposite channel fades out. Mono
+  material and centred tracks sound the same either way. New projects use Stereo; projects
+  from earlier versions keep Balance and are marked **Older project**. Switching is
+  click-free during playback and one undo step. Groups keep their balance (marked **BAL**).
+- **Stereo Map** (Mixer window, **Strips | Stereo Map** in its title bar): every track,
+  return and the master as a dot at its pan (left–right) and fader (up–down), with a measured
+  cloud — where the sound really sits, how wide it is (from the phase correlation) and how
+  loud — and the master correlation under the map. Drag a dot to set pan and volume at once
+  (one undo step), double-click for centre, ⌥ double-click for 0 dB; hover shows pan, volume,
+  balance, width, correlation and level and flags a source whose image is off its pan; click
+  selects the track. Muted tracks show no cloud, solo dims the rest.
 - **Reordering** by dragging the name row (with an accent insertion line); returns stay
   after regular tracks; the group hierarchy is saved with the project.
 - **Routing**:
@@ -184,7 +200,15 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   editor; transposing the selection.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
-  - ⌘D duplicates notes over whatever they land on, like clips in the arrangement.
+  - Notes replace the same-pitch notes they land on instead of stacking: moved, stretched,
+    drawn or pasted notes cut or remove what they cover once the selection is let go
+    (click elsewhere, Esc, another clip, save); until then the part that will go is drawn
+    faint with a dashed edge. ⌘D duplicates notes over whatever they land on, like clips
+    in the arrangement.
+  - ⌘C / ⌘V pastes the copy selected, on top of the copied notes, ready to move off with
+    the arrows or the mouse.
+  - Keyboard: ←/→ move by the grid, ↑/↓ by a semitone (⇧ an octave), ⇧←/⇧→ shorten or
+    lengthen by the grid, ⌥↑/⌥↓ change velocity by 10 (⌥⇧ by 1).
   - **Remove out of scale** (next to the Scale key and mode) deletes every note outside the
     scale in one undo step.
   - Zoomed out, the area past the clip's end is darkened and marked with a line.

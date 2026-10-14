@@ -22,6 +22,60 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.53.1] — 2026-10-15
+
+### Added
+- **Note length and velocity from the keyboard:** in the piano roll, **⇧← / ⇧→** shorten
+  or lengthen every selected note by one grid step (starts stay put), and **⌥↑ / ⌥↓**
+  raise or lower their velocity by 10 — **⌥⇧↑ / ⌥⇧↓** by 1. Each press is one undo step.
+- **Stereo pan law:** panning a stereo track or return now moves its whole image instead
+  of dropping a channel — at full left, both channels play from the left speaker. Mono
+  material and centred tracks sound exactly as before. New projects use it; the Mixer
+  footer shows the project's **PAN LAW** (Stereo / Balance) and switches it during
+  playback without a click, as one undo step. Group strips are marked **BAL**: groups keep
+  their balance so grouping stays level-transparent.
+- **Undo for volume and pan:** fader, pan and master-volume moves can now be undone and
+  redone (**⌘Z** / **⌘⇧Z**) — from the Mixer, the track headers, the Return and Master
+  rows, the Session mixer, the transport's **MST**, Nota Remote, a MIDI controller and the
+  AI assistant. One move is one step, in the same history as every other edit; a reset or a
+  typed dB value is a step too, and a MIDI controller's movement ends after a 1 s pause.
+  While recording automation, the recorded lane and the value undo together. Automation
+  playback, opening a project and freezing never add steps.
+- **Stereo Map:** the Mixer window has a new **Stereo Map** view (switch it in the window's
+  title bar). Every track, return and the master is a dot at its pan and fader, with a cloud
+  showing where its sound really is, how wide it is and how loud — a mono sound draws a narrow
+  cloud on its dot, a wide pad spans the map — plus the master's phase correlation. Drag a dot
+  to set pan and volume together (one undo step), double-click to centre it, ⌥ double-click
+  for 0 dB; hover for the numbers; click to select the track.
+
+### Changed
+- **Existing projects keep the Balance pan law** and sound exactly as before; the Mixer
+  marks them **Older project** until you switch them to Stereo. Projects are saved in
+  format v21 — earlier Nota versions can't open them.
+- **Notes replace the notes they land on:** a note moved, stretched, drawn or pasted onto
+  a note of the same pitch no longer stacks on top of it. The note underneath is cut where
+  the new one starts, or removed if its start is covered. This happens when you let the
+  selection go (click elsewhere, Esc, switch clips, save); until then the notes underneath
+  stay whole and the part that will go is drawn faint with a dashed edge.
+- **⌘V in the piano roll always pastes on top of the copied notes,** selected, whatever the
+  transport is doing — then move the copy off with the arrows or the mouse. Previously
+  paste jumped to the playback cursor while the song played.
+
+### Fixed
+- **Multi-output plug-ins no longer crash Nota when added:** Nota switched off a plug-in's
+  extra outputs, and some instruments (Vienna Synchron Pianos on Windows) still wrote to them
+  and crashed on the first block. Every output is now on; Nota plays the main stereo pair.
+- **No crash when audio restarts with plug-ins loaded:** after an export, a track freeze or
+  Apply in Preferences → Audio, Nota could play a few blocks while it was still getting the
+  project's plug-ins and devices ready for the audio device, which could crash inside a
+  plug-in. Audio now stays silent until everything is ready.
+- **Return tracks can be deleted in the arrangement:** the Return row's context menu has
+  Delete track, and Delete / Backspace removes a selected Return, in one undo step. The
+  Returns that stay keep sounding, and every track's sends stay on the same Returns.
+- **Plug-ins work on Linux:** VST3 plug-ins (including those from Get Plug-ins) play sound
+  again, and their windows draw their interface and close with the close button. Before,
+  they stayed silent behind a black window that only closed when Nota quit.
+
 ## [0.52.1] — 2026-10-13
 
 ### Added

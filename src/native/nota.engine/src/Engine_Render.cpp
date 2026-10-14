@@ -52,6 +52,63 @@ struct ScopedNoDenormals {
 constexpr double kTwoPi = 6.283185307179586;
 constexpr float  kToneGain = 0.2f;
 constexpr float  kMetroGain = 0.5f;
+// Track / return pan as a 2×2 matrix (specs/006): out L = ll·L + lr·R, out R = rl·L + rr·R,
+// fader volume included. Balance is the equal-power law Nota always had (cross terms 0, the
+// far channel fades out). Stereo folds a share b = |pan|/2 of the far channel into the near
+// side and takes it off the near channel's own gain, so a mono source (L = R) gets exactly
+// the Balance gains, centre is identical, and full pan is the mono fold (L+R)/2.
+struct PanGains { float ll, lr, rl, rr; };
+inline PanGains panGains(float pan, float vol, PanLaw law) {
+    const double theta = (pan + 1.0) * (kTwoPi / 8.0); // 0..pi/2
+    const double c = std::cos(theta), s = std::sin(theta);
+    if (law == PanLaw::Balance)
+        return { static_cast<float>(c) * vol, 0.0f, 0.0f, static_cast<float>(s) * vol };
+    const double b = 0.5 * std::fabs(pan);
+    if (pan <= 0.0f)
+        return { static_cast<float>(c - b) * vol, static_cast<float>(b) * vol, 0.0f, static_cast<float>(s) * vol };
+    return { static_cast<float>(c) * vol, 0.0f, static_cast<float>(b) * vol, static_cast<float>(s - b) * vol };
+}
+
+// One track's pan for one segment. Without cross terms or a law crossfade it is the plain
+// two-gain multiply (so Balance renders stay bit-identical); during a crossfade the gains
+// blend from the old law's to the new law's per sample.
+struct PanStage {
+    PanGains to, from;
+    bool  cross, fade;
+    float pos, step;
+    PanStage(float pan, float vol, PanLaw toLaw, PanLaw fromLaw, float fadePos, float fadeStep)
+        : to(panGains(pan, vol, toLaw)), from(to), fade(fadePos < 1.0f), pos(fadePos), step(fadeStep) {
+        if (fade) from = panGains(pan, vol, fromLaw);
+        cross = fade || to.lr != 0.0f || to.rl != 0.0f;
+    }
+    void apply(int32_t i, float inL, float inR, float& l, float& r) const {
+        if (!cross) { l = inL * to.ll; r = inR * to.rr; return; }
+        PanGains k = to;
+        if (fade) {
+            const float x = std::min(1.0f, pos + step * static_cast<float>(i));
+            k = { from.ll + (to.ll - from.ll) * x, from.lr + (to.lr - from.lr) * x,
+                  from.rl + (to.rl - from.rl) * x, from.rr + (to.rr - from.rr) * x };
+        }
+        l = k.ll * inL + k.lr * inR;
+        r = k.rl * inL + k.rr * inR;
+    }
+};
+
+// Stereo measurement (specs/008): fold one block's mean L², R², L·R into a track's running
+// averages; `a` is the per-block smoothing step for τ = 0.3 s at this block length.
+inline float stereoBlockStep(int32_t frames, double sr) {
+    return static_cast<float>(1.0 - std::exp(-frames / (0.3 * (sr > 0.0 ? sr : 44100.0))));
+}
+inline void stereoFold(std::atomic<float>& eL, std::atomic<float>& eR, std::atomic<float>& eLR,
+                       double sqL, double sqR, double sLR, int32_t frames, float a) {
+    const double n = frames > 0 ? frames : 1;
+    auto fold = [a](std::atomic<float>& e, double mean) {
+        const float cur = e.load(std::memory_order_relaxed);
+        e.store(cur + a * (static_cast<float>(mean) - cur), std::memory_order_relaxed);
+    };
+    fold(eL, sqL / n); fold(eR, sqR / n); fold(eLR, sLR / n);
+}
+
 // Sort note events by sample offset; at ties, note-offs before note-ons so a
 // same-block same-pitch retrigger releases the old voice before the new one.
 inline bool midiEvLess(const MidiEv& a, const MidiEv& b) {
@@ -268,6 +325,11 @@ void Engine::attachRecordedExpr(Note& n, int32_t pitch, double startBeat) {
 // --- audio thread ----------------------------------------------------------
 
 void Engine::render(float* out, int32_t numFrames) {
+    // start() is still re-preparing the nodes on the control thread: output silence.
+    if (renderSuspended_.load(std::memory_order_acquire)) {
+        std::fill(out, out + static_cast<size_t>(numFrames) * 2, 0.0f);
+        return;
+    }
     ScopedNoDenormals noDenormals;
     const auto t0 = std::chrono::steady_clock::now();
     processBlock(out, numFrames);
@@ -288,6 +350,12 @@ void Engine::renderOffline(float* out, int32_t frames, double sampleRate) {
 }
 
 void Engine::renderOffline(float* out, int32_t frames) {
+    // Offline rendering re-prepares and processes the graph on the calling thread — with the
+    // device live that would race the audio thread. Callers stop the backend first; enforce it.
+    if (isRunning()) {
+        std::fill(out, out + static_cast<size_t>(frames) * 2, 0.0f);
+        return;
+    }
     stopPreview(); // audition must never bleed into a bounce (M7-4a)
     if (transport_.sampleRate() <= 0) transport_.setSampleRate(44100.0);
     const double sr = transport_.sampleRate();
@@ -1008,7 +1076,7 @@ void Engine::processBlock(float* out, int32_t numFrames) {
 
     const float mv = masterVolume_.load(std::memory_order_relaxed);
     float mpkL = 0.0f, mpkR = 0.0f;
-    double msqL = 0.0, msqR = 0.0;
+    double msqL = 0.0, msqR = 0.0, msLR = 0.0;   // msLR: Stereo Map (specs/008)
     for (int32_t i = 0; i < numFrames; ++i) {
         // Master safety net: a NaN slips straight through std::clamp (every compare
         // with NaN is false, so clamp returns it unchanged) and hits the speakers as
@@ -1024,8 +1092,10 @@ void Engine::processBlock(float* out, int32_t numFrames) {
         const float al = std::fabs(l), ar = std::fabs(r);
         if (al > mpkL) mpkL = al;
         if (ar > mpkR) mpkR = ar;
-        msqL += l * (double)l; msqR += r * (double)r;
+        msqL += l * (double)l; msqR += r * (double)r; msLR += l * (double)r;
     }
+    stereoFold(masterStereoL_, masterStereoR_, masterStereoLR_, msqL, msqR, msLR, numFrames,
+               stereoBlockStep(numFrames, transport_.sampleRate()));
     masterPeakL_.store(mpkL, std::memory_order_relaxed);
     masterPeakR_.store(mpkR, std::memory_order_relaxed);
     masterRmsL_.store(numFrames ? static_cast<float>(std::sqrt(msqL / numFrames)) : 0.0f, std::memory_order_relaxed);
@@ -1052,6 +1122,26 @@ void Engine::renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t fr
 
 void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, bool playing, double spb) {
     {
+        // Pan law (specs/006): a change of the live law starts a 10 ms crossfade of the pan
+        // gains; flipping back mid-fade reverses it from where it is, so nothing jumps. A law
+        // that came with a load / reset is taken at once (nothing of the old project sounds).
+        if (panLawSnap_.exchange(false, std::memory_order_acq_rel)) {
+            panLawFrom_ = panLawTo_ = g->panLaw;
+            panLawPos_ = 1.0f;
+        } else if (g->panLaw != panLawTo_) {
+            if (panLawPos_ < 1.0f && g->panLaw == panLawFrom_) {
+                std::swap(panLawFrom_, panLawTo_);
+                panLawPos_ = 1.0f - panLawPos_;
+            } else {
+                panLawFrom_ = panLawTo_;
+                panLawTo_ = g->panLaw;
+                panLawPos_ = 0.0f;
+            }
+        }
+        const double srLaw = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
+        const float panLawStep = static_cast<float>(1.0 / (0.010 * srLaw));
+        const float stereoA = stereoBlockStep(frames, srLaw);   // Stereo Map averages (specs/008)
+
         // Automation (M9): read-mode block-rate eval — write each active lane's
         // value into its target atomic before the mix reads it. Always runs (also
         // when stopped: the playhead is static, so scrub shows automation too).
@@ -1162,7 +1252,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             const bool audible = !leafMute(t) && (!anySolo || leafSolo(t));
             // Soloing a monitoring (or recording) track must not silence what it listens to.
             const bool feeding = !audible && !leafMute(t) && feedsMonitor(t.id());
-            if (!audible && !capturing && !feeding) { t.setMeter(0, 0, 0, 0); continue; }
+            if (!audible && !capturing && !feeding) { t.setMeter(0, 0, 0, 0); t.stereoFold(0, 0, 0, frames, stereoA); continue; }
             const bool toMix = audible || capturing;   // false: render only for the taps
             // Destination: this leaf's parent group's submix bus, else the master mix.
             const int destSlot = slotOf(t.groupId());
@@ -1189,7 +1279,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
 
             // 1) Render the track's dry stereo (pre-fader) into scratch_.
             if (frozenActive) {
-                if (!playing) { t.setMeter(0, 0, 0, 0); continue; } // frozen sounds only while rolling
+                if (!playing) { t.setMeter(0, 0, 0, 0); t.stereoFold(0, 0, 0, frames, stereoA); continue; } // frozen sounds only while rolling
                 fillFrozen(t, scratch_.data(), frames, blockStart, spb);
             } else {
                 if (t.instrument) {
@@ -1213,7 +1303,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 else if (playing && arrangementActive)
                     renderAudioClipsRaw(t.clips, scratch_.data(), frames, blockStart, spb);
                 else
-                    { t.setMeter(0, 0, 0, 0); continue; } // stopped / session-only audio track: nothing to do
+                    { t.setMeter(0, 0, 0, 0); t.stereoFold(0, 0, 0, frames, stereoA); continue; } // stopped / session-only audio track: nothing to do
             }
 
             // 1b) Pre-FX tap (Phase D): if this track feeds a sidechain, capture its
@@ -1264,20 +1354,18 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             // 3) Channel fader + equal-power pan into the master mix + sends.
             const float vol = t.volume();
             const float pan = std::clamp(t.pan(), -1.0f, 1.0f);
-            const double theta = (pan + 1.0) * (kTwoPi / 8.0); // 0..pi/2
-            const float gl = static_cast<float>(std::cos(theta)) * vol;
-            const float gr = static_cast<float>(std::sin(theta)) * vol;
+            const PanStage ps(pan, vol, panLawTo_, panLawFrom_, panLawPos_, panLawStep);   // project pan law
             float sends[kMaxReturns]; bool anySend = false;   // post-fader send taps (M6-1)
             for (int b = 0; b < numReturns; ++b) { sends[b] = t.send(b); if (sends[b] != 0.0f) anySend = true; }
             const int32_t routeSlot = routeSlotForTrack(t.id());   // Phase B: this track is a sidechain source?
             float* route = routeSlot >= 0 ? routeBusNext_[routeSlot].data() : nullptr;
             const bool tapRec = (recSrc > 0 && t.id() == recSrc);   // internal resampling source
             float pkL = 0.0f, pkR = 0.0f;
-            double sqL = 0.0, sqR = 0.0;
+            double sqL = 0.0, sqR = 0.0, sLR = 0.0;   // sLR: Stereo Map (specs/008)
             int64_t recDropped = 0;
             for (int32_t i = 0; i < frames; ++i) {
-                const float l = scratch_[i * 2]     * gl;
-                const float r = scratch_[i * 2 + 1] * gr;
+                float l, r;
+                ps.apply(i, scratch_[i * 2], scratch_[i * 2 + 1], l, r);
                 if (tapRec && !inputQueue_.push(InputFrame{ l, r })) ++recDropped;   // record this track's output
                 if (route) { route[i * 2] += l; route[i * 2 + 1] += r; }   // tap post-fader → route bus
                 if (!toMix) continue;                                         // solo-gated feeder: taps only
@@ -1293,9 +1381,15 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 if (ar > pkR) pkR = ar;
                 sqL += l * (double)l;
                 sqR += r * (double)r;
+                sLR += l * (double)r;
             }
             if (recDropped) inputDroppedFrames_.fetch_add(recDropped, std::memory_order_relaxed);
-            if (!toMix) { t.setMeter(0, 0, 0, 0); continue; }
+            if (!toMix) {   // muted / solo-gated: nothing reaches the master, the averages decay
+                t.setMeter(0, 0, 0, 0);
+                t.stereoFold(0.0, 0.0, 0.0, frames, stereoA);
+                continue;
+            }
+            t.stereoFold(sqL, sqR, sLR, frames, stereoA);
             t.setMeter(pkL, pkR,
                        static_cast<float>(std::sqrt(sqL / frames)),
                        static_cast<float>(std::sqrt(sqR / frames)));
@@ -1374,7 +1468,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             Track& t = *tptr;
             if (t.type() != TrackType::Return) continue;
             const int32_t bus = t.returnIndex();
-            if (bus < 0 || bus >= numReturns || t.mute()) { t.setMeter(0, 0, 0, 0); continue; }
+            if (bus < 0 || bus >= numReturns || t.mute()) { t.setMeter(0, 0, 0, 0); t.stereoFold(0, 0, 0, frames, stereoA); continue; }
 
             std::copy_n(returnBus_[bus].data(), frames * 2, scratch_.data());
             {
@@ -1402,18 +1496,16 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
 
             const float vol = t.volume();
             const float pan = std::clamp(t.pan(), -1.0f, 1.0f);
-            const double theta = (pan + 1.0) * (kTwoPi / 8.0);
-            const float gl = static_cast<float>(std::cos(theta)) * vol;
-            const float gr = static_cast<float>(std::sin(theta)) * vol;
+            const PanStage ps(pan, vol, panLawTo_, panLawFrom_, panLawPos_, panLawStep);   // project pan law
             const int32_t routeSlot = routeSlotForTrack(t.id());
             float* route = routeSlot >= 0 ? routeBusNext_[routeSlot].data() : nullptr;
             const bool tapRec = (recSrc > 0 && t.id() == recSrc);   // internal resampling source (a return)
             float pkL = 0.0f, pkR = 0.0f;
-            double sqL = 0.0, sqR = 0.0;
+            double sqL = 0.0, sqR = 0.0, sLR = 0.0;   // sLR: Stereo Map (specs/008)
             int64_t recDropped = 0;
             for (int32_t i = 0; i < frames; ++i) {
-                const float l = scratch_[i * 2]     * gl;
-                const float r = scratch_[i * 2 + 1] * gr;
+                float l, r;
+                ps.apply(i, scratch_[i * 2], scratch_[i * 2 + 1], l, r);
                 out[i * 2]     += l;
                 out[i * 2 + 1] += r;
                 if (tapRec && !inputQueue_.push(InputFrame{ l, r })) ++recDropped;
@@ -1423,8 +1515,10 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 if (ar > pkR) pkR = ar;
                 sqL += l * (double)l;
                 sqR += r * (double)r;
+                sLR += l * (double)r;
             }
             if (recDropped) inputDroppedFrames_.fetch_add(recDropped, std::memory_order_relaxed);
+            t.stereoFold(sqL, sqR, sLR, frames, stereoA);
             t.setMeter(pkL, pkR,
                        static_cast<float>(std::sqrt(sqL / frames)),
                        static_cast<float>(std::sqrt(sqR / frames)));
@@ -1444,6 +1538,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 routeBus_[s].swap(routeBusNext_[s]);
                 routeBusPre_[s].swap(routeBusPreNext_[s]);
             }
+
+        if (panLawPos_ < 1.0f) panLawPos_ = std::min(1.0f, panLawPos_ + panLawStep * static_cast<float>(frames));
     }
 }
 

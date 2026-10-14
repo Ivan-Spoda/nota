@@ -15,6 +15,8 @@ public interface IAudioEngine : IDisposable
 {
     // --- Device / diagnostics ---------------------------------------------
     double SampleRate { get; }
+    /// <summary>True while the output device is open and the audio thread runs.</summary>
+    bool IsRunning { get; }
     void Start();
     void Stop();
     void SetTestTone(bool enabled);
@@ -823,6 +825,27 @@ public interface IAudioEngine : IDisposable
     void EndUndoGroup();
     /// <summary>Forget the undo/redo history; the current state becomes the baseline.</summary>
     void ClearUndoHistory();
+
+    // --- Pan law (specs/006) ---------------------------------------------
+    /// <summary>Project pan law (graph-level, undoable). See nota_engine_set_pan_law.</summary>
+    PanLaw PanLaw { get; }
+    /// <summary>Sets the project pan law; <paramref name="checkpoint"/> = false adds no undo
+    /// step (project load, the new-project baseline). No-op if unchanged.</summary>
+    void SetPanLaw(PanLaw law, bool checkpoint = true);
+
+    // --- Mix undo (specs/009) --------------------------------------------
+    /// <summary>Starts a gesture on volume / pan / master volume: their values now are what
+    /// undo returns to. Returns a handle (0 = no valid target).</summary>
+    int BeginMixGesture(params MixTarget[] targets);
+    /// <summary>Ends the gesture: one undo step for whatever it changed (none → no step).</summary>
+    void EndMixGesture(int handle);
+    /// <summary>The engine's master volume (linear) — follows undo/redo.</summary>
+    float MasterVolume { get; }
+
+    // --- Stereo Map (specs/008) ------------------------------------------
+    /// <summary>Fills <paramref name="buffer"/> with one row per non-group track (track order)
+    /// and the master last; returns the total row count (grow the buffer if larger).</summary>
+    int GetStereoMeasures(StereoMeasure[] buffer);
 
     // --- Project load (M7-6) -----------------------------------------------
     void Reset();

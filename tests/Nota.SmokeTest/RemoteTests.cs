@@ -306,6 +306,13 @@ internal static class RemoteTests
             }
             return null;
         }
+        // Polls a state change that sends no reply — not a fixed sleep, which a slow CI
+        // runner outlasts.
+        void WaitFor(Func<bool> done, int ms = 2000)
+        {
+            var until = DateTime.UtcNow.AddMilliseconds(ms);
+            while (DateTime.UtcNow < until && !done()) { hub.Tick(); Thread.Sleep(20); }
+        }
 
         Send(new { t = "hello", token = "nope", name = "x" });
         var denied = Wait("denied");
@@ -402,13 +409,19 @@ internal static class RemoteTests
         Send(new { t = "off", p = 65 });
         Loudest(e, 30);
 
+        float remoteVol0 = e.TryGetTrackInfo(0, out var rv0) ? rv0.Volume : -1;
         Send(new { t = "vol", id = inst, v = 0.5, ph = 2 });
         Send(new { t = "mute", id = inst, on = true });
-        Wait("none", 150);
+        WaitFor(() => e.TryGetTrackInfo(0, out var t) && Math.Abs(t.Volume - 0.5f) < 1e-3 && t.Muted == 1 && host.Refreshes > 0);
         yield return (e.TryGetTrackInfo(0, out var t1) && Math.Abs(t1.Volume - 0.5f) < 1e-3 && t1.Muted == 1, "fader and mute from the phone reach the track");
+        // A phone touch is one undo step (specs/009-mix-param-undo).
+        e.Undo();
+        e.TryGetTrackInfo(0, out var tu);
+        yield return (tu.Volume == remoteVol0, $"undo takes back the phone's fader move ({tu.Volume}, want {remoteVol0})");
+        e.Redo();
         yield return (host.Refreshes > 0, "Nota redraws after a phone edit");
         Send(new { t = "play" });
-        Wait("none", 120);
+        WaitFor(() => host.Plays == 1);
         yield return (host.Plays == 1, "transport goes through Nota's transport");
 
 

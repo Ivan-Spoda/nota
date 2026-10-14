@@ -11,6 +11,7 @@ Link the spec-driven artifacts if this is non-trivial work (skip for small fixes
 
 ## Checklist
 
+- [ ] Base branch is `develop` (not `main`)
 - [ ] `scripts/build.sh` (or `scripts/build-linux.sh` / `scripts/build-win.ps1`) passes — it runs the smoke test
 - [ ] Built and tested on: [ ] macOS [ ] Windows [ ] Linux
 - [ ] New source files carry the AGPL-3.0-only SPDX header

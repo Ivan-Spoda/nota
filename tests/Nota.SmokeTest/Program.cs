@@ -231,12 +231,52 @@ if (args.Length >= 1 && args[0] == "--grid")
     Console.WriteLine(failures == 0 ? "GRID PASSED" : $"GRID FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Piano-roll note editing alone: `--notes`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--notes")
+{
+    Console.WriteLine("-- note editing --");
+    foreach (var (ok, label) in NoteEditingTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "NOTES PASSED" : $"NOTES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Default project template alone: `--template`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--template")
 {
     Console.WriteLine("-- default project template --");
     foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "TEMPLATE PASSED" : $"TEMPLATE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Deleting a return track alone: `--returns`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--returns")
+{
+    Console.WriteLine("-- return delete --");
+    foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "RETURNS PASSED" : $"RETURNS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Stereo Map measurements alone: `--stereomap`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--stereomap")
+{
+    Console.WriteLine("-- stereo map --");
+    foreach (var (ok, label) in StereoMeasureTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "STEREOMAP PASSED" : $"STEREOMAP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Volume / pan undo alone: `--mixundo`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--mixundo")
+{
+    Console.WriteLine("-- mix undo --");
+    foreach (var (ok, label) in MixUndoTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MIXUNDO PASSED" : $"MIXUNDO FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// The project pan law alone: `--panlaw`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--panlaw")
+{
+    Console.WriteLine("-- pan law --");
+    foreach (var (ok, label) in PanLawTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PANLAW PASSED" : $"PANLAW FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // What Nota Mosaic makes of a real library: `--mosaic-dump <file.sfz | folder>`.
@@ -2457,7 +2497,8 @@ Console.WriteLine("-- Nota Pentad --");
         int active = se.InstrumentVoiceCount(ta);
         se.StopTransport();
         double budget = 128 / 44.1;
-        Check(active == 16 && totalMs / blocks < budget * 0.5, $"Nota Pentad stress: 16-voice unison ×4 OS avg {totalMs / blocks:0.000} ms, worst {worstMs:0.000} ms per 128-frame block (budget {budget:0.00} ms)");
+        var (pentadOk, pentadLabel) = TimingBudget.Check(active == 16, totalMs / blocks < budget * 0.5, $"Nota Pentad stress: 16-voice unison ×4 OS avg {totalMs / blocks:0.000} ms, worst {worstMs:0.000} ms per 128-frame block (budget {budget:0.00} ms)");
+        Check(pentadOk, pentadLabel);
     }
 
     // Automation: a plugin-param lane drives the cutoff during playback.
@@ -2732,7 +2773,8 @@ Console.WriteLine("-- Nota Consort --");
         for (int i = 0; i < blocks; i++) se.RenderOffline(blk, 128);
         sw.Stop();
         double budget = 128 / 44.1, avg = sw.Elapsed.TotalMilliseconds / blocks;
-        Check(se.InstrumentVoiceCount(ta) == 16 && avg < budget * 0.5, $"Nota Consort stress: 16 voices ×4 OS avg {avg:0.000} ms per 128-frame block (budget {budget:0.00} ms)");
+        var (consortOk, consortLabel) = TimingBudget.Check(se.InstrumentVoiceCount(ta) == 16, avg < budget * 0.5, $"Nota Consort stress: 16 voices ×4 OS avg {avg:0.000} ms per 128-frame block (budget {budget:0.00} ms)");
+        Check(consortOk, consortLabel);
         se.StopTransport();
     }
     // Factory presets: every named param is a real Consort id, each applies in place and sounds.
@@ -8444,8 +8486,8 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
 }
 
 // -- export normalize (−1 dBTP true peak) via AudioExporter ---------------
-// Own engine: ExportMaster start()s the backend on Restore, so keep it off the
-// shared `engine` (a later test asserts its backend was never started).
+// Own engine, never started: the export must leave its backend stopped — restarting it
+// threw on machines without an output device (.specify/bugs/export-restart-headless).
 {
     using var ne = new NotaEngine();
     ne.SetBpm(120); ne.SetTimeSignature(4, 4);
@@ -8457,7 +8499,9 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
     string nPath = Path.Combine(Path.GetTempPath(), "nota_normalize_test.wav");
     var req = new ExportRequest(nPath, 2.0, 120.0, 48000, WavBitDepth.Float32,
         RestoreLoop: false, RestoreMetronome: false, Normalize: true, Dither: false);
+    bool neIdle = !ne.IsRunning;
     exporter.ExportMaster(ne, req);
+    Check(neIdle && !ne.IsRunning, "export leaves a backend that was never started stopped");
 
     var nraw = File.ReadAllBytes(nPath);
     int ndata = BitConverter.ToInt32(nraw, 40);
@@ -8635,6 +8679,7 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
                                                                      Format: ExportFormat.Flac));
         var files = Directory.GetFiles(dir, "*.flac");
         Check(n == 2 && files.Length == 2, $"FLAC stems wrote one file per track ({n} reported, {files.Length} found)");
+        Check(!se.IsRunning, "stem export leaves a backend that was never started stopped");
         var decoded = files.Select(f => NotaEngine.DecodeMono(f, 10.0, out _)).ToList();
         Check(decoded.All(d => d is not null && d.Length > 48000), "every FLAC stem decodes to full length");
         if (decoded.All(d => d is not null))
@@ -8646,6 +8691,23 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
         }
     }
     finally { try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { } }
+}
+
+// -- freeze / bounce on an engine that was never started (export-restart-headless) --
+// TrackFreezer stops the backend for the capture and used to start it unconditionally
+// afterwards, which threw with no output device. It must restore what was there: nothing.
+{
+    using var fz = new NotaEngine();
+    fz.SetBpm(120); fz.SetTimeSignature(4, 4);
+    int fzTrk = fz.AddInstrumentTrack();
+    int fzClip = fz.AddMidiClip(fzTrk, 0.0, 2.0);
+    fz.SetClipNotes(fzTrk, fzClip, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+    var freezer = new TrackFreezer();
+    bool fzIdle = !fz.IsRunning;
+    var bounced = freezer.BounceRange(fz, fzTrk, 0.0, 2.0, restoreLoop: false, restoreMetronome: false);
+    Check(fzIdle && bounced is { Length: > 0 } && !fz.IsRunning, "bounce leaves a backend that was never started stopped");
+    bool frozen = freezer.Freeze(fz, fzTrk, 2.0, restoreLoop: false, restoreMetronome: false);
+    Check(frozen && !fz.IsRunning, "freeze leaves a backend that was never started stopped");
 }
 
 // -- M6-2: level meters (post-fader peak/RMS, master + per-track) --
@@ -14540,8 +14602,29 @@ foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
 Console.WriteLine("-- snap grid --");
 foreach (var (ok, label) in SnapGridTests.Run()) Check(ok, label);
 
+Console.WriteLine("-- note editing --");
+foreach (var (ok, label) in NoteEditingTests.Run()) Check(ok, label);
+
 Console.WriteLine("-- default project template --");
 foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- return delete --");
+foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- pan law --");
+foreach (var (ok, label) in PanLawTests.Run()) Check(ok, label);
+
+// The Linux JUCE message pump (.specify/bugs/linux-plugin-black-window): exported on every
+// platform and a safe no-op before any hosted plugin exists (the app ticks it on Linux).
+Console.WriteLine("-- plugin host pump --");
+Check(NotaEngine.PumpPluginHost() == 0 && NotaEngine.PumpPluginHost() == 0,
+    "plugin host pump: exported, non-blocking no-op with no plugin loaded");
+
+Console.WriteLine("-- mix undo --");
+foreach (var (ok, label) in MixUndoTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- stereo map --");
+foreach (var (ok, label) in StereoMeasureTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- filter knob glide --");
 foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);

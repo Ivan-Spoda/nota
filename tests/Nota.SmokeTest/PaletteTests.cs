@@ -376,7 +376,7 @@ internal static class PaletteTests
         long alloc = GC.GetAllocatedBytesForCurrentThread() - before;
         times.Sort();
         double median = times[times.Count / 2], worst = times[^1];
-        yield return (median <= 8, $"per keystroke on {index.Count:N0} items: median {median:0.0} ms, worst {worst:0.0} ms (budget 8 ms) · index built in {buildMs:0} ms");
+        yield return TimingBudget.Check(true, median <= 8, $"per keystroke on {index.Count:N0} items: median {median:0.0} ms, worst {worst:0.0} ms (budget 8 ms) · index built in {buildMs:0} ms");
         yield return (alloc / typed.Length < 256 * 1024, $"…allocating {alloc / typed.Length / 1024} KB per keystroke (results only, nothing per item)");
     }
 }

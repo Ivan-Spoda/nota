@@ -74,6 +74,34 @@ extern "C" NOTA_API NotaResult nota_pluginhost_open_test_window(void) {
     return NOTA_OK;
 }
 
+// ---- JUCE message pump (Linux) ---------------------------------------------
+// The spike premise above holds on macOS (shared CFRunLoop) and Windows (JUCE's
+// message HWND is serviced by Avalonia's Win32 loop), but on Linux JUCE runs its
+// own poll()-based loop over the X11 display fd, its message pipe and any fds a
+// hosted VST3 registers through the host IRunLoop. Nothing services that loop
+// unless we do: editor windows stay black and unclosable, and plugins — which
+// hand their message thread to the host's IRunLoop on creation — never run their
+// timers/async work and stay silent. The app calls this from a UI-thread timer.
+
+#if JUCE_LINUX || JUCE_BSD
+namespace juce::detail { bool dispatchNextMessageOnSystemQueue(bool returnIfNoPendingMessages); }
+#endif
+
+extern "C" NOTA_API int32_t nota_pluginhost_pump(void) {
+#if JUCE_LINUX || JUCE_BSD
+    if (g_juceGui == nullptr) return 0;   // no plugin/editor yet: nothing to service
+    auto* mm = juce::MessageManager::getInstanceWithoutCreating();
+    if (mm == nullptr || !mm->isThisTheMessageThread()) return 0;
+    // Bounded so a plugin that keeps re-posting messages can't starve Avalonia.
+    constexpr int kMaxPerPump = 64;
+    int n = 0;
+    while (n < kMaxPerPump && juce::detail::dispatchNextMessageOnSystemQueue(true)) ++n;
+    return n;
+#else
+    return 0;
+#endif
+}
+
 // ---- Plugin scanning & catalog (M3-1) --------------------------------------
 
 namespace {
@@ -382,6 +410,33 @@ int pluginChannelPtrs(const juce::AudioProcessor& p, juce::AudioBuffer<float>& s
     return want;
 }
 
+// Turn on every bus the plugin has, keeping the main buses as the caller set them. JUCE hands
+// an inactive VST3 bus to process() with null channel pointers (HostBufferMapper), and some
+// multi-output instruments (Vienna Synchron Pianos) write to every output bus regardless —
+// a null write on the first block. Active buses get real channels in the process buffer;
+// Nota mixes only the main stereo pair and discards the rest, like a host with unrouted
+// outputs. Never use setPlayConfigDetails after this: it disables non-main buses again.
+// Message thread, before prepareToPlay.
+void enableEveryBus(juce::AudioPluginInstance& p) {
+    if (p.enableAllBuses()) return;
+    for (const bool isInput : { true, false })   // all-or-nothing failed: take what it accepts
+        for (int i = 1; i < p.getBusCount(isInput); ++i)
+            if (auto* bus = p.getBus(isInput, i); bus != nullptr && !bus->isEnabled()) bus->enable(true);
+}
+
+// Bus layout on stderr when NOTA_DEBUG_PLUGIN_BUSES is set — the first thing to ask for
+// when a hosted plugin crashes in process().
+void logBuses(const juce::AudioPluginInstance& p) {
+    static const bool dbg = std::getenv("NOTA_DEBUG_PLUGIN_BUSES") != nullptr;
+    if (!dbg) return;
+    for (const bool isInput : { true, false })
+        for (int i = 0; i < p.getBusCount(isInput); ++i)
+            if (auto* bus = p.getBus(isInput, i))
+                std::fprintf(stderr, "[nota buses] %s %s %d '%s' chans=%d enabled=%d\n",
+                             p.getName().toRawUTF8(), isInput ? "in" : "out", i, bus->getName().toRawUTF8(),
+                             bus->getLastEnabledLayout().size(), (int)bus->isEnabled());
+}
+
 // Message-thread producer -> audio-thread consumer. The editor window's computer
 // keyboard pushes note events here; the plugin adapter drains them in its audio
 // callback (keeps the plugin's own MidiBuffer audio-thread-only — no data race).
@@ -671,14 +726,13 @@ public:
         for (GuiNote g; guiNotes_.pop(g); )
             pending_.addEvent(g.on ? juce::MidiMessage::noteOn(1, g.pitch, g.velocity)
                                    : juce::MidiMessage::noteOff(1, g.pitch), 0);
-        const int nc = juce::jmin(storage_.getNumChannels(), kMaxChans);
         storage_.clear();
         float* ptrs[kMaxChans];
         juce::AudioBuffer<float> block(ptrs, pluginChannelPtrs(*plugin_, storage_, spare_.data(), frames, ptrs), frames);
         plugin_->processBlock(block, pending_);
         pending_.clear();
         const float* l = block.getReadPointer(0);
-        const float* r = nc > 1 ? block.getReadPointer(1) : l;
+        const float* r = stereoOut_ ? block.getReadPointer(1) : l;   // channel 1 of a mono main is another bus
         for (int i = 0; i < frames; ++i) { out[i * 2] += l[i]; out[i * 2 + 1] += r[i]; }
     }
 
@@ -737,11 +791,16 @@ private:
     void audioProcessorChanged(juce::AudioProcessor*, const juce::AudioProcessorListener::ChangeDetails&) override {}
 
     void prepare(double sr) {
-        plugin_->setPlayConfigDetails(0, 2, sr, maxBlock_);
+        // Stereo main output (instruments get no input of their own), then every other bus on.
+        if (plugin_->getBusCount(false) > 0) plugin_->setChannelLayoutOfBus(false, 0, juce::AudioChannelSet::stereo());
+        enableEveryBus(*plugin_);
+        logBuses(*plugin_);
+        plugin_->setRateAndBufferSizeDetails(sr, maxBlock_);
         plugin_->prepareToPlay(sr, maxBlock_);
         plugin_->setPlayHead(&playHead_);   // DAW transport sync
         // In and out share the buffer, so it spans the wider side.
         storage_.setSize(juce::jmax(2, plugin_->getTotalNumInputChannels(), plugin_->getTotalNumOutputChannels()), maxBlock_);
+        stereoOut_ = plugin_->getBusCount(false) > 0 && plugin_->getChannelCountOfBus(false, 0) > 1;
         spare_.assign((size_t)maxBlock_, 0.0f);
     }
 
@@ -751,6 +810,7 @@ private:
     std::vector<float> spare_;   // the channels past storage_ (see pluginChannelPtrs)
     juce::MidiBuffer pending_;
     int maxBlock_;
+    bool stereoOut_ = true;   // main output bus has a channel 1 (see prepare)
     std::string name_;   // cached plugin name for displayName()
     std::atomic<int32_t> lastTouched_{-1};   // "Learn" (M9-B3)
     std::atomic<int32_t> gestureBegin_{-1}, gestureEnd_{-1};   // write gestures (M9-C)
@@ -787,12 +847,19 @@ public:
                 if (plugin_->setBusesLayout(layout)) hasSidechain_ = true;
             }
         }
-        if (!hasSidechain_)
-            plugin_->setPlayConfigDetails(2, 2, sr, maxBlock_);
+        if (!hasSidechain_) {   // stereo main I/O
+            if (plugin_->getBusCount(true)  > 0) plugin_->setChannelLayoutOfBus(true,  0, juce::AudioChannelSet::stereo());
+            if (plugin_->getBusCount(false) > 0) plugin_->setChannelLayoutOfBus(false, 0, juce::AudioChannelSet::stereo());
+        }
+        enableEveryBus(*plugin_);   // an unused sidechain input is fed silence (storage_ cleared)
+        logBuses(*plugin_);
+        plugin_->setRateAndBufferSizeDetails(sr, maxBlock_);
         plugin_->prepareToPlay(sr, maxBlock_);
         const int chans = juce::jmax(2, juce::jmax(plugin_->getTotalNumInputChannels(),
                                                    plugin_->getTotalNumOutputChannels()));
         storage_.setSize(chans, maxBlock_);
+        stereoIn_  = plugin_->getBusCount(true)  > 0 && plugin_->getChannelCountOfBus(true,  0) > 1;
+        stereoOut_ = plugin_->getBusCount(false) > 0 && plugin_->getChannelCountOfBus(false, 0) > 1;
         spare_.assign((size_t)maxBlock_, 0.0f);
         if (hasSidechain_ && plugin_->getBus(true, 1) != nullptr) {
             scChanOffset_ = plugin_->getChannelIndexInProcessBlockBuffer(true, 1, 0);
@@ -808,7 +875,7 @@ public:
         const int nc = juce::jmin(storage_.getNumChannels(), kMaxChans);
         storage_.clear();
         float* l = storage_.getWritePointer(0);
-        float* r = nc > 1 ? storage_.getWritePointer(1) : l;
+        float* r = stereoIn_ ? storage_.getWritePointer(1) : spare_.data();   // mono main: drop R, don't feed the next bus
         for (int i = 0; i < frames; ++i) { l[i] = buf[i * 2]; r[i] = buf[i * 2 + 1]; }
 
         // Feed the sidechain input bus (Phase C) if the engine handed us a source
@@ -832,7 +899,7 @@ public:
         plugin_->processBlock(block, empty_);
 
         const float* ol = block.getReadPointer(0);
-        const float* orr = nc > 1 ? block.getReadPointer(1) : ol;
+        const float* orr = stereoOut_ ? block.getReadPointer(1) : ol;
         const float mix = sidechainMix();   // dry/wet of the plugin (Phase D)
         for (int i = 0; i < frames; ++i) {
             const float dl = buf[i * 2], dr = buf[i * 2 + 1];
@@ -914,6 +981,7 @@ private:
     std::vector<float> spare_;   // the channels past storage_ (see pluginChannelPtrs)
     juce::MidiBuffer empty_;
     int maxBlock_ = 0;
+    bool stereoIn_ = true, stereoOut_ = true;   // main buses have a channel 1 (see setSampleRate)
     EditorHost editor_; // declared last: destroyed before plugin_
 };
 
