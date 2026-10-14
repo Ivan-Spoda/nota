@@ -102,8 +102,28 @@ dotnet run --project src/managed/Nota.App
 The build scripts run the smoke test (`tests/Nota.SmokeTest`), which drives the engine
 end-to-end through the C ABI. **It must pass before you open a pull request.**
 
+## Branches
+
+- **`develop`** is where work lands. Branch from it and open your pull request against
+  it.
+- **`main`** holds released code only. It moves forward when a release is cut from
+  `develop`; pull requests straight into `main` are not accepted.
+
+Name your branch after the change — `feat/stereo-pan-law`, `fix/clip-fade-click` — and
+keep it up to date by rebasing on, or merging in, the latest `develop`. Pull requests are
+squash-merged, so the pull request title becomes the commit message on `develop`: write
+it in the same form as the existing history, `(feat) …`, `(fix) …`, `(docs) …`,
+`(chore) …`.
+
+## Continuous integration
+
+Every pull request is built on macOS, Windows and Linux, and the smoke test runs on each
+(`.github/workflows/ci.yml`). All three must pass before a pull request can be merged.
+If this is your first contribution, a maintainer approves the CI run before it starts.
+
 ## Pull requests
 
+- Target `develop`.
 - One logical change per pull request.
 - Match the style of the code around you. Comment headers explain *why* a file exists,
   not what each line does — keep that convention.

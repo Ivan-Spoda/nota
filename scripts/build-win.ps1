@@ -6,6 +6,9 @@
 # Usage: pwsh scripts/build-win.ps1
 
 $ErrorActionPreference = 'Stop'
+# Stop on a failing native command (cmake, dotnet, the smoke test) too — without this
+# a non-zero exit code is ignored and the script, and CI, report success. PowerShell 7.3+.
+$PSNativeCommandUseErrorActionPreference = $true
 Set-Location (Join-Path $PSScriptRoot '..')
 
 $Native = 'src/native/nota.engine/build'

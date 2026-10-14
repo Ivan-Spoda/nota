@@ -1,0 +1,89 @@
+name: CI
+
+# Builds the engine + managed solution and runs the smoke test on macOS, Windows and
+# Linux for every pull request into develop or main, and for every push to them. This is
+# the required status check for merging (branch rulesets on develop and main).
+#
+# Runs on `pull_request`, never `pull_request_target`: code from forks executes with a
+# read-only token and no secrets. Workflows from first-time contributors wait for a
+# maintainer's approval (Settings -> Actions -> General).
+#
+# The smoke test renders offline, so the runners need no audio hardware.
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same PR cancels the build still running for the old one.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    name: macOS
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive   # JUCE, flac
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v5   # rebuilds the Nota Remote phone page when its sources changed
+        with:
+          node-version: '22'
+      - name: Install build tools
+        run: brew install cmake ninja
+      - name: Build + smoke test
+        run: bash scripts/build.sh
+
+  windows:
+    name: Windows
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - uses: ilammy/msvc-dev-cmd@v1   # the "Developer PowerShell" environment build-win.ps1 expects
+        with:
+          arch: x64
+      - name: Install Ninja
+        run: choco install ninja --no-progress -y
+      - name: Build + smoke test
+        run: pwsh scripts/build-win.ps1
+
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Install build deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build build-essential \
+            libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libfreetype6-dev libfontconfig1-dev
+      - name: Build + smoke test
+        run: bash scripts/build-linux.sh
