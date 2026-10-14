@@ -22,13 +22,14 @@ public sealed class TrackFreezer
         double restoreBeat = engine.PositionBeats;
         double loopStart = engine.LoopStart, loopEnd = engine.LoopEnd; // preserve the loop region
 
+        bool wasRunning = engine.IsRunning; // restart afterwards only what was running
         engine.Stop();               // halt the audio backend: no audio thread during capture
         engine.SetLoop(false, 0, 0); // capture the whole range once, no wrap
         engine.SetMetronome(false);  // keep clicks out of the freeze
         engine.StopTransport();
 
         long total = engine.BeginFreeze(trackId, lengthBeats);
-        if (total <= 0) { Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat); return false; }
+        if (total <= 0) { Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat, wasRunning); return false; }
 
         try
         {
@@ -56,11 +57,11 @@ public sealed class TrackFreezer
         catch
         {
             engine.CancelFreeze();
-            Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat);
+            Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat, wasRunning);
             throw;
         }
 
-        Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat);
+        Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat, wasRunning);
         progress?.Report(1.0);
         return true;
     }
@@ -76,13 +77,14 @@ public sealed class TrackFreezer
         double restoreBeat = engine.PositionBeats;
         double loopStart = engine.LoopStart, loopEnd = engine.LoopEnd;
 
+        bool wasRunning = engine.IsRunning;
         engine.Stop();
         engine.SetLoop(false, 0, 0);
         engine.SetMetronome(false);
         engine.StopTransport();
 
         long total = engine.BeginBounce(trackId, endBeat - startBeat);
-        if (total <= 0) { Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat); return null; }
+        if (total <= 0) { Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat, wasRunning); return null; }
 
         float[] pcm;
         try
@@ -108,22 +110,22 @@ public sealed class TrackFreezer
         catch
         {
             engine.CancelFreeze();
-            Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat);
+            Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat, wasRunning);
             throw;
         }
 
-        Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat);
+        Restore(engine, restoreLoop, restoreMetronome, loopStart, loopEnd, restoreBeat, wasRunning);
         progress?.Report(1.0);
         return pcm;
     }
 
     private static void Restore(IAudioEngine engine, bool loop, bool metronome,
-                                double loopStart, double loopEnd, double beat)
+                                double loopStart, double loopEnd, double beat, bool wasRunning)
     {
         engine.StopTransport();
         engine.Seek(beat);
         engine.SetLoop(loop, loopStart, loopEnd);
         engine.SetMetronome(metronome);
-        engine.Start();              // resume live audio at the device sample rate
+        if (wasRunning) engine.Start(); // resume live audio — only if it was live before
     }
 }

@@ -58,6 +58,11 @@ double nota_engine_sample_rate(const NotaEngine* engine) {
     return reinterpret_cast<const Engine*>(engine)->sampleRate();
 }
 
+int32_t nota_engine_is_running(const NotaEngine* engine) {
+    if (!engine) return 0;
+    return reinterpret_cast<const Engine*>(engine)->isRunning() ? 1 : 0;
+}
+
 // ---- Audio preview / audition (M7-4a) -------------------------------------
 
 NotaResult nota_engine_preview_file(NotaEngine* e, const char* path) {

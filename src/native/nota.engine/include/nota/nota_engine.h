@@ -222,6 +222,11 @@ NOTA_API NotaResult nota_engine_set_frequency(NotaEngine* engine, float hz);
 /* Current output sample rate (0 if not started). Informational. */
 NOTA_API double nota_engine_sample_rate(const NotaEngine* engine);
 
+/* 1 while the output device is open and the audio thread runs (between a successful
+ * nota_engine_start and nota_engine_stop), else 0. Offline work that stops the backend
+ * reads it first so it restarts only what was running. */
+NOTA_API int32_t nota_engine_is_running(const NotaEngine* engine);
+
 /* ---- Audio preview / audition (M7-4a) ------------------------------------
  * Decode a file and mix it into the live output without a track, for browser
  * auditioning. One preview at a time; needs the backend running to be heard. */

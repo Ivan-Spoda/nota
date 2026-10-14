@@ -36,6 +36,16 @@ public sealed partial class NotaEngine : IAudioEngine
         }
     }
 
+    /// <summary>True while the output device is open and the audio thread runs.</summary>
+    public bool IsRunning
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return NativeMethods.IsRunning(_handle) != 0;
+        }
+    }
+
     /// <summary>Open the default output device and start the audio thread.</summary>
     public void Start()
     {

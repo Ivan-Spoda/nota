@@ -23,6 +23,7 @@ public sealed class AudioExporter : IAudioExporter
         int sr = r.SampleRate;
         long totalFrames = FramesFor(r);
 
+        bool wasRunning = engine.IsRunning; // restart afterwards only what was running
         engine.Stop();               // halt the audio backend: no audio thread during render
         engine.SetLoop(false, 0, 0); // don't wrap; render the whole range once
         engine.SetMetronome(false);  // keep clicks out of the bounce
@@ -50,7 +51,7 @@ public sealed class AudioExporter : IAudioExporter
                              0.0, 1.0);
         }
 
-        Restore(engine, r);
+        Restore(engine, r, wasRunning);
         progress?.Report(1.0);
     }
 
@@ -69,6 +70,7 @@ public sealed class AudioExporter : IAudioExporter
         var savedMute = new bool[tracks.Count];
         for (int i = 0; i < tracks.Count; i++) savedMute[i] = tracks[i].Muted != 0;
 
+        bool wasRunning = engine.IsRunning;
         engine.Stop();
         engine.SetLoop(false, 0, 0);
         engine.SetMetronome(false);
@@ -100,7 +102,7 @@ public sealed class AudioExporter : IAudioExporter
         }
 
         for (int j = 0; j < count; j++) engine.SetTrackMute(tracks[j].Id, savedMute[j]); // restore mutes
-        Restore(engine, r);
+        Restore(engine, r, wasRunning);
         progress?.Report(1.0);
         return written;
     }
@@ -330,12 +332,14 @@ public sealed class AudioExporter : IAudioExporter
     private static long FramesFor(ExportRequest r)
         => (long)System.Math.Ceiling(r.TotalBeats * (r.SampleRate * 60.0 / r.Bpm));
 
-    private static void Restore(IAudioEngine engine, ExportRequest r)
+    private static void Restore(IAudioEngine engine, ExportRequest r, bool wasRunning)
     {
         engine.StopTransport();
         engine.Seek(0);
         engine.SetLoop(r.RestoreLoop, 0, 16);
         engine.SetMetronome(r.RestoreMetronome);
-        engine.Start();              // resume live audio at the device sample rate
+        // Resume live audio at the device sample rate — only if it was live: an engine that
+        // was never started (headless, no output device) has nothing to resume.
+        if (wasRunning) engine.Start();
     }
 }

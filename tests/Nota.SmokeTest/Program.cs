@@ -8446,8 +8446,8 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
 }
 
 // -- export normalize (−1 dBTP true peak) via AudioExporter ---------------
-// Own engine: ExportMaster start()s the backend on Restore, so keep it off the
-// shared `engine` (a later test asserts its backend was never started).
+// Own engine, never started: the export must leave its backend stopped — restarting it
+// threw on machines without an output device (.specify/bugs/export-restart-headless).
 {
     using var ne = new NotaEngine();
     ne.SetBpm(120); ne.SetTimeSignature(4, 4);
@@ -8459,7 +8459,9 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
     string nPath = Path.Combine(Path.GetTempPath(), "nota_normalize_test.wav");
     var req = new ExportRequest(nPath, 2.0, 120.0, 48000, WavBitDepth.Float32,
         RestoreLoop: false, RestoreMetronome: false, Normalize: true, Dither: false);
+    bool neIdle = !ne.IsRunning;
     exporter.ExportMaster(ne, req);
+    Check(neIdle && !ne.IsRunning, "export leaves a backend that was never started stopped");
 
     var nraw = File.ReadAllBytes(nPath);
     int ndata = BitConverter.ToInt32(nraw, 40);
@@ -8637,6 +8639,7 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
                                                                      Format: ExportFormat.Flac));
         var files = Directory.GetFiles(dir, "*.flac");
         Check(n == 2 && files.Length == 2, $"FLAC stems wrote one file per track ({n} reported, {files.Length} found)");
+        Check(!se.IsRunning, "stem export leaves a backend that was never started stopped");
         var decoded = files.Select(f => NotaEngine.DecodeMono(f, 10.0, out _)).ToList();
         Check(decoded.All(d => d is not null && d.Length > 48000), "every FLAC stem decodes to full length");
         if (decoded.All(d => d is not null))
@@ -8648,6 +8651,23 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
         }
     }
     finally { try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { } }
+}
+
+// -- freeze / bounce on an engine that was never started (export-restart-headless) --
+// TrackFreezer stops the backend for the capture and used to start it unconditionally
+// afterwards, which threw with no output device. It must restore what was there: nothing.
+{
+    using var fz = new NotaEngine();
+    fz.SetBpm(120); fz.SetTimeSignature(4, 4);
+    int fzTrk = fz.AddInstrumentTrack();
+    int fzClip = fz.AddMidiClip(fzTrk, 0.0, 2.0);
+    fz.SetClipNotes(fzTrk, fzClip, new[] { new NotaNote(60, 0.0, 2.0, 0.9f) });
+    var freezer = new TrackFreezer();
+    bool fzIdle = !fz.IsRunning;
+    var bounced = freezer.BounceRange(fz, fzTrk, 0.0, 2.0, restoreLoop: false, restoreMetronome: false);
+    Check(fzIdle && bounced is { Length: > 0 } && !fz.IsRunning, "bounce leaves a backend that was never started stopped");
+    bool frozen = freezer.Freeze(fz, fzTrk, 2.0, restoreLoop: false, restoreMetronome: false);
+    Check(frozen && !fz.IsRunning, "freeze leaves a backend that was never started stopped");
 }
 
 // -- M6-2: level meters (post-fader peak/RMS, master + per-track) --

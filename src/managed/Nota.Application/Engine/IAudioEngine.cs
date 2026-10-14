@@ -15,6 +15,8 @@ public interface IAudioEngine : IDisposable
 {
     // --- Device / diagnostics ---------------------------------------------
     double SampleRate { get; }
+    /// <summary>True while the output device is open and the audio thread runs.</summary>
+    bool IsRunning { get; }
     void Start();
     void Stop();
     void SetTestTone(bool enabled);

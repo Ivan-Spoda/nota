@@ -80,6 +80,7 @@ public:
     bool   start();
     void   stop();
     double sampleRate() const { return backend_ ? backend_->sampleRate() : 0.0; }
+    bool   isRunning() const  { return backend_ && backend_->isRunning(); }
 
     // --- audio device settings (M7-1) ---
     // The chosen device/rate/buffer live in config_ (persisted to audio.json)

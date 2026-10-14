@@ -51,6 +51,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_sample_rate")]
     internal static partial double SampleRate(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_is_running")]
+    internal static partial int IsRunning(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_transport_play")]
     internal static partial NotaResult TransportPlay(IntPtr engine);
 
