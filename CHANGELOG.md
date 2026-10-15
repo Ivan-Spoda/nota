@@ -22,7 +22,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.55.1] — 2026-10-15
+
 ### Added
+- **Resizable tracks in the arrangement** (nota-daw/nota#52): drag the bottom edge of a
+  track — in its header or its lane — to make it taller or shorter (30 to 256 px; it
+  snaps lightly to the Compact, Standard and Large sizes). Drag with several tracks
+  selected to resize them all together, hold **Alt** (**Option** on macOS) to resize every
+  track at once, and double-click the edge to go back to the standard height. The track's
+  context menu has **Track height** with the three sizes for the selection or for all
+  tracks. Clips, waveforms and automation grow with the row.
+- **Track headers that fit their height:** a short track shows its name and mute, solo
+  and record-arm on one line; a standard one looks as before; a tall one gives the input
+  or MIDI source, the volume fader and the pan a row each.
+- **Resizable track list:** drag the seam between the track headers and the lanes to
+  widen or narrow the header column (160 to 480 px); double-click it to reset. Track
+  heights and the column width are saved with the project.
 - **Colour themes:** Preferences → Appearance now offers colour themes — Studio Dark,
   Studio Light, and **Ember Graphite** / **Ember Paper**, the warm browns and brass of
   Nota's earlier look, on the new layout. Choose **Dark**, **Light** or **Follow system**,
@@ -82,6 +97,20 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   chain.
 
 ### Fixed
+- **One settings folder on Linux:** Nota kept its files in two folders, `~/.config/nota`
+  and `~/.config/Nota`; the audio and MIDI device choice and the plugin list went to the
+  second. Everything now lives in `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`), and on the
+  first launch Nota moves the files over from `~/.config/Nota` — nothing to set up again.
+- **Popping out the piano roll no longer crashes on Linux:** opening Devices / Clip in its
+  own window could close Nota at once on Linux ("Attempt to call InvalidateArrange on wrong
+  LayoutManager"). The editor's pending layout in the main window is now finished before it
+  moves to the new window, and the same on the way back.
+- **The transport meter says what it measures:** it read "CPU" but showed only the audio
+  engine's load, so it sat far below the system monitor. It is now labelled **DSP** — the
+  share of each audio buffer the engine needs, which is what causes dropouts — and its
+  tooltip adds the CPU used by the whole Nota process over the last few seconds, in the
+  same scale as your system monitor (Windows: of all CPUs; macOS and Linux: of one core).
+  Instrument cards that showed the engine load now say DSP too.
 - **Less CPU while idle:** Nota no longer redraws its meters, playhead and CPU read-out
   ~30 times a second when nothing on them has changed. It skips them entirely while the
   window is minimized, and on Linux the plug-in message pump slows down when no plug-in
