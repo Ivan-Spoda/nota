@@ -83,7 +83,7 @@ function Find-ISCC {
     return $null
 }
 $iscc = Find-ISCC
-if (-not $iscc) { throw "Inno Setup (ISCC.exe) not found — install Inno Setup 6.3+ (winget install JRSoftware.InnoSetup)." }
+if (-not $iscc) { throw "Inno Setup (ISCC.exe) not found — install Inno Setup 6/7 (winget install JRSoftware.InnoSetup)." }
 Write-Host "    using $iscc"
 & $iscc "/DAppVersion=$Version" "/DArch=$Arch" "/DPubDir=$PubDir" (Join-Path $PSScriptRoot 'nota.iss')
 
