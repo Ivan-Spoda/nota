@@ -99,7 +99,7 @@ internal sealed class SnapChip
         _shown = key;
 
         _value.Text = text;
-        if (_caption is not null) _caption.Text = s.Adaptive ? "AUTO GRID" : "GRID";
+        if (_caption is not null) _caption.Text = s.Adaptive ? "Auto grid" : "Grid";
         _value.TextDecorations = r.SnapOn ? null : TextDecorations.Strikethrough;
         _value.Foreground = !r.SnapOn ? NotaPalette.TextDisabled
             : r.FinerThanVisible ? NotaPalette.TextSecondary
@@ -118,7 +118,7 @@ internal sealed class SnapChip
         void Item(string header, bool on, Func<GridSetting, GridSetting> apply, KeyGesture? gesture = null)
         {
             var mi = new MenuItem { Header = header, InputGesture = gesture };
-            if (on) mi.Icon = new Glyph(GlyphKind.Dot, 6) { Foreground = NotaPalette.AccentBright };
+            if (on) mi.Icon = new Glyph(GlyphKind.Dot, 6) { Foreground = NotaPalette.TextPrimary };
             mi.Click += (_, _) => Grids.Set(_kind, apply(Grids.Get(_kind)));
             f.Items.Add(mi);
         }

@@ -16,7 +16,7 @@
 //   Rail 186    Output: Poly / Mono, tune, fine and note-off rows, volume, pan and the
 //               track's meter.
 //
-// Brass is the parameter itself; teal is modulation. Everything is a plugin param →
+// Neutral ink is the parameter itself; teal is modulation. Everything is a plugin param →
 // automation / persist / clone, and the card follows automation live.
 
 using System;
@@ -34,7 +34,7 @@ namespace Nota.App;
 internal sealed class PhysicalInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
-    public string Subtitle => "MODAL";
+    public string Subtitle => "Modal";
     public double CardWidth => 700;
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active)
@@ -91,8 +91,8 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
 
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold,
-            LetterSpacing = NotaType.KnobLabelTracking, Foreground = c ?? TextTertiary,
+            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
@@ -121,7 +121,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             double f0 = n > 2 && scope[2] > 0 ? scope[2] : 261.63;
             string pre = bank == 0 ? "r1" : "r2";
             int audible = PhysicalModel.AudiblePartials(mine, f0, sr);
-            partials.Set($"PARTIALS · {TypeWord(pre).ToUpperInvariant()}", mine, r2 ? other : Array.Empty<(double, double, double)>(),
+            partials.Set($"Partials · {TypeWord(pre).ToLowerInvariant()}", mine, r2 ? other : Array.Empty<(double, double, double)>(),
                 sr * 0.49 / f0, $"{audible} partials · inharm {NotaNum.Pct(G(pre + "inharm"))}", bank == 1 && !r2);
         }
 
@@ -372,7 +372,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
                 bool on = i == tab;
                 tabCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
                 tabCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                tabTexts[i].Foreground = on ? AccentBright : TextTertiary;
+                tabTexts[i].Foreground = on ? TextPrimary : TextTertiary;
                 tabTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 bodies[i].IsVisible = on;
             }
@@ -515,7 +515,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
 
         DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.Gutter, Children = { statusHost, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
 
         ctx.SetInstLiveViz(Refresh);
         showTab();
@@ -523,11 +523,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
     }
 
     // A device section: card ground, hairline, radius 6 — the almanac's section box.
-    private static Border SectionBox(Control child) => new()
-    {
-        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = child,
-    };
+    private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
 
     // A section's own header strip: a hairline under it, nothing else.
     private static Border HeaderStrip(Control child) => new()

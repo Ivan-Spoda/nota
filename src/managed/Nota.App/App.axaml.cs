@@ -58,6 +58,7 @@ public partial class App : Avalonia.Application
         services.AddSingleton<GamepadService>();
         services.AddSingleton<IGamepadService>(sp => sp.GetRequiredService<GamepadService>());
         services.AddSingleton<IAudioExporter, AudioExporter>();
+        services.AddSingleton<IProcessCpu, ProcessCpuSampler>();
         // UI-thread timer factory lives in the App layer (over DispatcherTimer).
         services.AddSingleton<IPeriodicTimerFactory, AvaloniaPeriodicTimerFactory>();
         services.AddSingleton<RecoveryService>();
@@ -88,9 +89,11 @@ public partial class App : Avalonia.Application
             e.SetObserved();
         };
 
-        // Palette variant (Preferences → Appearance), applied before the first window
-        // paints so nothing flashes graphite on the way to paper.
-        NotaThemeService.Set(Services.GetRequiredService<ISettingsService>().Current.Theme);
+        // Colour theme (Preferences → Appearance), applied before the first window paints so
+        // nothing flashes one theme on the way to another. Old Dark / Light / System
+        // settings resolve onto the Studio themes (Appearance.Resolve).
+        foreach (var err in NotaThemes.LoadErrors) log.Error($"Colour theme skipped — {err}", null);
+        NotaThemeService.Set(Appearance.Resolve(Services.GetRequiredService<ISettingsService>().Current, NotaThemeService.KnownThemes));
 
         // Nota Mosaic's samples resolve against the Samples and data folders; installed sample
         // packs get their Mosaic presets in the background (once per pack version).
@@ -109,10 +112,17 @@ public partial class App : Avalonia.Application
         // Linux: JUCE's message loop isn't shared with Avalonia's (it is on macOS/Windows),
         // so hosted plugins' editors and timers only run when we service it. Without this,
         // plugin windows stay black and unclosable and plugins stay silent.
+        // Paced: 10 ms while plugins post messages, 100 ms once the queue stays empty (#55).
         if (OperatingSystem.IsLinux())
         {
-            var pump = new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(10),
-                Avalonia.Threading.DispatcherPriority.Normal, (_, _) => NotaEngine.PumpPluginHost());
+            var pacer = new PumpPacer();
+            Avalonia.Threading.DispatcherTimer? pump = null;
+            pump = new Avalonia.Threading.DispatcherTimer(PumpPacer.Fast,
+                Avalonia.Threading.DispatcherPriority.Normal, (_, _) =>
+                {
+                    var next = pacer.Next(NotaEngine.PumpPluginHost());
+                    if (pump!.Interval != next) pump.Interval = next;
+                });
             pump.Start();
         }
 

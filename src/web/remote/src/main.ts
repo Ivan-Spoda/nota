@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { mount } from 'svelte';
+import 'virtual:nota-theme.css';   // first-paint colours, from the theme files
 import './app.css';
 import App from './App.svelte';
 import { app } from './lib/app.svelte';

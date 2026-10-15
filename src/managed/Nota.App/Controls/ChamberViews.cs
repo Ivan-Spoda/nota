@@ -27,10 +27,10 @@ internal static class ChamberInk
     public static readonly IBrush Veil = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0xB8);
     public static readonly IBrush GridLine = NotaPalette.SurfaceCard;
     private static readonly Typeface Mono = NotaFonts.Mono;
-    private static readonly Typeface Sans = NotaFonts.SansBold;
+    private static readonly Typeface Sans = NotaFonts.SansSemiBold;
 
     public static FormattedText Text(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, b);
-    public static FormattedText Caps(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
+    public static FormattedText Caps(string s, double size, IBrush b) => new(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
     public static IBrush Alpha(Color c, byte a) => new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B));
 
     // A time axis that stays put while the content moves inside it (so turning a knob visibly
@@ -49,8 +49,9 @@ internal static class ChamberInk
     public static double DbHeight(double v, double floorDb = 60) => Math.Clamp((20 * Math.Log10(Math.Max(v, 1e-9)) + floorDb) / floorDb, 0, 1);
 }
 
-// A vertical fader. Split = the BLEND C/A fader: slate (convolution) above the handle, brass
-// (algorithm) below, value = the algorithm share. Otherwise a brass fill from the bottom.
+// A vertical fader. Split = the BLEND C/A fader: slate (convolution) above the handle, neutral
+// ink (algorithm) below, value = the algorithm share. Otherwise a neutral fill from the bottom;
+// the handle turns accent while dragged.
 internal sealed class ChamberFader : Control
 {
     private double _v;
@@ -84,7 +85,11 @@ internal sealed class ChamberFader : Control
     }
     protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (_drag) Apply(e); }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { base.OnPointerReleased(e); if (_drag) { _drag = false; e.Pointer.Capture(null); DragEnded?.Invoke(); } }
+    { base.OnPointerReleased(e); if (_drag) { _drag = false; InvalidateVisual(); e.Pointer.Capture(null); DragEnded?.Invoke(); } }
+
+    // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    { if (_drag) { _drag = false; InvalidateVisual(); DragEnded?.Invoke(); } base.OnPointerCaptureLost(e); }
 
     public override void Render(DrawingContext ctx)
     {
@@ -97,16 +102,16 @@ internal sealed class ChamberFader : Control
         using (ctx.PushClip(new RoundedRect(rect, r)))
         {
             if (Split) ctx.FillRectangle(ChamberInk.Alpha(ChamberInk.SlateColor, 0x59), new Rect(0, 0, w, y));
-            ctx.FillRectangle(ChamberInk.Alpha(NotaPalette.AccentColor, 0x48), new Rect(0, y, w, h - y));
+            ctx.FillRectangle(NotaPalette.Wash(NotaPalette.VizInk, 0x30), new Rect(0, y, w, h - y));
         }
         ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), rect, r, r);
         double hy = Math.Clamp(y, 1.5, h - 2.5);
-        ctx.DrawRectangle(Split ? NotaPalette.AccentBright : NotaPalette.Accent, null, new Rect(1.5, hy - 1, w - 3, 2), 1, 1);
+        ctx.DrawRectangle(_drag ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(1.5, hy - 1, w - 3, 2), 1, 1);
     }
 }
 
-// The IR: a peak envelope of the source (left / LL above the centre line in brass, right / RR
-// below in mauve), veiled outside the Start … Decay window. Drag a trim line to move it,
+// The IR: a peak envelope of the source (left / LL above the centre line in neutral ink, right / RR
+// below in teal), veiled outside the Start … Decay window. Drag a trim line to move it,
 // double-click to reset both. Drop an audio file (Finder or the browser) to load it.
 internal sealed class ChamberIrView : Control
 {
@@ -186,6 +191,9 @@ internal sealed class ChamberIrView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     { base.OnPointerReleased(e); if (_drag != 0) { int d = _drag; _drag = 0; e.Pointer.Capture(null); DragEnded?.Invoke(d); } }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    { if (_drag != 0) { int d = _drag; _drag = 0; InvalidateVisual(); DragEnded?.Invoke(d); } base.OnPointerCaptureLost(e); }
+
     private static string Sec(double s) => s >= 1 ? NotaNum.F($"{s:0.00}\u2009s") : NotaNum.F($"{s * 1000:0}\u2009ms");
 
     public override void Render(DrawingContext ctx)
@@ -220,7 +228,7 @@ internal sealed class ChamberIrView : Control
             }
             ctx.DrawGeometry(null, new Pen(ChamberInk.Alpha(c, (byte)(255 * alphaLine)), 1.1), line);
         }
-        Env(_l, true, NotaPalette.AccentColor, 1.0);
+        Env(_l, true, NotaPalette.VizInk.Color, 1.0);
         // Left and right in the first two chromas; the second at 70% (almanac § oscillogram).
         Env(_r.Length > 0 ? _r : _l, false, NotaPalette.TealColor, 0.7);
 
@@ -235,23 +243,24 @@ internal sealed class ChamberIrView : Control
                 c.BeginFigure(new Point(xs, h - 2), false);
                 for (int i = 1; i <= 16; i++) { double t = i / 16.0; c.LineTo(new Point(xs + (xa - xs) * t, h - 2 - (h - 4) * t * t)); }
             }
-            ctx.DrawGeometry(null, new Pen(ChamberInk.Alpha(NotaPalette.AccentBrightColor, 0x90), 1, new DashStyle(new double[] { 2, 2 }, 0)), g);
+            ctx.DrawGeometry(null, new Pen(ChamberInk.Alpha(NotaPalette.VizInk.Color, 0x90), 1, new DashStyle(new double[] { 2, 2 }, 0)), g);
         }
         ctx.FillRectangle(ChamberInk.Veil, new Rect(0, 0, xs, h));
         ctx.FillRectangle(ChamberInk.Veil, new Rect(xe, 0, w - xe, h));
-        var brass = new Pen(NotaPalette.Accent, 1);
-        ctx.DrawLine(brass, new Point(xs + 0.5, 0), new Point(xs + 0.5, h));
-        ctx.DrawLine(brass, new Point(xe - 0.5, 0), new Point(xe - 0.5, h));
-        ctx.DrawRectangle(_drag == 1 ? NotaPalette.AccentBright : NotaPalette.Accent, null, new Rect(xs - 1.5, mid - 7, 3, 14), 1.5, 1.5);
-        ctx.DrawRectangle(_drag == 2 ? NotaPalette.AccentBright : NotaPalette.Accent, null, new Rect(xe - 1.5, mid - 7, 3, 14), 1.5, 1.5);
+        // Trims rest in neutral ink; the one being dragged turns accent.
+        var trim = new Pen(NotaPalette.VizInk, 1);
+        ctx.DrawLine(_drag == 1 ? new Pen(NotaPalette.Accent, 1) : trim, new Point(xs + 0.5, 0), new Point(xs + 0.5, h));
+        ctx.DrawLine(_drag == 2 ? new Pen(NotaPalette.Accent, 1) : trim, new Point(xe - 0.5, 0), new Point(xe - 0.5, h));
+        ctx.DrawRectangle(_drag == 1 ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(xs - 1.5, mid - 7, 3, 14), 1.5, 1.5);
+        ctx.DrawRectangle(_drag == 2 ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(xe - 1.5, mid - 7, 3, 14), 1.5, 1.5);
 
-        var st = ChamberInk.Text(NotaNum.F($"start {Sec(_start * _sec)}"), 7, NotaPalette.AccentBright);
+        var st = ChamberInk.Text(NotaNum.F($"start {Sec(_start * _sec)}"), 7, _drag == 1 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         ctx.DrawText(st, new Point(Math.Min(xs + 4, w - st.Width - 2), 2));
-        var en = ChamberInk.Text(NotaNum.F($"end {Sec(_end * _sec)}"), 7, NotaPalette.AccentBright);
+        var en = ChamberInk.Text(NotaNum.F($"end {Sec(_end * _sec)}"), 7, _drag == 2 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         ctx.DrawText(en, new Point(Math.Max(2, xe - en.Width - 4), h - en.Height - 2));
         if (_reverse)
         {
-            var rv = ChamberInk.Text("REVERSED", 7, ChamberInk.Mauve);
+            var rv = ChamberInk.Text("Reversed", 7, ChamberInk.Mauve);
             double rx = (xs + xe - rv.Width - 9) / 2;
             Glyph.Draw(ctx, GlyphKind.StepLeft, new Rect(rx, 2 + (rv.Height - 6) / 2, 6, 6), ChamberInk.Mauve);
             ctx.DrawText(rv, new Point(rx + 9, 2));
@@ -297,7 +306,7 @@ internal sealed class ChamberIrView : Control
                 }
                 f.LineTo(new Point(Math.Min(w, X(_preSec + _resSec)), bot));
             }
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Accent, 1), line);
+            ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, 1), line);
             if (_preSec > 0.0005)
             {
                 ctx.DrawLine(new Pen(NotaPalette.Teal, 1, new DashStyle(new double[] { 2, 2 }, 0)), new Point(x0, top + 2), new Point(x0, full));
@@ -306,7 +315,7 @@ internal sealed class ChamberIrView : Control
             }
             if (_preSec + _resSec > axis * 1.001)
             {
-                Glyph.Draw(ctx, GlyphKind.ChevronRight, new Rect(w - 9, peakY - 1, 7, 7), NotaPalette.AccentBright);
+                Glyph.Draw(ctx, GlyphKind.ChevronRight, new Rect(w - 9, peakY - 1, 7, 7), NotaPalette.TextSecondary);
             }
         }
         var len = ChamberInk.Text(NotaNum.F($"as heard · {_resSec:0.00}\u2009s · axis {ChamberInk.AxisLabel(axis)}"), 7, NotaPalette.TextDisabled);
@@ -326,7 +335,7 @@ internal sealed class ChamberDecayGraph : Control
     private float[] _echo = Array.Empty<float>();
     private double _echoSec;
     private string _info = "";
-    private static readonly IBrush[] Ink = { ChamberInk.Mauve, NotaPalette.Accent, NotaPalette.Teal };
+    private static readonly IBrush[] Ink = { ChamberInk.Mauve, NotaPalette.VizInk, NotaPalette.Teal };
     private static readonly string[] Names = { "low", "mid", "high" };
 
     public event Action<int, double>? Changed;   // band, RT60 seconds
@@ -370,7 +379,10 @@ internal sealed class ChamberDecayGraph : Control
         Changed?.Invoke(_drag, _rt[_drag]); InvalidateVisual();
     }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { base.OnPointerReleased(e); if (_drag >= 0) { int b = _drag; _drag = -1; e.Pointer.Capture(null); DragEnded?.Invoke(b); } }
+    { base.OnPointerReleased(e); if (_drag >= 0) { int b = _drag; _drag = -1; InvalidateVisual(); e.Pointer.Capture(null); DragEnded?.Invoke(b); } }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    { if (_drag >= 0) { int b = _drag; _drag = -1; InvalidateVisual(); DragEnded?.Invoke(b); } base.OnPointerCaptureLost(e); }
 
     private static string S(double s) => s >= 10 ? NotaNum.F($"{s:0}\u2009s") : NotaNum.F($"{s:0.0}\u2009s");
 
@@ -408,14 +420,14 @@ internal sealed class ChamberDecayGraph : Control
                 }
                 f.LineTo(new Point(Math.Min(w, X(_pre + _echoSec)), bot));
             }
-            ctx.DrawGeometry(null, new Pen(ChamberInk.Alpha(NotaPalette.AccentColor, 0x60), 0.8), line);
+            ctx.DrawGeometry(null, new Pen(ChamberInk.Alpha(NotaPalette.VizInk.Color, 0x60), 0.8), line);
         }
 
         // legend (right-aligned): swatch + "low 6.1 s"
         double lx = w - 5;
         for (int b = 2; b >= 0; b--)
         {
-            var t = ChamberInk.Text(NotaNum.F($"{Names[b]} {(_freeze ? "∞" : S(_rt[b]))}"), 7, b == 1 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+            var t = ChamberInk.Text(NotaNum.F($"{Names[b]} {(_freeze ? "∞" : S(_rt[b]))}"), 7, b == 1 ? NotaPalette.TextPrimary : NotaPalette.TextSecondary);
             lx -= t.Width; ctx.DrawText(t, new Point(lx, 3));
             lx -= 11; ctx.FillRectangle(Ink[b], new Rect(lx, 7, 8, 2));
             lx -= 8;
@@ -440,7 +452,7 @@ internal sealed class ChamberDecayGraph : Control
             if (!_freeze)
             {
                 double hx = Math.Clamp(X(_pre + _rt[b]), 4, w - 4);
-                ctx.DrawEllipse(Ink[b], new Pen(NotaPalette.BgSunken, 2), new Point(hx, bot - 1), _drag == b ? 4.5 : 3.5, _drag == b ? 4.5 : 3.5);
+                ctx.DrawEllipse(_drag == b ? NotaPalette.Accent : Ink[b], new Pen(NotaPalette.BgSunken, 2), new Point(hx, bot - 1), _drag == b ? 4.5 : 3.5, _drag == b ? 4.5 : 3.5);
             }
         }
         var tm = ChamberInk.Text(ChamberInk.AxisLabel(_tmax), 7, NotaPalette.TextDisabled);
@@ -449,7 +461,7 @@ internal sealed class ChamberDecayGraph : Control
 }
 
 // TAIL EQ response (log 30 Hz … 18 kHz, ±20 dB): low cut + low shelf, high shelf + high cut
-// (the same RBJ biquads the engine runs). Handle 0 (brass) = low cut (X) + low shelf gain (Y);
+// (the same RBJ biquads the engine runs). Handle 0 (neutral ink) = low cut (X) + low shelf gain (Y);
 // handle 1 = high cut (X) + high shelf gain (Y).
 internal sealed class ChamberEqCurve : Control
 {
@@ -496,7 +508,10 @@ internal sealed class ChamberEqCurve : Control
         InvalidateVisual();
     }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { base.OnPointerReleased(e); if (_drag >= 0) { int d = _drag; _drag = -1; e.Pointer.Capture(null); DragEnded?.Invoke(d); } }
+    { base.OnPointerReleased(e); if (_drag >= 0) { int d = _drag; _drag = -1; InvalidateVisual(); e.Pointer.Capture(null); DragEnded?.Invoke(d); } }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    { if (_drag >= 0) { int d = _drag; _drag = -1; InvalidateVisual(); DragEnded?.Invoke(d); } base.OnPointerCaptureLost(e); }
 
     // |H| (dB) of the four stages at f.
     private double Db(double f)
@@ -555,7 +570,7 @@ internal sealed class ChamberEqCurve : Control
             }
             fc.LineTo(new Point(w, h / 2));
         }
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Accent, NotaGraph.PrimaryWidth), line);
+        ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, NotaGraph.PrimaryWidth), line);
 
         var t0 = ChamberInk.Text("30", 7, NotaPalette.TextDisabled);
         ctx.DrawText(t0, new Point(4, h - t0.Height - 2));
@@ -565,8 +580,8 @@ internal sealed class ChamberEqCurve : Control
         var ring = new Pen(NotaPalette.BgSunken, 2);
         double hx0 = Math.Clamp(X(LowCutHz(_lc)), 4, w - 4), hy0 = Math.Clamp(Y((_lg - 0.5) * 36), 4, h - 4);
         double hx1 = Math.Clamp(X(HighCutHz(_hc)), 4, w - 4), hy1 = Math.Clamp(Y((_hs - 0.5) * 36), 4, h - 4);
-        ctx.DrawEllipse(NotaPalette.AccentBright, ring, new Point(hx0, hy0), _drag == 0 ? 4.5 : 3.8, _drag == 0 ? 4.5 : 3.8);
-        ctx.DrawEllipse(NotaPalette.TextSecondary, ring, new Point(hx1, hy1), _drag == 1 ? 4.5 : 3.8, _drag == 1 ? 4.5 : 3.8);
+        ctx.DrawEllipse(_drag == 0 ? NotaPalette.Accent : NotaPalette.VizInk, ring, new Point(hx0, hy0), _drag == 0 ? 4.5 : 3.8, _drag == 0 ? 4.5 : 3.8);
+        ctx.DrawEllipse(_drag == 1 ? NotaPalette.Accent : NotaPalette.TextSecondary, ring, new Point(hx1, hy1), _drag == 1 ? 4.5 : 3.8, _drag == 1 ? 4.5 : 3.8);
     }
 }
 

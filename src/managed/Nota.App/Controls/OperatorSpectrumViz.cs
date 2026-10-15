@@ -4,7 +4,7 @@
 // Nota Operator spectrum viz (mockup 3g, OPS tab): the harmonic magnitude spectrum of the
 // current FM patch at the played note, read live from the engine (OperatorSynth::scopeRead
 // → Goertzel at k·f0). FM is defined by its partials, so moving FM depth or a ratio shifts
-// the bars visibly. Brass bars over a sunken well with a fundamental-relative axis.
+// the bars visibly. Neutral bars over a sunken well with a fundamental-relative axis.
 
 using System;
 using System.Globalization;
@@ -18,10 +18,10 @@ internal sealed class OperatorSpectrumViz : Control
 {
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-    private static Color Brass => NotaPalette.Accent.Color;
-    private static Color BrassLit => NotaPalette.AccentBright.Color;
+    private static Color Dim => NotaPalette.TextTertiary.Color;
+    private static Color Lit => NotaPalette.VizInk.Color;
     private static readonly IBrush Axis = NotaPalette.TextAxis;
-    private static readonly IBrush Amber = NotaPalette.AccentBright;
+    private static readonly IBrush NoteInk = NotaPalette.TextPrimary;
     private static readonly Typeface Mono = NotaFonts.Mono;
 
     private float[] _bins = Array.Empty<float>();
@@ -46,7 +46,7 @@ internal sealed class OperatorSpectrumViz : Control
         double x0 = padX, x1 = w - padX, top = padTop, bot = h - padBot;
         double bw = (x1 - x0) / Math.Max(1, _n);
 
-        // Bars — brass, brighter toward the top of each partial.
+        // Bars — neutral ink, brighter the stronger the partial.
         for (int k = 0; k < _n; k++)
         {
             double v = Math.Clamp(_bins[k], 0, 1);
@@ -55,9 +55,9 @@ internal sealed class OperatorSpectrumViz : Control
             var rx = x0 + k * bw;
             var rect = new Rect(rx + 0.5, bot - bh, Math.Max(1, bw - 1.2), bh);
             var col = Color.FromArgb(255,
-                (byte)(Brass.R + (BrassLit.R - Brass.R) * v),
-                (byte)(Brass.G + (BrassLit.G - Brass.G) * v),
-                (byte)(Brass.B + (BrassLit.B - Brass.B) * v));
+                (byte)(Dim.R + (Lit.R - Dim.R) * v),
+                (byte)(Dim.G + (Lit.G - Dim.G) * v),
+                (byte)(Dim.B + (Lit.B - Dim.B) * v));
             ctx.DrawRectangle(new SolidColorBrush(col), null, rect, NotaRadius.BarValue, NotaRadius.BarValue);
         }
 
@@ -72,7 +72,7 @@ internal sealed class OperatorSpectrumViz : Control
         Tick(0, "f"); Tick(10, "10f"); Tick(20, "20f"); Tick(30, "30f");
 
         // Played-note badge top-right.
-        var note = new FormattedText(_note, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 9, Amber);
+        var note = new FormattedText(_note, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 9, NoteInk);
         ctx.DrawText(note, new Point(x1 - note.Width - 1, top));
     }
 }

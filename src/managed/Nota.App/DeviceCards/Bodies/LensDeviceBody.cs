@@ -65,7 +65,7 @@ internal sealed class LensDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "ANALYZER";
+    public string? Subtitle => "Analyzer";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -108,8 +108,8 @@ internal sealed class LensDeviceBody : IDeviceBody
         static string Pc(double v) => Inv($"{v * 100:0} %");
 
         // ---- small builders (same kit as Prism / Chamber) -----------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? MutedC, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? MutedC, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static Control Docked(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
@@ -157,7 +157,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         // A sunken readout box: a caps eyebrow over one or two mono lines.
         (Border Box, TextBlock A, TextBlock B) ReadBox(string title, string hintA = "—", string hintB = "")
         {
-            var a = Mono(hintA, 9, AmberLit);
+            var a = Mono(hintA, 9, NotaPalette.TextPrimary);
             var b = Mono(hintB, 8, Txt2);
             var box = new Border
             {
@@ -351,8 +351,8 @@ internal sealed class LensDeviceBody : IDeviceBody
             Toggle(NoteGridP, "Note grid"),
             Toggle(PeakHoldP, "Peak hold"));
 
-        // ---- SCALE rail ---------------------------------------------------------------
-        var railTopVal = Mono("", 7, AmberLit);
+        // ---- Scale rail ---------------------------------------------------------------
+        var railTopVal = Mono("", 7, TxtC);
         var railRngVal = Mono("", 7, TxtC);
 
         // The slider stretches to the rail's height, its caption keeps its own line, and both
@@ -367,7 +367,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             s.ValueChanged += v => Raw(param(), (float)v);
             readouts.Add(() =>
             {
-                lbl.Text = caption();
+                lbl.Text = NotaText.Label(caption());
                 s.Default = Def(param());
                 if (!s.Dragging) { float c = P(param()); if (Math.Abs(c - s.Value) > 1e-4) s.Value = c; }
             });
@@ -378,18 +378,17 @@ internal sealed class LensDeviceBody : IDeviceBody
         }
 
         int centreTab = Sel(ViewP, 3);
-        var railA = RailSlider(() => centreTab == 1 ? VoltDivP : ScaleTopP, NotaPalette.Accent, () => centreTab == 1 ? "V/D" : "TOP");
+        var railA = RailSlider(() => centreTab == 1 ? VoltDivP : ScaleTopP, NotaPalette.VizInk, () => centreTab == 1 ? "V/D" : "TOP");
         var railB = RailSlider(() => centreTab == 1 ? TimeDivP : ScaleRangeP, NotaPalette.Teal, () => centreTab == 1 ? "T/D" : "RNG");
-        var rail = new Border
+        var rail = new RuleSection
         {
-            Width = 56, Background = PanelBg, BorderBrush = Border2, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5),
+            Width = 56, Padding = new Thickness(0, 5),
             Child = new DockPanel
             {
                 LastChildFill = true,
                 Children =
                 {
-                    Docked(new TextBlock { Text = "SCALE", FontSize = 7, FontWeight = FontWeight.Bold, LetterSpacing = 0.9, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 4) }, Dock.Top),
+                    Docked(new TextBlock { Text = "Scale", FontSize = NotaType.KnobLabel, FontWeight = FontWeight.SemiBold, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 4) }, Dock.Top),
                     Docked(new StackPanel { Spacing = 1, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0), Children = { railTopVal, railRngVal } }, Dock.Bottom),
                     new StackPanel
                     {
@@ -443,7 +442,7 @@ internal sealed class LensDeviceBody : IDeviceBody
                     btns[i].Background = on ? PanelBg : Brushes.Transparent;
                     btns[i].BorderBrush = on ? Amber : Brushes.Transparent;
                     var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? AmberLit : MutedC;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : MutedC;
                     tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }
@@ -488,18 +487,10 @@ internal sealed class LensDeviceBody : IDeviceBody
             return RightBody(t == 1 ? 3 : centreTab);
         }, true, null, null);
 
-        var right = new Border
-        {
-            Width = 186, Background = RailBg, BorderBrush = Border2, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame,
-        };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
 
-        var centreBox = new Border
-        {
-            Background = RailBg, BorderBrush = Border2, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre,
-        };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ---- status strip ---------------------------------------------------------------
         var statusLeft = new TextBlock { FontSize = 8, Foreground = Txt2, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -514,7 +505,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         DockPanel.SetDock(status, Dock.Bottom);
 
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { rail, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.BgApp, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         // ---- WAV export of the captured scope window --------------------------------------
         async void ExportWav()
@@ -610,7 +601,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             int fftN = (int)Sc(M_FftN);
             string winName = new[] { "Hann", "B-H", "Flat" }[Sel(WindowP, 3)];
             headNote.Text = centreTab == 1
-                ? (data.Held ? "HELD" : data.TrigOk ? "TRIG’D" : "FREE")
+                ? (data.Held ? "Held" : data.TrigOk ? "Trig’d" : "Free")
                 : centreTab == 2 ? Inv($"{LensData.WfBins} bins") : Inv($"FFT {fftN}");
 
             specInfo.Text = Inv($"window {Sc(M_FftMs):0} ms · slope {P(TiltP) * 9:0.0} dB/oct");

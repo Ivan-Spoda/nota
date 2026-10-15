@@ -105,7 +105,7 @@ public sealed class WelcomeWindow : NotaWindow
 
         // --- Recent projects ----------------------------------------------
         var recentHead = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8) };
-        recentHead.Children.Add(new TextBlock { Classes = { "SectionLabel" }, Text = "RECENT PROJECTS", VerticalAlignment = VerticalAlignment.Bottom });
+        recentHead.Children.Add(new TextBlock { Classes = { "SectionLabel" }, Text = "Recent projects", VerticalAlignment = VerticalAlignment.Bottom });
         recentHead.Children.Add(new TextBlock
         {
             Text = recent.Count.ToString(NotaNum.Culture),
@@ -447,8 +447,8 @@ public sealed class WelcomeWindow : NotaWindow
 
     private static Border BannerCard() => new()
     {
-        Background = NotaPalette.AccentSubtle,
-        BorderBrush = NotaPalette.Accent,
+        Background = NotaPalette.SurfaceRaised,
+        BorderBrush = NotaPalette.Seam,
         BorderThickness = new Thickness(1),
         CornerRadius = NotaRadius.Panel,
         Padding = new Thickness(14, 12),
@@ -456,7 +456,7 @@ public sealed class WelcomeWindow : NotaWindow
     };
 
     // Title + message (+ an optional progress bar) on the left, buttons on the right. The
-    // first "main" button is a plain button (not solid brass: "New project" is this window's
+    // first "main" button is a plain button (not the primary: "New project" is this window's
     // primary action); the rest are ghosts.
     private static Grid BannerContent(string title, string message, Control? progress,
                                       params (string Label, bool Main, Action OnClick)[] actions)
@@ -564,7 +564,7 @@ public sealed class WelcomeWindow : NotaWindow
 
         private void Paint()
         {
-            Background = _selected ? NotaPalette.AccentSubtle : _hover ? NotaPalette.SurfaceRaised : NotaPalette.Wash(NotaPalette.SurfaceRaised, 0);
+            Background = _selected ? NotaPalette.SurfaceHover : _hover ? NotaPalette.SurfaceRaised : NotaPalette.Wash(NotaPalette.SurfaceRaised, 0);
             _edge.Background = _selected ? NotaPalette.Accent : null;
             _name.Foreground = _selected ? NotaPalette.TextPrimary : NotaPalette.TextStrong;
             _meta.Foreground = _selected ? NotaPalette.TextSecondary : NotaPalette.TextMuted;

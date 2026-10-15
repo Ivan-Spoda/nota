@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Macros: eight big knobs for one device of the track's chain — a rack's macros, a built-in
      instrument's or effect's parameters, a plug-in's first eight (paged). A vertical swipe turns
-     a knob, as in Nota; a brass dot marks an automated parameter. A knob mapped with MIDI Learn
+     a knob, as in Nota; a dot marks an automated parameter. A knob mapped with MIDI Learn
      shows what it drives instead. -->
 <script lang="ts">
   import { app } from '../lib/app.svelte';
@@ -49,7 +49,7 @@
 
 <div class="macros" onpointermove={move} onpointerup={up} onpointercancel={up} role="group" aria-label="Macros">
   <button class="dev" onclick={() => m && m.devs.length > 1 && (app.sheet = 'devices')}>
-    <span class="caps">Device</span>
+    <span class="k">Device</span>
     <span class="dn">{devName}</span>
     {#if m && m.devs.length > 1}<span class="mono pos">{m.di + 1}/{m.devs.length}</span>{/if}
     <svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3.5 L5 6.5 L8 3.5" /></svg>
@@ -64,7 +64,7 @@
         {@const empty = k.n === undefined && !k.map}
         <div class="knob" class:on class:empty class:learnable={app.learn.on && !empty}
           onpointerdown={(e) => !empty && down(e, i, v)} role="slider" tabindex="0"
-          aria-label={k.map ?? k.n ?? `Macro ${i + 1}`} aria-valuenow={Math.round(v * 100)} aria-valuetext={k.map ? `${Math.round(v * 100)} %` : k.txt}>
+          aria-label={k.map ?? k.n ?? `Macro ${i + 1}`} aria-valuenow={Math.round(v * 100)} aria-valuetext={k.map ? `${Math.round(v * 100)}\u2009%` : k.txt}>
           {#if k.a && !k.map}<span class="auto"></span>{/if}
           <svg width={size} height={size} viewBox="0 0 52 52">
             <circle cx="26" cy="26" r="21" class="trk" stroke-dasharray="{ARC} {CIRC}" transform="rotate(135 26 26)" />
@@ -72,8 +72,8 @@
             <circle cx="26" cy="26" r="14" class="capc" />
             {#if !empty}<line x1="26" y1="26" x2="26" y2="14" class="ptr" transform="rotate({-135 + 270 * v} 26 26)" />{/if}
           </svg>
-          <span class="kn">{(k.map ?? k.n ?? `Macro ${i + 1}`).toUpperCase()}</span>
-          <span class="mono kv">{empty ? '—' : k.map ? `${Math.round(v * 100)} %` : on ? `${Math.round(v * 100)} %` : k.txt}</span>
+          <span class="kn">{k.map ?? k.n ?? `Macro ${i + 1}`}</span>
+          <span class="mono kv">{empty ? '—' : k.map || on ? `${Math.round(v * 100)}\u2009%` : k.txt}</span>
         </div>
       {/each}
     </div>
@@ -82,24 +82,26 @@
 
 <style>
   .macros { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; touch-action: none; }
-  .dev { height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--well); border: 1px solid var(--border); border-radius: 5px; box-shadow: inset 0 1px 0 rgba(0,0,0,.5); text-align: left; }
-  .dev .caps { font-size: 9px; letter-spacing: .1em; }
-  .dn { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--ink1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pos { font-size: 10px; color: var(--ink5); }
-  .dev path { fill: none; stroke: var(--ink4); stroke-width: 1.4; stroke-linecap: round; }
-  .grid { flex: 1; min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 8px; }
-  .knob { min-height: 0; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 6px; background: var(--card); border: 1px solid var(--border); touch-action: none; }
-  .knob.on { border-color: var(--border-brass); }
-  .auto { position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-  .trk { fill: none; stroke: var(--well); stroke-width: 5; stroke-linecap: round; }
-  .arc { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; }
-  .on .arc { stroke: var(--accent-bright); }
-  .capc { fill: var(--panel); stroke: var(--border-strong); }
-  .ptr { stroke: var(--accent-bright); stroke-width: 2.4; stroke-linecap: round; }
-  .kn { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--ink5); max-width: 92%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .kv { font-size: 12px; color: var(--ink1); }
-  .on .kn, .on .kv { color: var(--accent-bright); }
-  .empty .kv { color: var(--ink6); }
-  .empty { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--ink5); }
+  /* The device picker reads like a readout: the well, a rule edge. */
+  .dev { height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--bg-sunken); box-shadow: var(--sunken); border-radius: 3px; text-align: left; }
+  .k { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+  .dn { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pos { font-size: 11px; color: var(--text-tertiary); }
+  .dev path { fill: none; stroke: var(--text-muted); stroke-width: 1.5; }
+  .grid { flex: 1; min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 1px; background: var(--seam); border: 1px solid var(--seam); border-radius: 3px; overflow: hidden; }
+  .knob { min-height: 0; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: var(--panel); touch-action: none; }
+  .auto { position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }
+  /* Nota's knob: a well groove, the value in viz ink at rest and the accent while turned, a raised face with a seam edge. */
+  .trk { fill: none; stroke: var(--bg-sunken); stroke-width: 5; stroke-linecap: round; }
+  .arc { fill: none; stroke: var(--viz-ink); stroke-width: 5; stroke-linecap: round; }
+  .on .arc { stroke: var(--accent); }
+  .capc { fill: var(--surface-raised); stroke: var(--seam); }
+  .ptr { stroke: var(--text-primary); stroke-width: 2.4; stroke-linecap: round; }
+  .kn { font-size: 11px; font-weight: 500; color: var(--text-secondary); max-width: 92%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kv { font-size: 12px; color: var(--text-primary); }
+  .on .kn { color: var(--text-primary); }
+  .on .kv { color: var(--accent-bright); }
+  .knob.empty .kn, .knob.empty .kv { color: var(--text-faint); }
+  .empty { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-tertiary); }
   .knob.empty { flex: initial; display: flex; }
 </style>

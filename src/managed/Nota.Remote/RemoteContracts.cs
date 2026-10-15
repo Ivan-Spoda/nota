@@ -47,8 +47,10 @@ public interface IRemoteHost
 {
     /// <summary>The computer's name, as the phone shows it ("Reconnecting to Studio Mac…").</summary>
     string HostName { get; }
-    /// <summary>Nota's palette, which the phone follows unless set to follow its own theme.</summary>
-    bool DarkTheme { get; }
+    /// <summary>The colour theme Nota wears and the user's dark-mode and light-mode picks, which
+    /// the phone wears (spec 014). The same instance until one of them changes — the hub
+    /// compares by reference.</summary>
+    RemoteAppearance Appearance { get; }
     /// <summary>The track's colour as Nota draws it, "#RRGGBB".</summary>
     string TrackColor(int trackId);
     /// <summary>The track selected in Nota (0 = none), for "Follow Nota's selection".</summary>
@@ -92,6 +94,15 @@ public interface IRemoteHost
     /// <summary>A phone sent something (the Remote button flashes, like the gamepad dot).</summary>
     void Activity();
 }
+
+/// <summary>One colour theme as the phone needs it: every token of Theme/Themes/&lt;id&gt;.json
+/// as CSS hex (<c>#RRGGBB</c>, or <c>#RRGGBBAA</c> when translucent).</summary>
+public sealed record RemoteTheme(string Id, string Name, bool Dark, IReadOnlyDictionary<string, string> Colors);
+
+/// <summary>What the phone is told about colour: the theme Nota wears (Follow Nota), the user's
+/// dark-mode and light-mode picks (Follow phone), and the two inks text on a solid fill is
+/// chosen from, as <c>NotaPalette.ReadableInkOn</c> chooses.</summary>
+public sealed record RemoteAppearance(RemoteTheme Active, RemoteTheme DarkPick, RemoteTheme LightPick, string InkDark, string InkLight);
 
 /// <summary>Who may do what from a phone (Settings → Remote).</summary>
 public enum RemoteAccess

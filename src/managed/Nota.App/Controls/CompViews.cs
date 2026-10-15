@@ -56,8 +56,8 @@ internal sealed class CompFader : Control
     private double _v, _live = double.NaN, _startV, _startY;
     private bool _drag;
 
-    public IBrush Ink { get; set; } = NotaPalette.Accent;
-    public IBrush Handle { get; set; } = NotaPalette.AccentBright;
+    public IBrush Ink { get; set; } = NotaPalette.VizInk;      // resting fill: neutral ink
+    public IBrush Handle { get; set; } = NotaPalette.VizInk;   // turns accent while dragged
     public double Default { get; set; } = double.NaN;
     public bool Dragging => _drag;
 
@@ -104,7 +104,14 @@ internal sealed class CompFader : Control
     {
         base.OnPointerReleased(e);
         if (!_drag) return;
-        _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke();
+        _drag = false; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
@@ -126,12 +133,12 @@ internal sealed class CompFader : Control
         }
         ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), rect, r, r);
         double hy = Math.Clamp(y, 1.5, h - 2.5);
-        ctx.DrawRectangle(Handle, null, new Rect(1.5, hy - 1, w - 3, 2), 1, 1);
+        ctx.DrawRectangle(_drag ? NotaPalette.Accent : Handle, null, new Rect(1.5, hy - 1, w - 3, 2), 1, 1);
     }
 }
 
 // The transfer curve: input dB (x, −60…0) against output dB (y), unity dashed, the knee drawn
-// as a curve, the threshold node brass. Drag anywhere: left / right moves the threshold,
+// as a curve, the threshold node (accent while dragged). Drag anywhere: left / right moves the threshold,
 // up / down the ratio; double-click restores both. The live input level rides the curve as a small dot.
 internal sealed class CompTransferView : Control
 {
@@ -176,7 +183,13 @@ internal sealed class CompTransferView : Control
     {
         base.OnPointerReleased(e);
         if (!_drag) return;
-        _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke();
+        _drag = false; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
     private void Apply(Point p)
     {
@@ -220,10 +233,10 @@ internal sealed class CompTransferView : Control
             double li = Math.Min(Hi, _live);
             ctx.DrawEllipse(NotaPalette.TextPrimary, null, new Point(X(li), Y(li - CompDraw.Reduction(li, _thr, _ratio, _knee, _range))), 2, 2);
         }
-        NotaGraph.Node(ctx, new Point(tx, Y(_thr - CompDraw.Reduction(_thr, _thr, _ratio, _knee, _range))), active: true);
+        NotaGraph.Node(ctx, new Point(tx, Y(_thr - CompDraw.Reduction(_thr, _thr, _ratio, _knee, _range))), active: _drag);
 
         NotaGraph.Title(ctx, rect, "Transfer");
-        NotaGraph.Axis(ctx, rect, NotaGraph.Corner.TopRight, NotaNum.F($"{_ratio:0.#}:1"), NotaPalette.AccentBright);
+        NotaGraph.Axis(ctx, rect, NotaGraph.Corner.TopRight, NotaNum.F($"{_ratio:0.#}:1"), _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomLeft, "−60");
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomRight, "0 in");
     }
@@ -293,13 +306,13 @@ internal sealed class CompGrHistoryView : Control
             ctx.DrawText(ft, new Point(x1 - ft.Width - 2, Math.Clamp(py - ft.Height - 1, top, bot - ft.Height)));
         }
         NotaGraph.Title(ctx, rect, "Gain reduction");
-        NotaGraph.Axis(ctx, rect, NotaGraph.Corner.TopRight, Current > 0.05 ? NotaNum.F($"−{Current:0.0} dB") : "0.0 dB", NotaPalette.AccentBright);
+        NotaGraph.Axis(ctx, rect, NotaGraph.Corner.TopRight, Current > 0.05 ? NotaNum.F($"−{Current:0.0} dB") : "0.0 dB", NotaPalette.TextSecondary);
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomLeft, "−4 s");
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomRight, "now");
     }
 }
 
-// Motion: the reduction envelope (brass, hanging from 0 dB at the top) over the input level
+// Motion: the reduction envelope (neutral ink, hanging from 0 dB at the top) over the input level
 // (teal, −60…0 dB bottom→top) with the threshold dashed on the input scale — a window short
 // enough that attack and release read as shapes. Fed from the device's 1 ms envelope ring.
 internal sealed class CompMotionView : Control
@@ -358,7 +371,7 @@ internal sealed class CompMotionView : Control
         ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1) { DashStyle = new DashStyle(new double[] { 2, 4 }, 0) }, new Point(x0, ty), new Point(x1, ty));
 
         NotaGraph.Title(ctx, rect, "Reduction envelope");
-        NotaGraph.Legend(ctx, x1 - 2, 3, ("reduction", NotaPalette.AccentBright, NotaGraph.Mark.Line), ("input", NotaPalette.TealBright, NotaGraph.Mark.Line));
+        NotaGraph.Legend(ctx, x1 - 2, 3, ("reduction", NotaPalette.VizInk, NotaGraph.Mark.Line), ("input", NotaPalette.TealBright, NotaGraph.Mark.Line));
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomLeft, "0");
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomRight, _windowMs >= 1000 ? NotaNum.F($"{_windowMs / 1000:0.#} s") : NotaNum.F($"{_windowMs:0} ms"));
         var sc = CompDraw.Text(NotaNum.F($"−{_grScale:0} dB"), NotaPalette.TextAxis);
@@ -366,10 +379,10 @@ internal sealed class CompMotionView : Control
     }
 }
 
-// The sidechain key: the spectrum of the unfiltered key (brass) with the detector filters
+// The sidechain key: the spectrum of the unfiltered key (neutral ink) with the detector filters
 // laid over it (teal dashed — the 2-pole HP × LP response with its Q). Drag a handle
 // sideways to move its corner, up / down to change Q; double-click opens that filter.
-// Framed brass while Listen is on (the key is what you hear).
+// Framed in accent while Listen is on (the key is what you hear).
 internal sealed class CompKeyView : Control
 {
     private const int FftN = 2048, Bins = FftN / 2;
@@ -465,6 +478,17 @@ internal sealed class CompKeyView : Control
         if (_qGesture) { GestureEnd?.Invoke(2); _qGesture = false; }
         _drag = 0; e.Pointer.Capture(null);
     }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag != 0)
+        {
+            GestureEnd?.Invoke(_drag - 1);
+            if (_qGesture) { GestureEnd?.Invoke(2); _qGesture = false; }
+            _drag = 0; InvalidateVisual();
+        }
+        base.OnPointerCaptureLost(e);
+    }
     private void Apply(Point p)
     {
         double hz = HzOf(p.X, Bounds.Width);
@@ -530,15 +554,15 @@ internal sealed class CompKeyView : Control
             double x = Math.Clamp(XOf(hz, w), 3, w - 3);
             bool hot = _drag == idx || (_drag == 0 && _hover == idx);
             ctx.DrawLine(new Pen(hot ? NotaPalette.AccentBright : NotaPalette.BorderStrong, 1), new Point(x, top), new Point(x, bot));
-            NotaGraph.Node(ctx, new Point(x, Y(-6)), active: hot || on);
+            NotaGraph.Node(ctx, new Point(x, Y(-6)), active: hot);
             string lbl = !on ? "off" : hz >= 1000 ? NotaNum.F($"{hz / 1000:0.#}k") : NotaNum.F($"{hz:0}");
-            var ft = CompDraw.Text(lbl, on ? NotaPalette.AccentBright : NotaPalette.TextAxis);
+            var ft = CompDraw.Text(lbl, hot ? NotaPalette.AccentBright : on ? NotaPalette.TextSecondary : NotaPalette.TextAxis);
             double lx = Math.Clamp(x - ft.Width / 2, 3, w - 3 - ft.Width);
             ctx.DrawText(ft, new Point(lx, h - ft.Height - 2));
         }
 
         NotaGraph.Title(ctx, rect, "Sidechain key");
-        NotaGraph.Legend(ctx, w - 6, 3, ("key", NotaPalette.AccentBright, NotaGraph.Mark.Line), ("key filter", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
+        NotaGraph.Legend(ctx, w - 6, 3, ("key", NotaPalette.VizInk, NotaGraph.Mark.Line), ("key filter", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
         if (!_has)
         {
             var ft = CompDraw.Text("no key signal", NotaPalette.TextTertiary, 8);

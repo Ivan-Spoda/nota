@@ -41,6 +41,13 @@
     <AvaloniaResource Include="..\..\..\assets\fonts\*.ttf" Link="Assets/Fonts/%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!-- The built-in colour themes (spec 011): one JSON file per theme, the only place a
+       colour value lives. Read by NotaThemes at startup; the smoke test reads the same
+       files from disk. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Theme\Themes\*.json" LogicalName="Nota.Themes.%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Nota.Presentation\Nota.Presentation.csproj" />
     <ProjectReference Include="..\Nota.Infrastructure\Nota.Infrastructure.csproj" />

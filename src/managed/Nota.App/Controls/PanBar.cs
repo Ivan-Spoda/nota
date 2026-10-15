@@ -19,8 +19,9 @@ namespace Nota.App;
 public sealed class PanBar : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
-    private static readonly IBrush Border = NotaPalette.BorderDefault;
-    private static readonly IBrush Fill = NotaPalette.Accent;         // brass
+    private static readonly IBrush Border = NotaPalette.Rule;
+    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.VizInk, 0x40);   // at rest: neutral
+    private static readonly IBrush FillLive = NotaPalette.Wash(NotaPalette.Accent, 0x8C); // live
     private static readonly IBrush CentreTick = NotaPalette.BorderStrong;
     private static readonly IBrush TextBrush = NotaPalette.TextSecondary;
     private static readonly Typeface Mono = NotaFonts.Mono;
@@ -74,11 +75,24 @@ public sealed class PanBar : Control
         Apply(_raw);
     }
 
+    // Under the pointer (or in the hand) the control is live and takes the accent; at rest
+    // its value is neutral ink — the accent marks a knob or fader only while focused or dragged.
+    private bool _hover;
+    protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; InvalidateVisual(); }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hover = false; InvalidateVisual(); }
+
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (_drag) GestureEnd?.Invoke();
         _drag = false;
         e.Pointer.Capture(null);
+        InvalidateVisual();   // a drag that ended off the control leaves no hover to repaint it
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
     }
 
     private void Apply(double p)
@@ -95,13 +109,14 @@ public sealed class PanBar : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        var rrect = new RoundedRect(new Rect(0, 0, w, h), 4);
+        var rrect = new RoundedRect(new Rect(0, 0, w, h), NotaRadius.ControlValue);
         ctx.DrawRectangle(Bg, new Pen(Border, 1), rrect);
         double cx = w / 2, px = cx + _pan * (w / 2);
+        var fill = _drag || _hover ? FillLive : Fill;
         using (ctx.PushClip(rrect))
         {
-            if (px >= cx) ctx.FillRectangle(Fill, new Rect(cx, 0, px - cx, h));
-            else ctx.FillRectangle(Fill, new Rect(px, 0, cx - px, h));
+            if (px >= cx) ctx.FillRectangle(fill, new Rect(cx, 0, px - cx, h));
+            else ctx.FillRectangle(fill, new Rect(px, 0, cx - px, h));
             ctx.DrawLine(new Pen(CentreTick, 1), new Point(cx, 0), new Point(cx, h));
         }
         var text = new FormattedText(Label(_pan), CultureInfo.InvariantCulture,

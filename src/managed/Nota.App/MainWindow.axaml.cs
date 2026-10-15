@@ -99,7 +99,7 @@ public partial class MainWindow : Window
         else
         {
             ExtendClientAreaToDecorationsHint = true;
-            ExtendClientAreaTitleBarHeightHint = 36;
+            ExtendClientAreaTitleBarHeightHint = 32;
         }
         DataContextChanged += OnDataContextChanged;
         BuildDownloadIndicator();
@@ -120,7 +120,7 @@ public partial class MainWindow : Window
         }
     }
 
-    // Fullscreen hides the custom bar: the 36-px band and its separator vanish and the
+    // Fullscreen hides the custom bar: the 32-px band and its separator vanish and the
     // workspace fills the top edge; leaving fullscreen restores them. A pure function
     // of the current state — never of transitions — so rapid toggles converge. Maximized
     // keeps the bar (the app launches maximized); Linux never shows it (native frame).
@@ -266,9 +266,15 @@ public partial class MainWindow : Window
         var cpuGreen = (IBrush?)NotaPalette.Success;
         var cpuAmber = (IBrush?)NotaPalette.Warning;
         var cpuRed = (IBrush?)NotaPalette.Danger;
+        int cpuShown = -1;   // the CPU read-out's last percentage, so an unchanged one isn't re-laid-out
         vm.PlayheadUpdated += beats =>
         {
             _learn?.Tick();          // apply incoming MIDI mappings / capture a learn message
+            SyncSceneTempo();        // a launched scene set tempo / signature
+            // Nothing of the window can be seen: keep servicing MIDI and scenes, skip the
+            // meters, playheads and live knobs — they'd redraw ~30×/s for nobody (#55).
+            if (WindowState == WindowState.Minimized
+                && _detailWindow is not { IsVisible: true, WindowState: not WindowState.Minimized }) return;
             LearnOverlay.Refresh();  // keep highlights over rebuilt cards while armed
             Timeline.SetPlayhead(beats);
             _masterMeter?.Push(vm.Engine.MasterMeter());
@@ -276,7 +282,6 @@ public partial class MainWindow : Window
             Timeline.RefreshAutomationLive();                          // show writes live (M9-C)
             SyncReenableAutomation();                                  // "a control is overriding its lane"
             if (_session?.IsVisible == true) _session.UpdateStates(); // live launch/queue/play
-            SyncSceneTempo();                                          // a launched scene set tempo / signature
             if (_mixer?.IsVisible == true) _mixer.UpdateMeters();      // Mixer tab strips
             if (_modular?.IsVisible == true) _modular.Tick(vm.Engine.IsPlaying); // graph knobs follow automation + edge pulse
             if (DetailBody.Content is MixerView mx && mx.IsEffectivelyVisible) mx.UpdateMeters(); // 1f strips
@@ -296,9 +301,15 @@ public partial class MainWindow : Window
                 _patternView.SetPlayhead(beats - ppi.StartBeat, vm.Engine.IsPlaying);
 
             double load = Math.Clamp(vm.Engine.CpuLoad, 0, 1);         // live DSP load (Phase 11)
-            CpuFill.Width = load * 52;
-            CpuFill.Background = load > 0.9 ? cpuRed : load > 0.7 ? cpuAmber : cpuGreen;
-            CpuText.Text = "CPU " + (int)Math.Round(load * 100) + "%";
+            int pct = (int)Math.Round(load * 100);
+            if (pct != cpuShown)
+            {
+                cpuShown = pct;
+                CpuFill.Width = pct * 0.52;
+                CpuFill.Background = pct > 90 ? cpuRed : pct > 70 ? cpuAmber : cpuGreen;
+                CpuText.Text = "DSP " + pct + "%";
+            }
+            _cpuTipTick?.Invoke();
             SyncMidiDot();
         };
         // Recording tick fires ~60 Hz: refresh clip data + lane drawing only, WITHOUT
@@ -389,8 +400,8 @@ public partial class MainWindow : Window
 
         // Modular: signal-graph view of the selected track (mockup 1a). Follows track
         // selection like the Detail device chain does.
-        // Same island gutter as the arrangement it replaces in MainContent.
-        _modular = new ModularView(vm.Engine) { IsVisible = false, Margin = new Thickness(0, NotaSpace.Gutter, NotaSpace.Gutter, NotaSpace.Gutter) };
+        // Docked like the arrangement it replaces in MainContent: no margin, it meets the browser on the seam.
+        _modular = new ModularView(vm.Engine) { IsVisible = false };
         _modular.Changed += () => { Timeline.Refresh(); if (_deviceChain is { } dc && dc.TrackId > 0) dc.Refresh(); };
         _modular.TrackActivated += OnTrackSelected;   // Global-view island → select that track
         _modular.ItemDropped += OnModularDrop;        // browser drag onto the modular canvas
@@ -449,6 +460,7 @@ public partial class MainWindow : Window
         ReleaseTextFocusOnOutsidePress(this);
 
         Closed += (_, _) => vm.Dispose();
+        SetUpCpuTip(vm.Engine);
 
         // MCP server: MCP tool edits redraw the arrangement + device panel; start the server if
         // enabled in Preferences (loopback only). Runs off the settings toggle thereafter.
@@ -537,6 +549,7 @@ public partial class MainWindow : Window
         }
         finally { Engine.EndUndoGroup(); }
         Timeline.Refresh();
+        Timeline.RevealTrack(trackId);   // scrolled into view, not left below the pinned returns
         if (anchorTrackId > 0) Timeline.Select(trackId, -1);   // show where it landed
         _session?.Refresh();
         if (_modular?.IsVisible == true) _modular.Refresh();   // new track shows in the graph/sidebar
@@ -581,7 +594,8 @@ public partial class MainWindow : Window
         if (modular)
         {
             int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack();
-            if (t > 0) _modular.Show(t);
+            if (t <= 0) t = _modular.FirstPatchableTrack();   // after opening a project nothing is selected (F3)
+            _modular.Show(t);                                   // Show(-1) still builds the sidebar and its empty state
         }
         SyncClipTab();   // Clip tab availability is per-context (arrangement vs session)
     }
@@ -626,6 +640,34 @@ public partial class MainWindow : Window
             f.Items.Add(mi);
         }
         f.ShowAt(MetronomeBtn);
+    }
+
+    // The transport meter shows DSP load (what predicts dropouts); its tooltip adds the whole
+    // process's CPU in the platform monitor's own scale (issue #54). Refreshed from the
+    // transport tick, at most once a second.
+    private Action? _cpuTipTick;
+
+    private void SetUpCpuTip(IAudioEngine engine)
+    {
+        var cpu = App.Services.GetRequiredService<IProcessCpu>();
+        bool wholeMachine = ProcessCpuScale.WholeMachine;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var next = TimeSpan.Zero;
+        string? shown = null;
+        _cpuTipTick = () =>
+        {
+            if (clock.Elapsed < next) return;
+            next = clock.Elapsed + TimeSpan.FromSeconds(1);
+            double dsp = Math.Clamp(engine.CpuLoad, 0, 1) * 100;
+            string proc = cpu.CorePercent() is { } core
+                ? NotaNum.Unit(ProcessCpuScale.ToDisplay(core, cpu.LogicalCpus, wholeMachine), "0", "%")
+                  + " " + ProcessCpuScale.Unit(wholeMachine)
+                : "measuring…";
+            string tip = $"DSP load: {NotaNum.Unit(dsp, "0", "%")} of the audio buffer time — dropouts start near 100\u2009%\n"
+                + $"Nota process CPU: {proc} (audio, interface, plugins)";
+            if (tip != shown) ToolTip.SetTip(CpuMeter, shown = tip);   // re-set only when it changed (#66)
+        };
+        _cpuTipTick();
     }
 
     private readonly TapTempo _tap = new();

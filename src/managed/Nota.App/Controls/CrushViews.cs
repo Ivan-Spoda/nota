@@ -3,11 +3,11 @@
 //
 // Nota Crush (device kind 12) card windows:
 //  · CrQuantView — the Quantiser tab: 10 ms of a 100 Hz sine through the crusher — the source
-//    dashed, the held and quantised steps in brass over the level grid. The hold is drawn to
+//    dashed, the held and quantised steps in neutral ink over the level grid. The hold is drawn to
 //    scale; above 4 bits the level step is enlarged (so it stays visible) and says so. Drag up /
 //    down for Bits, left / right for Rate; double-click resets both.
 //  · CrSpectrumView — the Spectrum tab, from the engine's FFT (Crush.h scopeRead): the crushed
-//    output in 40 log bands, brass up to the (level-matched) input, teal where the crush added
+//    output in 40 log bands, neutral ink up to the (level-matched) input, teal where the crush added
 //    content — bright above the reduced Nyquist (the images), dim below (harmonics, noise). A
 //    ghost outline shows input the post filter took away. Drag the Nyquist line (Rate) or the
 //    filter line (Post Filter).
@@ -108,6 +108,13 @@ internal sealed class CrQuantView : Control
         _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); InvalidateVisual();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
@@ -164,14 +171,14 @@ internal sealed class CrQuantView : Control
             }
             if (!first) g.EndFigure(false);
         }
-        ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.Accent, 0x29), null, area);
+        ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.VizInk, 0x29), null, area);
         ctx.DrawGeometry(null, new Pen(NotaPalette.TextTertiary, 1, new DashStyle(new double[] { 3, 3 }, 0)), src);
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Accent, _drag ? 2.2 : NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round), step);
+        ctx.DrawGeometry(null, new Pen(_drag ? NotaPalette.Accent : NotaPalette.VizInk, _drag ? 2.2 : NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round), step);
 
         NotaGraph.Title(ctx, frame, "Quantiser");
         double rate = _sr / _hold;
         NotaGraph.Legend(ctx, w - 6, 3, ("source", NotaPalette.TextSecondary, NotaGraph.Mark.Dashed),
-            (NotaNum.F($"{_bits:0.0} bit @ {CrushMath.Hz(rate)}"), NotaPalette.AccentBright, NotaGraph.Mark.Line));
+            (NotaNum.F($"{_bits:0.0} bit @ {CrushMath.Hz(rate)}"), NotaPalette.VizInk, NotaGraph.Mark.Line));
         if (enlarged) NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "level step shown enlarged");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "10\u2009ms");
     }
@@ -238,7 +245,7 @@ internal sealed class CrSpectrumView : ShDragView
                 double fc = FLo * Math.Pow(FHi / FLo, (b + 0.5) / _n);
                 double yi = Y(_in[b]), yo = Y(_out[b]);
                 double ys = Math.Max(yi, yo);   // the signal part: up to the lower of in and out
-                if (ys < bot - 0.5) ctx.DrawRectangle(NotaPalette.Accent, null, new Rect(x, ys, cw, bot - ys), 1, 1);
+                if (ys < bot - 0.5) ctx.DrawRectangle(NotaPalette.VizInk, null, new Rect(x, ys, cw, bot - ys), 1, 1);
                 if (_out[b] > _in[b] + 1 && yo < ys - 0.5)
                     ctx.DrawRectangle(fc > _nyq ? addHi : addLo, null, new Rect(x, yo, cw, ys - yo), 1, 1);
                 if (_in[b] > _out[b] + 3 && yi < bot - 1)
@@ -253,15 +260,15 @@ internal sealed class CrSpectrumView : ShDragView
 
         // The post filter and the Nyquist of the reduced rate — both draggable.
         double fx = X(_filt);
-        ctx.DrawLine(new Pen(Active == HFilter ? NotaPalette.AccentBright : NotaPalette.AccentDim, Active == HFilter ? 1.6 : 1, new DashStyle(new double[] { 2, 3 }, 0)),
+        ctx.DrawLine(new Pen(Active == HFilter ? NotaPalette.Accent : NotaPalette.TextSecondary, Active == HFilter ? 1.6 : 1, new DashStyle(new double[] { 2, 3 }, 0)),
             new Point(fx, top), new Point(fx, bot));
         ctx.DrawLine(new Pen(Active == HNyquist ? NotaPalette.TealBright : NotaPalette.Teal, Active == HNyquist ? 1.6 : 1, new DashStyle(new double[] { 3, 2 }, 0)),
             new Point(nx, top), new Point(nx, bot));
         Label(ctx, "Nyquist " + CrushMath.Hz(_nyq), nx, top + 2, NotaPalette.TealBright);
-        Label(ctx, "filter " + CrushMath.Hz(_filt), fx, top + 12, NotaPalette.AccentBright);
+        Label(ctx, "filter " + CrushMath.Hz(_filt), fx, top + 12, Active == HFilter ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
 
         NotaGraph.Title(ctx, frame, "Spectrum");
-        NotaGraph.Legend(ctx, w - 6, 3, ("signal", NotaPalette.AccentBright, NotaGraph.Mark.Area),
+        NotaGraph.Legend(ctx, w - 6, 3, ("signal", NotaPalette.VizInk, NotaGraph.Mark.Area),
             ("added", NotaPalette.Teal, NotaGraph.Mark.Area), ("images", NotaPalette.TealBright, NotaGraph.Mark.Area));
         Text(ctx, "100", X(100) + 2, h - 11);
         Text(ctx, "1\u2009k", X(1000) + 2, h - 11);
@@ -321,13 +328,13 @@ internal sealed class CrTransferView : ShDragView
             }
             gc.EndFigure(false);
         }
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Accent, Dragging ? 2.2 : NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round), g);
+        ctx.DrawGeometry(null, new Pen(Dragging ? NotaPalette.Accent : NotaPalette.VizInk, Dragging ? 2.2 : NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round), g);
         // Where the signal peaks on the curve (the driven peak back in input units).
         if (_peak > 1e-4 && _drive > 1e-6)
         {
             double xin = Math.Clamp(_peak / _drive, 0, 1);
             double y = CrushMath.Quant(CrushMath.Shape(_mode, xin * _drive), _levels);
-            NotaGraph.Node(ctx, new Point(cx + xin * r, cy - Math.Clamp(y, -1.1, 1.1) * r / 1.1), true);
+            NotaGraph.Node(ctx, new Point(cx + xin * r, cy - Math.Clamp(y, -1.1, 1.1) * r / 1.1), false);
         }
         NotaGraph.Title(ctx, frame, "Curve");
     }
@@ -380,11 +387,11 @@ internal sealed class CrWaveView : Control
             s.EndFigure(false); o.EndFigure(false);
         }
         ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xB3), 1, new DashStyle(new double[] { 3, 3 }, 0)), src);
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Accent, 1.6, lineJoin: PenLineJoin.Round), outG);
+        ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, 1.6, lineJoin: PenLineJoin.Round), outG);
 
         NotaGraph.Title(ctx, frame, "Form");
         NotaGraph.Legend(ctx, w - 6, 3, (NotaNum.F($"in {_driveDb:+0;−0;0}\u2009dB"), NotaPalette.TealBright, NotaGraph.Mark.Dashed),
-            ("out", NotaPalette.AccentBright, NotaGraph.Mark.Line));
+            ("out", NotaPalette.VizInk, NotaGraph.Mark.Line));
         string lv = _levels >= 1e6 ? NotaNum.F($"{_levels / 1e6:0.0}\u2009M levels") : _levels >= 1e4 ? NotaNum.F($"{_levels / 1e3:0}\u2009k levels") : NotaNum.F($"{_levels:0} levels");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, lv);
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "10\u2009ms");

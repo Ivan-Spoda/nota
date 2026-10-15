@@ -35,6 +35,9 @@ internal sealed class PanKnob : Control
     }
     protected override void OnPointerReleased(PointerReleasedEventArgs e) { if (_drag) GestureEnd?.Invoke(); _drag = false; e.Pointer.Capture(null); }
 
+    // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) { if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); } base.OnPointerCaptureLost(e); }
+
     public override void Render(DrawingContext ctx)
     {
         double cx = Bounds.Width / 2, cy = Bounds.Height / 2, r = 11;

@@ -47,7 +47,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "SATURATION";
+    public string? Subtitle => "Saturation";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -102,23 +102,19 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             : NotaNum.F($"{0.05 * Math.Pow(400, v):0.00} Hz");
 
         // ---- small builders -----------------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
-        static Border Island(Control child, double width = double.NaN) => new()
-        {
-            Width = width, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-            ClipToBounds = true, Child = child,
-        };
+        static RuleSection Island(Control child, double width = double.NaN) => new() { Width = width, Child = child };
         static Border Bar(Control child, Thickness pad) => new()
         { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = pad, Child = child };
 
         // Slider row, as the mockup draws it inside the card: caps 7 label · 3px track · mono 8 value
-        // (brass-light once moved off its default). The param is chosen at paint time — the selected
+        // (primary ink once moved off its default). The param is chosen at paint time — the selected
         // stage's, or a fixed one. Double-click resets.
         Control Slider(string label, Func<int> param, Func<double, string> fmt, string tip, double labelW, double valueW,
             bool teal = false, bool bipolar = false)
@@ -144,7 +140,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
                 int p = param();
                 if (!track.Dragging) track.Norm = P(p);
                 val.Text = fmt(P(p));
-                val.Foreground = Math.Abs(P(p) - Def(p)) > 0.003 ? AccentBright : TextPrimary;
+                val.Foreground = Math.Abs(P(p) - Def(p)) > 0.003 ? TextPrimary : TextSecondary;
             });
             LearnFollow(g, param);
             ToolTip.SetTip(g, tip);
@@ -164,7 +160,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             var dot = new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
             var num = Mono((s + 1).ToString(), 8, TextSecondary); num.FontWeight = FontWeight.Bold;
             var name = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-            var role = new TextBlock { FontSize = 7, FontWeight = FontWeight.Bold, LetterSpacing = 0.5, VerticalAlignment = VerticalAlignment.Center };
+            var role = new TextBlock { FontSize = 7, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center };
             var outTxt = Mono("", 8, TextSecondary);
             var outBox = new Border
             {
@@ -213,6 +209,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
                 Raw(OutP(s), ov + (oy - e.GetPosition(outBox).Y) / 120.0); Refresh();
             };
             outBox.PointerReleased += (_, e) => { if (od) { od = false; End(OutP(s)); e.Pointer.Capture(null); } };
+            outBox.PointerCaptureLost += (_, _) => { if (od) { od = false; End(OutP(s)); } };
             Learn(outBox, OutP(s));
             ToolTip.SetTip(outBox, $"Stage {s + 1} output, −12 … +12 dB — drag up / down, double-click resets");
 
@@ -222,12 +219,12 @@ internal sealed class ForgeDeviceBody : IDeviceBody
                 dot.Background = lit ? Brass : BorderStrong;
                 num.Foreground = lit ? TextSecondary : TextDisabled;
                 name.Text = ForgeMath.AlgoNames[TypeI(s)];
-                name.Foreground = lit ? (isSel ? AccentBright : TextPrimary) : TextTertiary;
-                role.Text = ForgeMath.Role(RouteI(), s);
+                name.Foreground = lit ? TextPrimary : TextTertiary;
+                role.Text = NotaText.Label(ForgeMath.Role(RouteI(), s));
                 role.Foreground = lit ? NotaPalette.TealBright : TextDisabled;
                 double trim = (P(OutP(s)) - 0.5) * 24;
                 outTxt.Text = TrimF(P(OutP(s)));
-                outTxt.Foreground = Math.Abs(trim) > 0.05 ? AccentBright : lit ? TextSecondary : TextDisabled;
+                outTxt.Foreground = Math.Abs(trim) > 0.05 ? TextPrimary : lit ? TextSecondary : TextDisabled;
                 tile.BorderBrush = isSel ? Brass : NotaPalette.GraphBorder;
                 tile.Background = isSel ? Raised : Sunken;
                 rows.Opacity = lit ? 1 : 0.45;
@@ -255,7 +252,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         Learn(transfer, Amount);
         ToolTip.SetTip(transfer, "Input → output through the device (in M/S and Multi through the selected stage): each stage alone faint, the LFO-modulated curve dashed teal, the node where the input sits now. Drag up / down for Amount; double-click resets.");
         var harm = new FgHarmonicsView { Height = 50 };
-        ToolTip.SetTip(harm, "Harmonics 2 … 9 of a −6 dB sine through the curve: odd partials in brass (hard, buzzy), even ones in ink (warm, round), and the total harmonic distortion");
+        ToolTip.SetTip(harm, "Harmonics 2 … 9 of a −6 dB sine through the curve: odd partials in full ink (hard, buzzy), even ones dimmer (warm, round), and the total harmonic distortion");
         var graphs = new DockPanel
         {
             Margin = new Thickness(5), LastChildFill = true,
@@ -277,8 +274,8 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             bool lit = On(OnP(sel));
             badgeTxt.Text = (sel + 1).ToString();
             badge.Background = lit ? AccentBright : TextDisabled;
-            stName.Text = ForgeMath.AlgoNames[TypeI(sel)].ToUpperInvariant();
-            stName.Foreground = lit ? AccentBright : TextTertiary;
+            stName.Text = ForgeMath.AlgoNames[TypeI(sel)];
+            stName.Foreground = lit ? TextPrimary : TextTertiary;
         });
 
         var typeSeg = Segments(ForgeMath.ChipNames, () => Array.IndexOf(ForgeMath.ChipAlgo, TypeI(sel)),
@@ -300,7 +297,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             {
                 if (!knob.Dragging) { double c = P(param()); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
                 val.Text = fmt(P(param()));
-                val.Foreground = Math.Abs(P(param()) - Def(param())) > 0.003 ? AccentBright : TextPrimary;
+                val.Foreground = Math.Abs(P(param()) - Def(param())) > 0.003 ? TextPrimary : TextSecondary;
             });
             return KnobCell(label, knob, val, 46);
         }
@@ -375,7 +372,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         {
             bool alias = Sc(ForgeMath.S_Alias) > 0.5;
             statusLeft.Text = StatusText();
-            statusLeft.Foreground = alias ? AccentBright : TextSecondary;
+            statusLeft.Foreground = alias ? NotaPalette.Warning : TextSecondary;
             double sr = Sc(ForgeMath.S_SampleRate);
             statusRight.Text = sr > 0
                 ? NotaNum.F($"{sr / 1000:0.#} kHz · OS {(OsI() == 0 ? "off" : OsNames[OsI()])} · latency {Sc(ForgeMath.S_Latency):0} smp · CPU {Sc(ForgeMath.S_Cpu) * 100:0.0} %")
@@ -390,7 +387,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         var onArr = new bool[3];
         refreshNow = () =>

@@ -3,7 +3,7 @@
 //
 // The Drum Rack's pad oscillogram: a pad's one-shot as mirrored peak bars in the pad's
 // own hue, inside the almanac graph window (well, hairline, radius 4), with the live
-// playback position as a Brass Light line while the pad sounds. Read-only — trimming a
+// playback position as an accent line while the pad sounds. Read-only — trimming a
 // sample is the Sampler's job.
 
 using System;
@@ -23,7 +23,7 @@ internal sealed class PadWave : Control
     private double _play = -1;
 
     /// <summary>The bar colour — the pad's hue slot, so it re-tints with the theme.</summary>
-    public IBrush Hue { get; set; } = NotaPalette.Accent;
+    public IBrush Hue { get; set; } = NotaPalette.VizInk;
 
     /// <summary>Normalised peaks (0..1), one per bucket, drawn left to right.</summary>
     public float[] Peaks { get => _peaks; set { _peaks = value ?? Array.Empty<float>(); InvalidateVisual(); } }

@@ -190,7 +190,7 @@ public sealed class StereoMapView : Control
         // Panel, header, well.
         ctx.DrawRectangle(NotaPalette.SurfaceCard, new Pen(NotaPalette.BorderDefault, 1), new Rect(0.5, 0.5, b.Width - 1, b.Height - 1), Radius, Radius);
         ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(0, HeaderH), new Point(b.Width, HeaderH));
-        DrawText(ctx, "STEREO MAP", NotaFonts.SansBold, 10, NotaPalette.TextPrimary, new Point(12, HeaderH / 2), vCenter: true, tracking: true);
+        DrawText(ctx, "Stereo map", NotaFonts.SansBold, 10, NotaPalette.TextPrimary, new Point(12, HeaderH / 2), vCenter: true);
         var well = new Rect(Inset, HeaderH + Inset, b.Width - 2 * Inset, b.Height - HeaderH - BottomH - 2 * Inset);
         ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), well, 4, 4);
         DrawGrid(ctx, plot);
@@ -283,7 +283,7 @@ public sealed class StereoMapView : Control
         double y0 = b.Height - BottomH, cy = y0 + BottomH / 2;
         ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(0, y0), new Point(b.Width, y0));
         double x = 10;
-        x += DrawText(ctx, "MASTER CORR", NotaFonts.SansBold, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true, tracking: true) + 10;
+        x += DrawText(ctx, "Correlation", NotaFonts.SansBold, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 10;
         x += DrawText(ctx, "−1", NotaFonts.Mono, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 6;
         var bar = new Rect(x, cy - 3, 180, 6);
         ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), bar, 2, 2);
@@ -309,15 +309,15 @@ public sealed class StereoMapView : Control
         var it = _items[idx];
         var rows = new List<(string k, string v, IBrush ink)>
         {
-            ("PAN", it.Master ? "—" : PanText(it.Pan), NotaPalette.TextPrimary),
-            ("VOLUME", DbText(it.Volume), NotaPalette.TextPrimary),
+            ("Pan", it.Master ? "—" : PanText(it.Pan), NotaPalette.TextPrimary),
+            ("Volume", DbText(it.Volume), NotaPalette.TextPrimary),
         };
         if (it.Has)
         {
-            rows.Add(("BALANCE", Signed(it.M.Balance, 2), NotaPalette.TextSecondary));
-            rows.Add(("WIDTH", it.M.Width.ToString("0.00", NotaNum.Culture), NotaPalette.TextSecondary));
-            rows.Add(("CORRELATION", Signed(it.M.Correlation, 2), it.M.Correlation < PhaseAlarm ? NotaPalette.Danger : NotaPalette.TextSecondary));
-            rows.Add(("LEVEL", it.M.Silent ? "below −60 dBFS" : Signed(it.M.LevelDb, 1) + NotaNum.Thin + "dBFS", NotaPalette.TextSecondary));
+            rows.Add(("Balance", Signed(it.M.Balance, 2), NotaPalette.TextSecondary));
+            rows.Add(("Width", it.M.Width.ToString("0.00", NotaNum.Culture), NotaPalette.TextSecondary));
+            rows.Add(("Correlation", Signed(it.M.Correlation, 2), it.M.Correlation < PhaseAlarm ? NotaPalette.Danger : NotaPalette.TextSecondary));
+            rows.Add(("Level", it.M.Silent ? "below −60 dBFS" : Signed(it.M.LevelDb, 1) + NotaNum.Thin + "dBFS", NotaPalette.TextSecondary));
         }
         var notes = new List<(string title, string body, IBrush ink)>();
         if (it.Has && !it.M.Silent && !it.Muted && !it.Master && Math.Abs(it.M.Balance - it.Pan) > OffPanNote)
@@ -351,7 +351,7 @@ public sealed class StereoMapView : Control
         ty += 18;
         foreach (var (k, v, ink) in rows)
         {
-            DrawText(ctx, k, NotaFonts.SansBold, 7, NotaPalette.TextTertiary, new Point(r.Left + Pad, ty + 6), vCenter: true, tracking: true);
+            DrawText(ctx, k, NotaFonts.SansBold, 7, NotaPalette.TextTertiary, new Point(r.Left + Pad, ty + 6), vCenter: true);
             DrawText(ctx, v, NotaFonts.Mono, 9, ink, new Point(r.Left + Pad + 62, ty + 6), vCenter: true);
             ty += RowH;
         }

@@ -19,7 +19,8 @@ namespace Nota.App;
 internal sealed class RangeSliderTrack : Control
 {
     private static readonly IBrush Groove = NotaPalette.BgSunken;
-    private static readonly IBrush Fill = NotaPalette.Accent;
+    private static readonly IBrush Fill = NotaPalette.VizInk;           // at rest: neutral
+    private static readonly IBrush FillLive = NotaPalette.Accent;       // a handle under the pointer or in the hand
     private static readonly IBrush Handle = NotaPalette.AccentBright;
     private static readonly IBrush HandleIdle = NotaPalette.TextSecondary;
 
@@ -60,7 +61,7 @@ internal sealed class RangeSliderTrack : Control
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (e.ClickCount == 2 && Reset is not null)
         {
-            if (_drag >= 0) { int d = _drag; _drag = -1; e.Pointer.Capture(null); GestureEnd?.Invoke(d); }
+            if (_drag >= 0) { int d = _drag; _drag = -1; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke(d); }
             Reset();
             e.Handled = true;
             return;
@@ -109,7 +110,7 @@ internal sealed class RangeSliderTrack : Control
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
-        if (_drag >= 0) { int d = _drag; _drag = -1; GestureEnd?.Invoke(d); }
+        if (_drag >= 0) { int d = _drag; _drag = -1; InvalidateVisual(); GestureEnd?.Invoke(d); }
         base.OnPointerCaptureLost(e);
     }
 
@@ -121,7 +122,7 @@ internal sealed class RangeSliderTrack : Control
         double cy = h / 2, ty = cy - TrackH / 2;
         ctx.DrawRectangle(Groove, null, new RoundedRect(new Rect(0, ty, w, TrackH), NotaRadius.ClipValue));
         double a = _lo * w, b = _hi * w;
-        if (b - a > 0.5) ctx.DrawRectangle(Fill, null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.ClipValue));
+        if (b - a > 0.5) ctx.DrawRectangle(_drag >= 0 || _hover >= 0 ? FillLive : Fill, null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.ClipValue));
         for (int k = 0; k < 2; k++)
         {
             double x = k == 0 ? a : b;

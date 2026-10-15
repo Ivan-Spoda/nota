@@ -29,7 +29,6 @@ namespace Nota.App;
 internal sealed class ConsortInstrumentCard : IInstrumentCard
 {
     private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
-    private static readonly IBrush Panel = NotaPalette.TextOnAccent; // dark ink over an engaged fill
     private static readonly IBrush Border2 = NotaPalette.BorderDefault;
     private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
     private static readonly IBrush Inset = NotaPalette.BgSunken;
@@ -65,7 +64,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
     private static readonly Dictionary<int, ViewState> Views = new();
 
     public bool BodyOnly => true;
-    public string Subtitle => "PARAPHONIC";
+    public string Subtitle => "Paraphonic";
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active)
     {
@@ -78,8 +77,8 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             return 0;
         }
         int a = Math.Max(0, active);
-        if (G("truepoly", 8) > 0.5f) return $"POLY {a}/16";
-        return Math.Clamp((int)Math.Round(G("voicemode", 7) * 2), 0, 2) switch { 0 => "MONO", 1 => $"DUO {a}/2", _ => $"PARA {a}/4" };
+        if (G("truepoly", 8) > 0.5f) return $"Poly {a}/16";
+        return Math.Clamp((int)Math.Round(G("voicemode", 7) * 2), 0, 2) switch { 0 => "Mono", 1 => $"Duo {a}/2", _ => $"Para {a}/4" };
     }
 
     public Control Build(DeviceCardContext ctx)
@@ -113,9 +112,9 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         void Refresh() => refreshAll();
 
         // ---- small builders --------------------------------------------------------
-        static TextBlock Lbl(string t, double fs, IBrush c, FontWeight w = FontWeight.Bold)
-            => new() { Text = t, FontSize = fs, FontWeight = w, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
-        static TextBlock Caps(string t) => new() { Text = t, FontSize = 7, FontWeight = FontWeight.Bold, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center, LetterSpacing = 0.8 };
+        static TextBlock Lbl(string t, double fs, IBrush c, FontWeight w = FontWeight.SemiBold)
+            => new() { Text = NotaText.Label(t), FontSize = fs, FontWeight = w, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t) => new() { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock MonoText(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -168,7 +167,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         Control ViewSeg(string[] names, Func<int> get, Action<int> set)
         {
             var arr = new Border[names.Length];
-            void Hi() { for (int i = 0; i < arr.Length; i++) { bool on = i == get(); arr[i].Background = on ? Amber : Brushes.Transparent; var tb = (TextBlock)arr[i].Child!; tb.Foreground = on ? Panel : MutedC; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal; } }
+            void Hi() { for (int i = 0; i < arr.Length; i++) { bool on = i == get(); arr[i].Background = on ? Amber : Brushes.Transparent; var tb = (TextBlock)arr[i].Child!; tb.Foreground = on ? NotaPalette.TextOnAccent : MutedC; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal; } }
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
             for (int i = 0; i < names.Length; i++)
             {
@@ -227,10 +226,12 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             }
             host.PointerPressed += (_, e) => { springT?.Stop(); drag = true; if (pi >= 0) Begin(id); e.Pointer.Capture(host); From(e); };
             host.PointerMoved += (_, e) => { if (drag) From(e); };
-            host.PointerReleased += (_, e) => { if (drag) { drag = false; if (pi >= 0) End(id); e.Pointer.Capture(null); if (spring) Spring(); } };
+            void EndDrag() { drag = false; if (pi >= 0) End(id); if (spring) Spring(); }
+            host.PointerReleased += (_, e) => { if (drag) { EndDrag(); e.Pointer.Capture(null); } };
+            host.PointerCaptureLost += (_, _) => { if (drag) EndDrag(); };
             host.SizeChanged += (_, _) => Vis(G(id));
-            var nm = new TextBlock { Text = name, FontSize = 7, FontWeight = FontWeight.Bold, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center };
-            common.Add(() => { if (!drag) Vis(G(id)); bool live = Math.Abs(G(id) - (spring ? 0.5f : 0f)) > 0.01f; nm.Foreground = live ? AmberLit : MutedC; });
+            var nm = new TextBlock { Text = NotaText.Label(name), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center };
+            common.Add(() => { if (!drag) Vis(G(id)); bool moved = Math.Abs(G(id) - (spring ? 0.5f : 0f)) > 0.01f; nm.Foreground = moved ? TxtC : MutedC; });
             var col = new DockPanel { HorizontalAlignment = HorizontalAlignment.Center };
             DockPanel.SetDock(nm, Avalonia.Controls.Dock.Bottom);
             col.Children.Add(nm); col.Children.Add(host);
@@ -337,18 +338,18 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         // ======================================================================
         // LEFT — wheels
         // ======================================================================
-        var bendTxt = MonoText("", 7, AmberLit); var modTxt = MonoText("", 7, MutedC);
+        var bendTxt = MonoText("", 7, TxtC); var modTxt = MonoText("", 7, MutedC);
         bendTxt.HorizontalAlignment = HorizontalAlignment.Center; modTxt.HorizontalAlignment = HorizontalAlignment.Center;
-        common.Add(() => { bendTxt.Text = $"±{BendSt()}\u2009st"; modTxt.Text = $"{G("modwheel") * 100:0}\u2009%"; modTxt.Foreground = G("modwheel") > 0.01f ? AmberLit : MutedC; });
+        common.Add(() => { bendTxt.Text = $"±{BendSt()}\u2009st"; modTxt.Text = $"{G("modwheel") * 100:0}\u2009%"; modTxt.Foreground = G("modwheel") > 0.01f ? TxtC : MutedC; });
         var wheelsBody = new DockPanel { LastChildFill = true };
         var wTitle = Caps("WHEELS"); wTitle.HorizontalAlignment = HorizontalAlignment.Center; wTitle.Margin = new Thickness(0, 0, 0, 4);
         wheelsBody.Children.Add(Docked(wTitle, Avalonia.Controls.Dock.Top));
         wheelsBody.Children.Add(Docked(modTxt, Avalonia.Controls.Dock.Bottom));
         wheelsBody.Children.Add(Docked(bendTxt, Avalonia.Controls.Dock.Bottom));
         wheelsBody.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 3), Children = {
-            VWheel("bend", "PITCH", Amber, spring: true),
-            VWheel("modwheel", "MOD", AmberLit, spring: false) } });
-        var wheels = new Border { Width = 52, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5), Child = wheelsBody };
+            VWheel("bend", "PITCH", NotaPalette.VizInk, spring: true),
+            VWheel("modwheel", "MOD", NotaPalette.VizInk, spring: false) } });
+        var wheels = new RuleSection { Width = 52, Padding = new Thickness(0, 5), Child = wheelsBody };
         DockPanel.SetDock(wheels, Avalonia.Controls.Dock.Left);
 
         // ======================================================================
@@ -394,7 +395,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             string p = $"o{n}";
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(OscCols) };
             g.Children.Add(Cell(Lbl(n.ToString(), 10, TxtC, FontWeight.SemiBold), 0, HorizontalAlignment.Left));
-            g.Children.Add(Cell(MiniKnob($"{p}oct", Foot, 22, AmberLit), 1, HorizontalAlignment.Left));
+            g.Children.Add(Cell(MiniKnob($"{p}oct", Foot, 22, TxtC), 1, HorizontalAlignment.Left));
             g.Children.Add(n == 1 ? Cell(MonoText("master", 8, MutedC), 2, HorizontalAlignment.Left) : Cell(MiniKnob($"{p}freq", Freq, 38, TxtC), 2, HorizontalAlignment.Left));
             g.Children.Add(Cell(WaveSel($"{p}wave"), 3));
             var jd = new ConsortJackDot(11);
@@ -416,7 +417,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             string[] h = { "#", "OCT", "FREQ", "WAVE", "SYNC / CV" };
             for (int i = 0; i < h.Length; i++)
             {
-                var t = new TextBlock { Text = h[i], FontSize = 7, FontWeight = FontWeight.Bold, Foreground = DimC, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center,
+                var t = new TextBlock { Text = NotaText.Label(h[i]), FontSize = 7, FontWeight = FontWeight.Medium, Foreground = DimC, VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = i == 0 || i == 1 || i == 2 ? HorizontalAlignment.Left : i == h.Length - 1 ? HorizontalAlignment.Right : HorizontalAlignment.Center };
                 hdr.Children.Add(Col(t, i));
             }
@@ -465,7 +466,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         }
         Control EnvPanel(string title, string pre, bool amp)
         {
-            var curve = new PentadEnvCurve { Accent = amp ? TealC : Amber };
+            var curve = new PentadEnvCurve { Accent = amp ? TealC : NotaPalette.VizInk };
             var times = MonoText("", 7, Txt2);
             cur.Add(() =>
             {
@@ -541,7 +542,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             });
             var head = new DockPanel { Height = 14, LastChildFill = false, Children = { Docked(Caps(""), Avalonia.Controls.Dock.Left), Docked(times, Avalonia.Controls.Dock.Right) } };
             var title = (TextBlock)head.Children[0];
-            cur.Add(() => title.Text = On("dlydigital") ? "DELAY · DIGITAL" : "ANALOG DELAY · BBD");
+            cur.Add(() => title.Text = On("dlydigital") ? "Delay · digital" : "Analog delay · BBD");
             var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Margin = new Thickness(0, 2, 0, 3), Child = view };
             var knobs = Row(0, K("dlytime", "TIME", DlyMs, false, Knob.SizeSecondary, 44), K("dlyspacing", "SPACING", DlySpc, false, Knob.SizeSecondary, 44), K("dlyfb", "FEEDBACK", v => Pct(v), false, Knob.SizeSecondary, 46), K("dlymix", "MIX", v => Pct(v), false, Knob.SizeSecondary, 40));
             var opts = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { Chips("dlyping", new[] { "Ping", "Stereo" }, new[] { 1f, 0f }), Toggle("dlydigital", "Digital") } };
@@ -567,17 +568,18 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         Control SeqTab()
         {
             // length: a draggable number
-            var lenTxt = MonoText("", 9, AmberLit);
+            var lenTxt = MonoText("", 9, TxtC);
             var lenBox = new Border { Padding = new Thickness(3, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = lenTxt };
             ToolTip.SetTip(lenBox, "Sequence length — drag up / down");
             { bool drag = false; double y0 = 0; float v0 = 0;
               lenBox.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(lenBox).Properties.IsLeftButtonPressed) return; drag = true; y0 = e.GetPosition(lenBox).Y; v0 = G("seqlen"); Begin("seqlen"); e.Pointer.Capture(lenBox); e.Handled = true; };
               lenBox.PointerMoved += (_, e) => { if (!drag) return; float v = Math.Clamp(v0 + (float)(y0 - e.GetPosition(lenBox).Y) / 120f, 0, 1); v = (float)Math.Round(v * 15) / 15f; Raw("seqlen", v); Refresh(); };
-              lenBox.PointerReleased += (_, e) => { if (drag) { drag = false; End("seqlen"); e.Pointer.Capture(null); } }; }
+              lenBox.PointerReleased += (_, e) => { if (drag) { drag = false; End("seqlen"); e.Pointer.Capture(null); } };
+              lenBox.PointerCaptureLost += (_, _) => { if (drag) { drag = false; End("seqlen"); } }; }
             tabReadouts[3].Add(() => lenTxt.Text = $"{SeqLen()}");
             // legend = paint brushes
             string[] names = { "note", "ratchet", "tie", "rest" };
-            IBrush[] cols = { Amber, ChamberInk.Mauve, TealC, NotaPalette.BorderStrong };
+            IBrush[] cols = { NotaPalette.VizInk, ChamberInk.Mauve, TealC, NotaPalette.BorderStrong };
             var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center };
             var legItems = new Border[4];
             for (int b = 0; b < 4; b++)
@@ -624,7 +626,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             ToolTip.SetTip(clkDot, "Clock out (patch bay)"); ToolTip.SetTip(gateDot, "Seq gate out (patch bay)");
             tabReadouts[3].Add(() => { clkDot.Set(PatchedAt(true, 12)); gateDot.Set(PatchedAt(true, 11, 10)); });
             var swingSl = HSlider("seqswing", v => $"{50 + v * 25:0}\u2009%", 28); swingSl.Width = 84;
-            var rateTxt = MonoText("", 9, AmberLit);
+            var rateTxt = MonoText("", 9, TxtC);
             var rateBox = new Border { Background = Brushes.Transparent, Padding = new Thickness(2, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = Glyph.WithChevron(rateTxt, 7) };
             ToolTip.SetTip(rateBox, "Step rate (synced to the host tempo)");
             tabReadouts[3].Add(() => rateTxt.Text = SeqRates[Sel("seqrate", SeqRates.Length)]);
@@ -816,7 +818,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 g.Children.Add(Caps(cap)); g.Children.Add(Col(c, 1)); if (right != null) g.Children.Add(Col(right, 2));
                 return g;
             }
-            var mode = Chips("voicemode", new[] { "MONO", "DUO", "PARA" }, null, 7, Poly);
+            var mode = Chips("voicemode", new[] { "Mono", "Duo", "Para" }, null, 7, Poly);
             var body = new StackPanel { Spacing = 1, Children = {
                 Line("MODE", mode),
                 Line("VOICES", cellRow),
@@ -873,7 +875,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             tabReadouts[2].Add(() => dlyTxt.Text = $"{(On("dlydigital") ? "digital" : "BBD")} · {(On("dlyping") ? "ping-pong" : "stereo")}");
             extras[2] = dlyTxt;
             cur = tabReadouts[3];
-            extras[3] = Row(6, Chips("seqmode", new[] { "Off", "SEQ", "ARP" }), Caps("OCT"), Chips("arpoct", new[] { "1", "2", "3" }, null, 7, () => Sel("seqmode", 3) != 2));
+            extras[3] = Row(6, Chips("seqmode", new[] { "Off", "Seq", "Arp" }), Caps("OCT"), Chips("arpoct", new[] { "1", "2", "3" }, null, 7, () => Sel("seqmode", 3) != 2));
             ToolTip.SetTip(extras[3], "Off · SEQ (steps transposed by the key) · ARP (the held chord over 1–3 octaves)");
             cur = saved;
             extras[4] = Row(6, ViewSeg(new[] { "Matrix", "Cables" }, () => vs.PatchView, v => { vs.PatchView = v; patchShow(); }), patchCountTxt);
@@ -899,9 +901,9 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         var (centre, selectCentre) = TabFrame(new[] { "Osc · Mix", "Filters · Env", "LFO · Delay", "Seq", "Patch" }, centreHost, CentreBody, false, vs.Centre,
             t => { vs.Centre = t; if (t != 4) vs.LastNonPatch = t; extrasHost.Content = extras[t]; Refresh(); }, extrasHost);
         var (rightFrame, _) = TabFrame(new[] { "Voices", "Output" }, rightHost, RightBody, true, vs.Right, t => { vs.Right = t; Refresh(); }, null);
-        var right = new Border { Width = 172, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Child = rightFrame };
+        var right = new RuleSection { Width = 172, Child = rightFrame };
         DockPanel.SetDock(right, Avalonia.Controls.Dock.Right);
-        var centreBox = new Border { Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Patch-bay row (collapsed) + overlay
@@ -909,7 +911,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         var overlay = new Border { IsVisible = false, Background = RailBg, Focusable = true };
         void OpenOverlay(bool open) { vs.Overlay = open; overlay.IsVisible = open; if (open) { overlay.Focus(); } Refresh(); }
         var chipsHost = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 9, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
-        var countTxt = MonoText("", 8, AmberLit);
+        var countTxt = MonoText("", 8, TxtC);
         var openTxt = new TextBlock { FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center };
         var openBtn = new Border { Height = 13, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, Background = OffPill, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = openTxt };
         ToolTip.SetTip(openBtn, "Open the full patch bay (all 42 points) · on the Patch tab: back to the last panel");
@@ -976,7 +978,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             }
             var view = ViewSeg(new[] { "Cables", "Matrix" }, () => 0, v => { if (v == 1) { vs.PatchView = 0; OpenOverlay(false); selectCentre(4); patchShow(); } });
             var topGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto,Auto"), ColumnSpacing = 10 };
-            topGrid.Children.Add(Lbl("Patch bay", 10, AmberLit, FontWeight.SemiBold));
+            topGrid.Children.Add(Lbl("Patch bay", 10, TxtC, FontWeight.SemiBold));
             topGrid.Children.Add(Col(info, 1)); topGrid.Children.Add(Col(view, 2));
             topGrid.Children.Add(Col(Btn("Clear all", ClearAll), 4)); topGrid.Children.Add(Col(Btn("Close", () => OpenOverlay(false)), 5));
             var top = new Border { Height = 26, BorderBrush = Border2, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(10, 0), Child = topGrid };
@@ -1005,6 +1007,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                     };
                     depBox.PointerMoved += (_, e) => { if (!drag) return; float v = Math.Clamp(v0 + (float)(y0 - e.GetPosition(depBox).Y) / 200f, 0, 1); Raw(AmtId(slot), v); dep.Text = $"{(v - 0.5f) * 200:+0;−0;0}"; };
                     depBox.PointerReleased += (_, e) => { if (drag) { drag = false; End(AmtId(slot)); e.Pointer.Capture(null); Refresh(); } };
+                    depBox.PointerCaptureLost += (_, _) => { if (drag) { drag = false; End(AmtId(slot)); Refresh(); } };
                     bottomHost.Children.Add(Row(4, new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Control, Background = tone, VerticalAlignment = VerticalAlignment.Center },
                         new TextBlock { Text = CableName(c), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }, depBox));
                 }
@@ -1022,7 +1025,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         // ======================================================================
         // Status strip
         // ======================================================================
-        string ModeName() => Poly() ? "True poly" : Sel("voicemode", 3) switch { 0 => "MONO", 1 => "DUO", _ => "PARA" };
+        string ModeName() => Poly() ? "True poly" : Sel("voicemode", 3) switch { 0 => "Mono", 1 => "Duo", _ => "Para" };
         string FiltModeName() => Sel("filtmode", 3) switch { 0 => "HP/LP series", 1 => "LP/LP parallel stereo", _ => "HP/LP stereo" };
         string StatusText()
         {
@@ -1080,7 +1083,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5, 5, 5, 4), Children = { wheels, right, centreBox } };
-        var main = new DockPanel { LastChildFill = true, Background = RailBg, Children = { status, strip, bodyRow } };
+        var main = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, strip, bodyRow } };
         var root = new Panel { Children = { main, overlay } };
 
         refreshAll = () =>
@@ -1107,7 +1110,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 {
                     bool on = i == sel;
                     btns[i].Background = on ? TabBg : Brushes.Transparent; btns[i].BorderBrush = on ? Amber : Brushes.Transparent;
-                    var tb = (TextBlock)btns[i].Child!; tb.Foreground = on ? AmberLit : MutedC; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                    var tb = (TextBlock)btns[i].Child!; tb.Foreground = on ? NotaPalette.TextPrimary : MutedC; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }
             void Select(int i) { sel = i; Hi(); host.Content = body(i); changed?.Invoke(i); }

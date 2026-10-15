@@ -3,11 +3,12 @@
 // proxies /ws to a running Nota (NOTA_REMOTE=http://192.168.1.5:7788 to pick another one).
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { notaTheme } from './theme-plugin.ts';
 
 const nota = process.env.NOTA_REMOTE ?? 'http://127.0.0.1:7788';
 
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [svelte(), notaTheme()],
   base: './',
   build: {
     outDir: '../../managed/Nota.Remote/wwwroot',

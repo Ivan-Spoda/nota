@@ -3,7 +3,7 @@
 //
 // Nota Volt modulation matrix: a source×destination grid of bipolar cells. Drag a cell
 // vertically to set its amount (up = positive, down = negative); right-click or
-// double-click clears it. A route reads as a brass-washed cell carrying its signed
+// double-click clears it. A route reads as a neutral-washed cell carrying its signed
 // amount — the deeper the wash, the more of it — and an empty one stays a dark well, so
 // the routes a patch actually uses are the only thing on screen. Modulator rows are
 // named in teal, performance sources in plain ink. Reads/writes the mtx{s}_{d} plugin
@@ -25,8 +25,8 @@ internal sealed class VoltMatrix : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush GridB = NotaGraph.Grid;
     private static readonly IBrush Teal = NotaPalette.Teal;
-    private static readonly IBrush Lit = NotaPalette.AccentBright;
-    private static readonly IBrush LitEdge = NotaPalette.BorderBrass;
+    private static readonly IBrush Lit = NotaPalette.TextPrimary;
+    private static readonly IBrush LitEdge = NotaPalette.BorderStrong;
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
     private static readonly IBrush CellBg = NotaPalette.BgSunken;
@@ -96,6 +96,18 @@ internal sealed class VoltMatrix : Control
         Changed?.Invoke();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_dragS >= 0)
+        {
+            _e.EndAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, Id(_dragS, _dragD));
+            _dragS = _dragD = -1; InvalidateVisual();
+            Changed?.Invoke();
+        }
+        base.OnPointerCaptureLost(e);
+    }
+
     private void Txt(DrawingContext ctx, string t, double x, double y, IBrush b, double size = 8, bool center = false)
     {
         var ft = new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, size, b);
@@ -122,9 +134,9 @@ internal sealed class VoltMatrix : Control
                 double amt = (_e.PluginParamGet(_t, -1, i) - 0.5) * 2.0;
                 bool on = Math.Abs(amt) > 0.01;
                 if (!on) { ctx.DrawRectangle(CellBg, new Pen(GridB, 1), r, 2, 2); continue; }
-                // A route lights the whole cell: a brass wash that deepens with the amount,
-                // a brass hairline, and the signed number in Brass Light.
-                var wash = NotaPalette.Wash(NotaPalette.Accent, (byte)(0x18 + 0x40 * Math.Min(1.0, Math.Abs(amt))));
+                // A route lights the whole cell: a neutral wash that deepens with the amount,
+                // a hairline, and the signed number in primary ink.
+                var wash = NotaPalette.Wash(NotaPalette.VizInk, (byte)(0x18 + 0x40 * Math.Min(1.0, Math.Abs(amt))));
                 ctx.DrawRectangle(wash, new Pen(LitEdge, 1), r, 2, 2);
                 if (r.Width >= 18)
                     Txt(ctx, (amt > 0 ? "+" : "−") + (int)Math.Round(Math.Abs(amt) * 100), r.X + r.Width / 2, r.Y + r.Height / 2 - 5, Lit, 8, true);

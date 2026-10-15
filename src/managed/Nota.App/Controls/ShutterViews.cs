@@ -3,19 +3,19 @@
 //
 // Nota Shutter (device kind 19) card windows, all read from the engine's telemetry
 // (Shutter.h scopeRead) so the picture is what the gate does:
-//  · ShPill — a STATE column pill meter: a level rising from the bottom (input / key, with
+//  · ShPill — a State column pill meter: a level rising from the bottom (input / key, with
 //    the threshold tick) or a reduction hanging from the top.
 //  · ShSignalView — the Signal tab: the input over the window as teal columns, the gated
-//    output in brass, the threshold (brass dashed) and the close level (Ink dashed) where
+//    output in neutral ink, the threshold and the close level (dashed) where
 //    they act. Drag a line up or down to set the threshold / the return.
 //  · ShEnvelopeView — the Envelope tab: one opening drawn from the attack / hold / release /
 //    shape / floor (inverted for Duck). Drag the nodes sideways for the times, the floor up
 //    or down.
 //  · ShKeyView — the Sidechain tab: the detector band-pass (teal, 12 dB/oct) with its HP /
-//    LP nodes to drag, under the reduction over the window (brass).
+//    LP nodes to drag, under the reduction over the window (neutral ink).
 //  · ShPatternView — the Pattern tab: the step grid (a column per step, quantised to the
 //    levels) with the gain it makes on top — smooth and swing bend the curve — the current
-//    step lit and the playhead. Draw / Line / Erase / Flip edit the steps with the mouse.
+//    step lit (accent) and the playhead. Draw / Line / Erase / Flip edit the steps with the mouse.
 // Shared drag contract (ShDragView): left button only, a gesture per drag, double-click
 // resets the handle, right-click bubbles to the MIDI-learn menu.
 
@@ -32,7 +32,7 @@ internal sealed class ShPill : Control
 {
     private double _v, _tick = double.NaN;
     public bool FromTop { get; init; }
-    public IBrush Ink { get; init; } = NotaPalette.Accent;
+    public IBrush Ink { get; init; } = NotaPalette.VizInk;
 
     public ShPill() { Width = 16; }
 
@@ -113,6 +113,13 @@ internal abstract class ShDragView : Control
         base.OnPointerReleased(e);
         if (_drag < 0) return;
         int h = _drag; _drag = -1; e.Pointer.Capture(null); GestureEnd?.Invoke(h); InvalidateVisual();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag >= 0) { int h = _drag; _drag = -1; GestureEnd?.Invoke(h); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
     }
     protected virtual StandardCursorType CursorFor(int handle) => StandardCursorType.SizeNorthSouth;
 
@@ -195,7 +202,7 @@ internal sealed class ShSignalView : ShDragView
             for (int i = 0; i < _n; i++)
                 if (_in[i] > DbBot + 0.5) ctx.DrawLine(inPen, new Point(X(i), floorY), new Point(X(i), Y(_in[i])));
 
-            // Output: the input times the gate, in brass.
+            // Output: the input times the gate, in neutral ink.
             var g = new StreamGeometry();
             using (var c = g.Open())
                 for (int i = 0; i < _n; i++)
@@ -209,15 +216,15 @@ internal sealed class ShSignalView : ShDragView
         }
 
         bool hotT = Active == HThreshold, hotR = Active == HReturn;
-        ctx.DrawLine(new Pen(NotaPalette.Accent, hotT ? 1.4 : 1, new DashStyle(new double[] { 4, 4 }, 0)), new Point(0, Y(_thr)), new Point(w, Y(_thr)));
-        ctx.DrawLine(new Pen(hotR ? NotaPalette.AccentDim : NotaPalette.BorderStrong, 1, new DashStyle(new double[] { 2, 4 }, 0)), new Point(0, Y(_ret)), new Point(w, Y(_ret)));
+        ctx.DrawLine(new Pen(hotT ? NotaPalette.Accent : NotaPalette.VizInk, hotT ? 1.4 : 1, new DashStyle(new double[] { 4, 4 }, 0)), new Point(0, Y(_thr)), new Point(w, Y(_thr)));
+        ctx.DrawLine(new Pen(hotR ? NotaPalette.Accent : NotaPalette.BorderStrong, 1, new DashStyle(new double[] { 2, 4 }, 0)), new Point(0, Y(_ret)), new Point(w, Y(_ret)));
 
         NotaGraph.Title(ctx, frame, _duck ? "Signal and duck" : "Signal and gate");
-        NotaGraph.Legend(ctx, w - 6, 3, ("input", NotaPalette.TealBright, NotaGraph.Mark.Area), ("output", NotaPalette.AccentBright, NotaGraph.Mark.Line));
+        NotaGraph.Legend(ctx, w - 6, 3, ("input", NotaPalette.TealBright, NotaGraph.Mark.Area), ("output", NotaPalette.VizInk, NotaGraph.Mark.Line));
         var thrTxt = NotaNum.F($"threshold {_thr:0.0}");
         double ty = Y(_thr) - 11;
         if (ty < 14) ty = Y(_thr) + 2;
-        Text(ctx, thrTxt, 6, ty, NotaPalette.AccentBright);
+        Text(ctx, thrTxt, 6, ty, hotT ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         Text(ctx, "−" + _window, 6, h - 11);
         TextR(ctx, "now", w - 6, h - 11);
         if (_closing > _n * 0.12 && _closing < _n * 0.85)
@@ -340,11 +347,11 @@ internal sealed class ShEnvelopeView : ShDragView
             c.EndFigure(false);
         }
         ctx.DrawGeometry(null, NotaGraph.PrimaryPen, g);
-        for (int k = 0; k < 3; k++) { var n = Node(k); if (n.X < w - 2) NotaGraph.Node(ctx, n, Active == k || Active < 0 && k == 0); }
+        for (int k = 0; k < 3; k++) { var n = Node(k); if (n.X < w - 2) NotaGraph.Node(ctx, n, Active == k); }
         NotaGraph.Node(ctx, Node(HFloor), Active == HFloor, NotaPalette.Teal);
 
         NotaGraph.Title(ctx, frame, _duck ? "Duck envelope" : _retrig ? "Gate envelope · trigger" : "Gate envelope");
-        TextR(ctx, "open 0\u2009dB", w - 6, 3, NotaPalette.AccentBright);
+        TextR(ctx, "open 0\u2009dB", w - 6, 3, NotaPalette.TextSecondary);
         double fy = _duck ? yf + 2 : yf - 11;
         if (fy > h - 24) fy = yf - 11;
         TextR(ctx, (_duck ? "duck " : "floor ") + _floorText, w - 22, fy, NotaPalette.TealBright);
@@ -419,7 +426,7 @@ internal sealed class ShKeyView : ShDragView
                     var pt = new Point((i + 0.5) / _n * w, Bot - red * (Bot - Top) * 0.85);
                     if (i == 0) c.BeginFigure(pt, false); else c.LineTo(pt);
                 }
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Accent, 0xB0), 1.3, lineJoin: PenLineJoin.Round), g);
+            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0xB0), 1.3, lineJoin: PenLineJoin.Round), g);
         }
 
         // The key band-pass.
@@ -440,7 +447,7 @@ internal sealed class ShKeyView : ShDragView
         }
 
         NotaGraph.Title(ctx, frame, _on ? "Detector filter" : "Detector · full band");
-        NotaGraph.Legend(ctx, w - 6, 3, ("key", NotaPalette.TealBright, NotaGraph.Mark.Line), (_legend, NotaPalette.AccentBright, NotaGraph.Mark.Line));
+        NotaGraph.Legend(ctx, w - 6, 3, ("key", NotaPalette.TealBright, NotaGraph.Mark.Line), (_legend, NotaPalette.VizInk, NotaGraph.Mark.Line));
         static string Hz(double f) => f >= 1000 ? NotaNum.F($"{f / 1000:0.0}\u2009k") : NotaNum.F($"{f:0}");
         Text(ctx, "20", 4, h - 11);
         TextR(ctx, "20\u2009k", w - 4, h - 11);
@@ -522,6 +529,12 @@ internal sealed class ShPatternView : Control
         _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); InvalidateVisual();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     private void Apply(Point p)
     {
         var (c, v) = At(p);
@@ -551,8 +564,8 @@ internal sealed class ShPatternView : Control
         NotaGraph.Window(ctx, frame);
         int n = _steps.Length;
         double cw = w / n;
-        var ink = _map ? NotaPalette.Teal : NotaPalette.Accent;
-        var inkBright = _map ? NotaPalette.TealBright : NotaPalette.AccentBright;
+        var ink = _map ? NotaPalette.Teal : NotaPalette.VizInk;
+        var inkBright = _map ? NotaPalette.TealBright : NotaPalette.VizInk;
         double dim = _active ? 1 : 0.45;
 
         // Level lines, then the step columns: the playing one lit, a stronger line every 4.

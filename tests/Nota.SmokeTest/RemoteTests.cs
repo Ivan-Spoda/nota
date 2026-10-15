@@ -177,7 +177,14 @@ internal static class RemoteTests
     private sealed class FakeHost : IRemoteHost
     {
         public string HostName => "Test Mac";
-        public bool DarkTheme => true;
+        // Two appearances the test switches between: Nota in a dark theme with a separate
+        // light-mode pick, then Nota in its light pick (so one id serves two roles).
+        public static readonly RemoteTheme Dark = Theme("test-dark", true, "#1E1F22"), Light = Theme("test-light", false, "#C9CBCF");
+        public static readonly RemoteAppearance DarkOn = new(Dark, Dark, Light, "#17181A", "#FFFFFF");
+        public static readonly RemoteAppearance LightOn = new(Light, Dark, Light, "#17181A", "#FFFFFF");
+        public RemoteAppearance Appearance { get; set; } = DarkOn;
+        private static RemoteTheme Theme(string id, bool dark, string ground) =>
+            new(id, id, dark, new Dictionary<string, string> { ["BgApp"] = ground, ["Accent"] = "#FF9F1C", ["ShadowBevel"] = "#FFFFFF12" });
         public string TrackColor(int trackId) => "#58B368";
         public int SelectedTrackId { get; set; }
         public int ProjectKeyCode => -1;
@@ -328,6 +335,28 @@ internal static class RemoteTests
         var proj = Wait("proj");
         yield return (proj is { } pj && pj.GetProperty("tracks").GetArrayLength() == 1 && pj.GetProperty("you").GetInt32() == inst,
             "the phone gets the project and is put on the instrument track");
+
+        // The theme (specs/014 contracts/theme-message.md): the worn theme and both picks,
+        // each once with its tokens, and sent again only when it changes.
+        var theme = Wait("theme");
+        bool ThemeOk(JsonElement? m, string on) => m is { } tm
+            && tm.GetProperty("on").GetString() == on
+            && tm.GetProperty("dark").GetString() == "test-dark" && tm.GetProperty("light").GetString() == "test-light"
+            && tm.GetProperty("ink").GetArrayLength() == 2
+            && tm.GetProperty("th").EnumerateObject().Select(p => p.Name).OrderBy(n => n).SequenceEqual(new[] { "test-dark", "test-light" })
+            && tm.GetProperty("th").EnumerateObject().All(p => p.Value.GetProperty("c").EnumerateObject().Count() == 3
+                && p.Value.GetProperty("c").TryGetProperty("BgApp", out _));
+        yield return (ThemeOk(theme, "test-dark") && theme!.Value.GetProperty("th").GetProperty("test-dark").GetProperty("c").GetProperty("ShadowBevel").GetString() == "#FFFFFF12",
+            "the phone is told the theme Nota wears and both picks, each with its colours");
+        yield return (proj is { } pd && pd.GetProperty("dark").GetBoolean(), "the project still says dark for an older page");
+        yield return (Wait("theme", 200) is null, "an unchanged theme is not sent again");
+        host.Appearance = FakeHost.LightOn;
+        var theme2 = Wait("theme");
+        yield return (ThemeOk(theme2, "test-light") && theme2!.Value.GetProperty("th").GetProperty("test-light").GetProperty("dark").GetBoolean() == false,
+            "a theme change in Nota reaches the phone");
+        yield return (Wait("theme", 200) is null, "and is sent once");
+        yield return (Wait("proj", 1000, m => !m.GetProperty("dark").GetBoolean()) is not null, "the project's dark flag follows the theme");
+        host.Appearance = FakeHost.DarkOn;
         yield return (hub.Devices.Count == 1 && hub.Devices[0].Name == "Anna's iPhone", "Nota lists the phone");
 
         Send(new { t = "ping", c = 1 });

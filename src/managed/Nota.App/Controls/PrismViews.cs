@@ -10,7 +10,8 @@
 //   PrismEnvTrace  — the band's input peaks and its detector envelope against the threshold.
 //   PrismGrMeter   — a gain-reduction bar that grows down from the top (boost grows up), with
 //                    an optional peak-hold line.
-// Band colours follow the mockup: Low = mauve, Mid = brass, High = teal.
+// Band colours follow the mockup: Low = mauve, Mid = neutral ink, High = teal (accent is kept
+// for live or chosen state — a dragged handle, solo).
 
 using System;
 using System.Diagnostics;
@@ -26,19 +27,19 @@ namespace Nota.App;
 internal static class PrismInk
 {
     // Read per use: the colours follow the theme, so they must not be captured in a static array.
-    public static Color[] BandColor => new[] { NotaPalette.TrackColors[7], NotaPalette.AccentColor, NotaPalette.TrackColors[4] };
-    public static readonly IBrush[] Band = { NotaPalette.TrackBrushes[7], NotaPalette.Accent, NotaPalette.Teal };
-    // Text / handle tint for the selected band (the brass band lights up to AccentBright).
-    public static readonly IBrush[] BandLit = { Band[0], NotaPalette.AccentBright, Band[2] };
+    public static Color[] BandColor => new[] { NotaPalette.TrackColors[7], NotaPalette.VizInk.Color, NotaPalette.TrackColors[4] };
+    public static readonly IBrush[] Band = { NotaPalette.TrackBrushes[7], NotaPalette.VizInk, NotaPalette.Teal };
+    // Text / handle tint for the selected band.
+    public static readonly IBrush[] BandLit = { Band[0], NotaPalette.TextPrimary, Band[2] };
     public static readonly string[] Names = { "Low", "Mid", "High" };
     public static readonly IBrush InnerBorder = NotaPalette.GraphBorder;
     public static readonly IPen InnerPen = new Pen(InnerBorder, 1);
     private static readonly Typeface Mono = NotaFonts.Mono;
-    private static readonly Typeface Sans = NotaFonts.SansBold;
+    private static readonly Typeface Sans = NotaFonts.SansSemiBold;
 
     public static IBrush Alpha(Color c, byte a) => new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B));
     public static FormattedText Text(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, b);
-    public static FormattedText Caps(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
+    public static FormattedText Caps(string s, double size, IBrush b) => new(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
     public static double Db(double lin) => lin > 1e-6 ? 20 * Math.Log10(lin) : -120;
     public static string HzShort(double hz) => hz >= 1000 ? (hz >= 10000 ? NotaNum.F($"{hz / 1000:0}k") : NotaNum.F($"{hz / 1000:0.0}k")) : NotaNum.F($"{hz:0}");
 }
@@ -161,6 +162,13 @@ internal sealed class PrismSpectrum : Control
         int d = _drag; _drag = -1; e.Pointer.Capture(null); DragEnded?.Invoke(d); InvalidateVisual();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag >= 0) { int d = _drag; _drag = -1; DragEnded?.Invoke(d); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
@@ -214,8 +222,8 @@ internal sealed class PrismSpectrum : Control
             double x = Math.Round(X(v)) + 0.5;
             var col = PrismInk.Band[upper];
             bool hot = _hover == idx || _drag == idx;
-            ctx.DrawLine(new Pen(col, hot ? 2 : 1), new Point(x, 0), new Point(x, h));
-            var t = PrismInk.Text(PrismInk.HzShort(20 * Math.Pow(1000, v)), 7, upper == 1 ? NotaPalette.AccentBright : col);
+            ctx.DrawLine(new Pen(_drag == idx ? NotaPalette.Accent : col, hot ? 2 : 1), new Point(x, 0), new Point(x, h));
+            var t = PrismInk.Text(PrismInk.HzShort(20 * Math.Pow(1000, v)), 7, _drag == idx ? NotaPalette.AccentBright : upper == 1 ? NotaPalette.TextPrimary : col);
             double tw = t.Width + 8, tx = Math.Clamp(x - tw / 2, 0, w - tw);
             var tag = new Rect(tx, 0, tw, 12);
             ctx.DrawRectangle(hot ? NotaPalette.SurfaceRaised : NotaPalette.SurfaceCard, new Pen(col, 1), tag, 3, 3);
@@ -335,6 +343,12 @@ internal sealed class PrismTransfer : Control
         int d = _drag; _drag = 0; e.Pointer.Capture(null); DragEnded?.Invoke(d);
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag != 0) { int d = _drag; _drag = 0; DragEnded?.Invoke(d); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
@@ -360,8 +374,8 @@ internal sealed class PrismTransfer : Control
         if (_level > Lo) ctx.DrawEllipse(NotaPalette.TextPrimary, null, Pt(_level, Out(_level)), 2.2, 2.2);
         // Threshold handles.
         var below = Pt(_thrB, Out(_thrB));
-        if (_below || _hover == 2) ctx.DrawEllipse(_below ? NotaPalette.TextSecondary : NotaPalette.TextDisabled, _hover == 2 ? new Pen(NotaPalette.TextPrimary, 1) : null, below, 3, 3);
-        ctx.DrawEllipse(PrismInk.BandLit[_band], _hover == 1 ? new Pen(NotaPalette.TextPrimary, 1) : null, Pt(_thrA, Out(_thrA)), 3.5, 3.5);
+        if (_below || _hover == 2) ctx.DrawEllipse(_drag == 2 ? NotaPalette.Accent : _below ? NotaPalette.TextSecondary : NotaPalette.TextDisabled, _hover == 2 ? new Pen(NotaPalette.TextPrimary, 1) : null, below, 3, 3);
+        ctx.DrawEllipse(_drag == 1 ? NotaPalette.Accent : PrismInk.BandLit[_band], _hover == 1 ? new Pen(NotaPalette.TextPrimary, 1) : null, Pt(_thrA, Out(_thrA)), 3.5, 3.5);
 
         var ta = PrismInk.Text(NotaNum.F($"above {_thrA:0}"), 7, PrismInk.BandLit[_band]);
         ctx.DrawText(ta, new Point(4, 3));
@@ -421,7 +435,7 @@ internal sealed class PrismEnvTrace : Control
         Trace(_in, new Pen(NotaPalette.BorderStrong, 1.2));
         Trace(_det, new Pen(col, 1.7));
 
-        var title = PrismInk.Caps("DETECTOR ENVELOPE · " + PrismInk.Names[_band].ToUpperInvariant(), 7, NotaPalette.TextTertiary);
+        var title = PrismInk.Caps("Detector envelope · " + PrismInk.Names[_band].ToLowerInvariant(), 7, NotaPalette.TextTertiary);
         ctx.DrawText(title, new Point(5, 3));
         var l2 = PrismInk.Text("detector", 7, PrismInk.BandLit[_band]);
         var l1 = PrismInk.Text("input", 7, NotaPalette.TextTertiary);

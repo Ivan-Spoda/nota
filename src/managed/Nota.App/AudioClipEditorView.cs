@@ -114,16 +114,16 @@ public sealed class AudioClipEditorView : UserControl
         _wave.AdsrCommitted = SetAdsr;
 
         // CLIP — where it sits, and its length (± one beat).
-        var clip = Section("CLIP",
+        var clip = Section("Clip",
             Pair(Labeled("Start", Field(_startText)), Labeled("Length", Stepper(_lengthText, () => Resize(-1), () => Resize(1)))));
 
         // PLAYBACK — gain, varispeed pitch, direction.
-        var gain = SliderRow("GAIN", 44, () => _gain / 2.0, v => SetGain(v * 2.0), GainText, out _syncGain,
+        var gain = SliderRow("Gain", 44, () => _gain / 2.0, v => SetGain(v * 2.0), GainText, out _syncGain,
             reset: () => SetGain(1.0), valueW: 44);
         var pitchRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
         pitchRow.Children.Add(new TextBlock
         {
-            Text = "PITCH", Width = 44, FontSize = 9, FontWeight = FontWeight.Bold, LetterSpacing = 0.72,
+            Text = "Pitch", Width = 44, FontSize = 9, FontWeight = FontWeight.Medium,
             Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         });
         var pitch = Stepper(_pitchText, () => Pitch(-1), () => Pitch(1), zone: 24);
@@ -131,7 +131,7 @@ public sealed class AudioClipEditorView : UserControl
         // Reverse is non-destructive (the file is untouched) and free to toggle, so it
         // doubles as an audition switch; the wave mirrors so it always reads in playing order.
         var reverse = SwitchRow("Reverse", () => _reversed, ToggleReverse, out _syncReverse, height: 22);
-        var playback = Section(SectionTitle("PLAYBACK"), 10, gain, pitchRow, reverse);
+        var playback = Section(SectionTitle("Playback"), 10, gain, pitchRow, reverse);
 
         // WARP — on/off and the stretch mode, the two detectors, what they found.
         var warpSwitch = SwitchRow("Warp", () => _warpEnabled, ToggleWarp, out _syncWarp);
@@ -144,21 +144,21 @@ public sealed class AudioClipEditorView : UserControl
         ToolTip.SetTip(detect, "Detect the file's tempo and conform it to the project");
         var transients = ClipEditorKit.Button("To transients", TransientWarp);
         ToolTip.SetTip(transients, "Pin a marker on every hit so drums lock to the grid");
-        var warp = Section(SectionTitle("WARP", _markerCount), 8,
+        var warp = Section(SectionTitle("Warp", _markerCount), 8,
             warpRow, Pair(detect, transients), Card(KeyValue("Detected", _detectedText)));
 
         // ADSR — the clip's amplitude shape (the ADSR tab swaps the inspector to it). Times
         // run on a square-law slider over the clip length, so short attacks stay fine-grained.
-        var attack = SliderRow("ATTACK", 52, () => TimeNorm(_adsr.AttackBeats),
+        var attack = SliderRow("Attack", 52, () => TimeNorm(_adsr.AttackBeats),
             v => SetAdsrStage(AdsrHandle.Attack, NormTime(v), _adsr.Sustain), () => AdsrTime(_adsr.AttackBeats), out _syncAttack,
             reset: () => SetAdsr(ClipAdsrKit.Reset(AdsrHandle.Attack, _adsr)), valueW: 52);
-        var decay = SliderRow("DECAY", 52, () => TimeNorm(_adsr.DecayBeats),
+        var decay = SliderRow("Decay", 52, () => TimeNorm(_adsr.DecayBeats),
             v => SetAdsrStage(AdsrHandle.DecaySustain, _adsr.AttackBeats + NormTime(v), _adsr.Sustain), () => AdsrTime(_adsr.DecayBeats), out _syncDecay,
             reset: () => { var a = _adsr; a.DecayBeats = 0; SetAdsr(a); }, valueW: 52);
-        var sustain = SliderRow("SUSTAIN", 52, () => _adsr.Sustain,
+        var sustain = SliderRow("Sustain", 52, () => _adsr.Sustain,
             v => SetAdsrStage(AdsrHandle.DecaySustain, _adsr.AttackBeats + _adsr.DecayBeats, v), () => ClipAdsrKit.SustainText(_adsr.Sustain), out _syncSustain,
             reset: () => { var a = _adsr; a.Sustain = 1f; SetAdsr(a); }, valueW: 52);
-        var release = SliderRow("RELEASE", 52, () => TimeNorm(_adsr.ReleaseBeats),
+        var release = SliderRow("Release", 52, () => TimeNorm(_adsr.ReleaseBeats),
             v => SetAdsrStage(AdsrHandle.Release, _lengthBeats - NormTime(v), _adsr.Sustain), () => AdsrTime(_adsr.ReleaseBeats), out _syncRelease,
             reset: () => SetAdsr(ClipAdsrKit.Reset(AdsrHandle.Release, _adsr)), valueW: 52);
         var resetAll = ClipEditorKit.Button("Reset", () => SetAdsr(ClipAdsr.Identity));
@@ -282,7 +282,7 @@ public sealed class AudioClipEditorView : UserControl
         {
             _pitch = (int)Math.Round(ai.PitchSemitones);
             _pitchText.Text = Semis(_pitch);
-            _pitchText.Foreground = _pitch != 0 ? NotaPalette.AccentBright : NotaPalette.TextPrimary;
+            _pitchText.Foreground = _pitch != 0 ? NotaPalette.TextPrimary : NotaPalette.TextSecondary;
             _gain = ai.Gain;
             _syncGain();
             _wave.SetGain(ai.Gain);
@@ -623,8 +623,8 @@ public sealed class AudioClipEditorView : UserControl
         private bool _bpmScrubMoved;   // a plain click (no drag) must not re-warp the clip
 
         // Volume envelope (M9 follow-up): points (beat, value 0..1) in clip-local beats.
-        private static readonly IPen EnvPen = new Pen(NotaPalette.Accent, 1.8);
-        private static readonly IPen EnvPenDim = new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x60), 1);
+        private static readonly IPen EnvPen = new Pen(NotaPalette.VizInk, 1.8);      // the curve at rest: neutral
+        private static readonly IPen EnvPenDim = new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0x60), 1);
         private static readonly IBrush EnvWash = NotaPalette.Wash(NotaPalette.BgSunken, 0x99);
         private static readonly IBrush NodeFill = NotaPalette.TextSecondary;
         private static readonly IBrush NodeHot = NotaPalette.Accent;

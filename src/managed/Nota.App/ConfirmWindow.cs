@@ -20,7 +20,7 @@ public sealed class ConfirmWindow : NotaWindow
         SizeToContent = SizeToContent.Height;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = NotaPalette.BgApp;
+        Background = NotaPalette.Panel;
 
         var yes = new Button { Content = affirmative, Classes = { "primary" } };
         yes.Click += (_, _) => Close(true);

@@ -90,13 +90,13 @@ internal static class PluginCard
         };
         var tags = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 4, 0, 0) };
         if (info.Format.Length > 0) tags.Children.Add(Tag(info.Format));
-        tags.Children.Add(Tag(info.IsInstrument ? "INSTRUMENT" : "EFFECT"));
+        tags.Children.Add(Tag(info.IsInstrument ? "Instrument" : "Effect"));
 
         int pc = e.PluginParamCount(t, di);
         double ms = e.SampleRate > 0 ? e.TrackLatencySamples(t) / e.SampleRate * 1000.0 : 0;
         var facts = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), RowSpacing = 3, Margin = new Thickness(0, 8, 0, 0) };
-        Fact(facts, 0, "PARAMS", pc.ToString(NotaNum.Culture));
-        Fact(facts, 1, "LATENCY", $"{ms.ToString("0.0", NotaNum.Culture)}\u2009ms");
+        Fact(facts, 0, "Params", pc.ToString(NotaNum.Culture));
+        Fact(facts, 1, "Latency", $"{ms.ToString("0.0", NotaNum.Culture)}\u2009ms");
 
         var open = ActionButton("Open editor", GlyphKind.PopOut, primary: true);
         ToolTip.SetTip(open, "Open the plug-in's own window");
@@ -123,7 +123,7 @@ internal static class PluginCard
         for (int i = 0, n = e.TrackCount; i < n && src >= 0; i++)
             if (e.TryGetTrackInfo(i, out var ti) && ti.Id == src) { label = TrackNames.Of(e, ti); break; }
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(0, 0, 0, 3) };
-        Fact(g, 0, "SIDECHAIN", label);
+        Fact(g, 0, "Sidechain", label);
         return g;
     }
 
@@ -132,7 +132,7 @@ internal static class PluginCard
         if (g.RowDefinitions.Count <= row) g.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         var l = new TextBlock
         {
-            Text = label, FontSize = NotaType.RowLabel, FontWeight = FontWeight.Bold, LetterSpacing = NotaType.RowLabelTracking,
+            Text = NotaText.Label(label), FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium,
             Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0),
         };
         var v = new TextBlock
@@ -150,8 +150,8 @@ internal static class PluginCard
         Padding = new Thickness(4, 1), VerticalAlignment = VerticalAlignment.Center,
         Child = new TextBlock
         {
-            Text = text.ToUpperInvariant(), FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobLabel,
-            FontWeight = FontWeight.Medium, LetterSpacing = 0.8, Foreground = TextSecondary,
+            Text = NotaText.Label(text), FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobLabel,
+            FontWeight = FontWeight.Medium, Foreground = TextSecondary,
         },
     };
 
@@ -181,8 +181,8 @@ internal static class PluginCard
 
         var title = new TextBlock
         {
-            Text = "PARAMETERS", FontSize = NotaType.DeviceSection, FontWeight = FontWeight.Bold,
-            LetterSpacing = NotaType.DeviceSectionTracking, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center,
+            Text = "Parameters", FontSize = NotaType.DeviceSection, FontWeight = FontWeight.SemiBold,
+            Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center,
         };
         var count = new TextBlock { FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobValue, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
 
@@ -294,9 +294,10 @@ internal static class PluginCard
     }
 
     // A device section: card ground, hairline, radius 6.
-    private static Border Section(Control child, double pad = 8) => new()
+    private static Decorator Section(Control child, double pad = 8)
     {
-        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Panel, Padding = new Thickness(pad, 6, pad, pad), ClipToBounds = true, Child = child,
-    };
+        var d = DeviceCardKit.Section(child);
+        d.Padding = new Thickness(pad, 6, pad, pad);
+        return d;
+    }
 }

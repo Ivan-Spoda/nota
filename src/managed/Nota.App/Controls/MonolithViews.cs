@@ -69,11 +69,10 @@ internal sealed class MonolithWaveIcon : Control
 // roll-off. Draggable — X sets cutoff, Y sets emphasis (via the Changed callback).
 internal sealed class MonolithFilterCurve : Control
 {
-    private static readonly IBrush Amber = NotaPalette.Accent;
-    private static readonly IBrush AmberLit = NotaPalette.AccentBright;
+    private static readonly IBrush Ink = NotaPalette.VizInk;   // the curve at rest: neutral ink
     private static readonly IBrush Inset = NotaPalette.BgSunken;
     private static readonly IBrush Grid = NotaGraph.Grid;
-    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Accent, 0x1E);
+    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.VizInk, 0x1E);
     private static readonly Typeface Mono = NotaFonts.Mono;
     private double _cut = 0.5, _reso;
     private bool _drag;
@@ -100,7 +99,11 @@ internal sealed class MonolithFilterCurve : Control
     protected override void OnPointerMoved(PointerEventArgs e)
     { base.OnPointerMoved(e); if (_drag) Apply(e); }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { base.OnPointerReleased(e); if (_drag) { _drag = false; DragEnded?.Invoke(); e.Pointer.Capture(null); } }
+    { base.OnPointerReleased(e); if (_drag) { _drag = false; InvalidateVisual(); DragEnded?.Invoke(); e.Pointer.Capture(null); } }
+
+    // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    { if (_drag) { _drag = false; InvalidateVisual(); DragEnded?.Invoke(); } base.OnPointerCaptureLost(e); }
 
     private double Y(double x, double w, double h)
     {
@@ -132,17 +135,17 @@ internal sealed class MonolithFilterCurve : Control
             for (double x = 0; x <= w; x += 2) { var p = new Point(x, Y(x, w, h)); lc.LineTo(p); fc.LineTo(p); }
             fc.LineTo(new Point(w, h));
         }
-        ctx.DrawGeometry(null, new Pen(Amber, NotaGraph.PrimaryWidth), line);
+        ctx.DrawGeometry(null, new Pen(Ink, NotaGraph.PrimaryWidth), line);
 
         // freq · Q readout (top-right)
         double hz = 16 * Math.Pow(1250, _cut), q = _reso * 10;
         string txt = (hz >= 1000 ? $"{hz / 1000:0.0}\u2009k" : $"{hz:0}\u2009Hz") + $" · Q {q:0.0}";
-        var ft = new FormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, AmberLit);
+        var ft = new FormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         ctx.DrawText(ft, new Point(w - ft.Width - 4, 3));
 
         // cutoff handle (filled, dark ring) at the resonance peak
         double hx = Math.Clamp(_cut * w, 4, w - 4), hy = Math.Clamp(Y(_cut * w, w, h), 4, h - 4);
-        ctx.DrawEllipse(AmberLit, new Pen(Inset, 2), new Point(hx, hy), 4, 4);
+        ctx.DrawEllipse(_drag ? NotaPalette.Accent : Ink, new Pen(Inset, 2), new Point(hx, hy), 4, 4);
     }
 }
 
@@ -150,7 +153,7 @@ internal sealed class MonolithFilterCurve : Control
 internal sealed class MonolithEnvCurve : Control
 {
     private double _a, _d, _s = 0.8;
-    public IBrush Accent { get; set; } = NotaPalette.Accent;
+    public IBrush Accent { get; set; } = NotaPalette.VizInk;   // the curve's ink (neutral at rest)
 
     public void Set(double a, double d, double s) { _a = a; _d = d; _s = s; }
 

@@ -16,7 +16,7 @@
 //              sits in the tab strip.
 //   • S 260 × 260 — the model chips, the pickup window, HARD · PICKUP · DRIVE · TREM.
 //
-// Brass is the parameter itself; teal is modulation depth (vel → hardness, key → bright,
+// Neutral ink is the parameter itself; teal is modulation depth (vel → hardness, key → bright,
 // tremolo depth). BodyOnly — the shared shell draws the header (name / preset / A-B / MPE).
 
 using System;
@@ -35,7 +35,7 @@ namespace Nota.App;
 internal sealed class KeysInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
-    public string Subtitle => "ELECTRIC PIANO";
+    public string Subtitle => "Electric piano";
 
     public double WidthFor(IAudioEngine engine, int trackId) => InstrumentView.IsMini(engine, trackId) ? 260 : 700;
 
@@ -127,11 +127,11 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
 
         static TextBlock Caps(string text, IBrush? ink = null) => new()
         {
-            Text = text.ToUpperInvariant(), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold,
-            LetterSpacing = NotaType.KnobLabelTracking, Foreground = ink ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center,
+            Text = NotaText.Label(text), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Foreground = ink ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         };
 
-        // A section's power dot: brass and glowing when on. Click toggles the param.
+        // A section's power dot: accent and glowing when on. Click toggles the param.
         Control PowerDot(string id)
         {
             var dot = new Ellipse { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center };
@@ -296,7 +296,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
             pedalDot.Fill = down ? NotaPalette.Success : NotaPalette.BorderStrong;
             pedalPill.BorderBrush = down ? NotaPalette.Success : BorderDef;
             pedalTxt.Foreground = down ? TextPrimary : TextTertiary;
-            pedalLbl.Text = down ? "PEDAL ↓" : "PEDAL";
+            pedalLbl.Text = down ? "Pedal ↓" : "Pedal";
             pedalLbl.Foreground = down ? TextPrimary : TextTertiary;
         });
         var damper = Col("Damper", VStack(
@@ -309,7 +309,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         for (int i = 0; i < soundCells.Length; i++) { Grid.SetColumn(soundCells[i], i); soundRow.Children.Add(soundCells[i]); }
 
         // ======================= FX tab =========================================
-        Border Island(string title, Control body, string? power = null, Control? accessory = null, double width = double.NaN)
+        Decorator Island(string title, Control body, string? power = null, Control? accessory = null, double width = double.NaN)
         {
             var head = new DockPanel { Height = 18, Margin = new Thickness(6, 0) };
             if (accessory is not null) { DockPanel.SetDock(accessory, Dock.Right); head.Children.Add(accessory); }
@@ -323,11 +323,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
             grid.Children.Add(new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 0, 0, 1), Child = head });
             body.Margin = new Thickness(5, 5, 5, 5);
             Grid.SetRow(body, 1); grid.Children.Add(body);
-            var b = new Border
-            {
-                Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = grid,
-            };
+            var b = DeviceCardKit.Section(grid);
             if (!double.IsNaN(width)) b.Width = width;
             return b;
         }
@@ -431,7 +427,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         railBottom.Children.Add(voiceInfo);
         Grid.SetColumn(railMeter, 1); railBottom.Children.Add(railMeter);
         var voicesRow = new DockPanel();
-        var vLbl = new TextBlock { Text = "VOICES", FontSize = NotaType.RowLabel, FontWeight = FontWeight.Bold, LetterSpacing = NotaType.RowLabelTracking, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var vLbl = new TextBlock { Text = "Voices", FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         DockPanel.SetDock(vLbl, Dock.Left); voicesRow.Children.Add(vLbl);
         voicesChips.HorizontalAlignment = HorizontalAlignment.Right; voicesRow.Children.Add(voicesChips);
         var railTop = new StackPanel
@@ -481,7 +477,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
                 bool on = i == tab;
                 tabCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
                 tabCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                tabTexts[i].Foreground = on ? AccentBright : TextTertiary;
+                tabTexts[i].Foreground = on ? TextPrimary : TextTertiary;
                 tabTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
             }
             soundRow.IsVisible = tab == 0; fxRow.IsVisible = tab == 1;
@@ -513,7 +509,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
 
         var statusHost = StatusStrip(status, meta);
         DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.Gutter, Children = { statusHost, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
         ShowTab();
         return root;
     }
@@ -548,7 +544,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
 
         var statusHost = StatusStrip(status, meta);
         DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.Gutter, Children = { statusHost, island } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, island } };
         refresh();
         return root;
     }
@@ -565,11 +561,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         };
     }
 
-    private static Border SectionBox(Control child) => new()
-    {
-        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = child,
-    };
+    private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
 
     private static Knob? FindKnob(Control cell)
         => cell is Panel p ? System.Linq.Enumerable.FirstOrDefault(System.Linq.Enumerable.OfType<Knob>(p.Children)) : null;

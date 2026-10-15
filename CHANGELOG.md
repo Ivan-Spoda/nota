@@ -22,6 +22,109 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.55.1] — 2026-10-15
+
+### Added
+- **Resizable tracks in the arrangement** (nota-daw/nota#52): drag the bottom edge of a
+  track — in its header or its lane — to make it taller or shorter (30 to 256 px; it
+  snaps lightly to the Compact, Standard and Large sizes). Drag with several tracks
+  selected to resize them all together, hold **Alt** (**Option** on macOS) to resize every
+  track at once, and double-click the edge to go back to the standard height. The track's
+  context menu has **Track height** with the three sizes for the selection or for all
+  tracks. Clips, waveforms and automation grow with the row.
+- **Track headers that fit their height:** a short track shows its name and mute, solo
+  and record-arm on one line; a standard one looks as before; a tall one gives the input
+  or MIDI source, the volume fader and the pan a row each.
+- **Resizable track list:** drag the seam between the track headers and the lanes to
+  widen or narrow the header column (160 to 480 px); double-click it to reset. Track
+  heights and the column width are saved with the project.
+- **Colour themes:** Preferences → Appearance now offers colour themes — Studio Dark,
+  Studio Light, and **Ember Graphite** / **Ember Paper**, the warm browns and brass of
+  Nota's earlier look, on the new layout. Choose **Dark**, **Light** or **Follow system**,
+  then a theme: each is a card showing a miniature Nota window in its own colours, and
+  picking one recolours every window at once. Themes change colours only, and each gives the track
+  colours its own shades — your projects are untouched.
+- **Follow system, with a theme for each mode:** choose a theme for when your computer is
+  in dark mode and one for light mode, and Nota switches between them with the OS.
+- **Category chips in the browser:** the Instruments, Audio effects and MIDI effects tabs
+  have a row of category chips above the list — Synths, Drums, Samplers…; EQ & filter,
+  Dynamics, Reverb & delay, Modulation…; Generate and Shape. Click one to see only that
+  kind of device, and click it again to see everything. Each tab remembers its pick while
+  you switch tabs, and the chips combine with search, Favorites and tags. Installed
+  plug-ins join the same categories from the category they report (anything unrecognised
+  under Other). "Category chips" in the ⋮ menu hides the row.
+
+### Changed
+- **A new look, Studio:** your music carries the colour now, and the interface steps back
+  — neutral greys with one orange accent. The panels — browser, arrangement, detail panel
+  — now sit edge to edge on thin seams instead of floating as rounded islands, and the
+  transport is a slimmer, flat row with its readouts set in small wells ("120.00 BPM",
+  "1/4 Grid"). Orange now means only "playing, selected or switched on": knob arcs, faders
+  and device graphs are neutral at rest and light up while you hover or drag them; a
+  toggled-on button fills solid orange. Mute fills amber, solo blue and record-arm red.
+  Labels are in sentence case instead of spaced capitals, corners are nearly square, and
+  clips in the arrangement are drawn in their full track colour with a darker title band.
+  Studio Light follows the same system in light greys (see *Colour themes* above; your
+  Dark / Light / System choice carries over). Every feature, shortcut and menu stays where
+  it was, and projects open unchanged (track colours keep their place in the new palette).
+- **Nota Remote matches Nota:** the phone now wears the same colour theme as the
+  computer, and switches with it — pick another theme in Preferences → Appearance, or let
+  Follow system flip it, and the phone follows within a moment, without reloading or
+  cutting a held note. Under the phone's own **Follow phone** setting (⋯ → Theme) it wears
+  your In dark mode / In light mode themes as the phone itself turns dark or light. The
+  phone's screens take the Studio look too: neutral greys, orange only for what is playing,
+  held or switched on, mute amber, solo blue and arm red, sentence-case labels and nearly
+  square corners. A phone that has connected before opens straight in its last theme.
+- **View switcher as icons:** Arrangement, Session and Modular are now three small icon
+  keys in the transport instead of words, freeing about 140 px. Hover one for its name.
+  Every icon in the app now comes from one set, drawn at one line weight.
+- **Calmer device cards:** sections inside a card are no longer boxes — they sit on the
+  card and a thin line divides neighbours, with every control where it was. Every card,
+  including the Instrument Rack, the generic instrument card and Sends, has the same
+  header: name, presets, badges, then the power switch, each in the same place, so presets
+  and power switches line up down a chain.
+- **A mixer window that fits:** in the Strips view the Mixer window is as wide as its
+  channel strips (up to the screen width) and resizes as you add or remove tracks — no
+  more empty space beside the master. Escape closes it, and cancels Export.
+- **One labelling voice:** menus, the command palette, window titles, the Session view,
+  Preferences and the mixer use sentence case throughout ("Save as…", "Export audio",
+  "Recent") instead of a mix of capitals and Title Case.
+- **A quieter browser list:** built-in devices are listed by their short name ("Aurora",
+  not "Nota Aurora" — searching either still finds it), and the type on the right is a
+  shade quieter.
+- **A slimmer "add device" target:** the end of a device chain is a narrow "+" instead of
+  a large dashed tile; the dashed outline appears only while you drag a device over the
+  chain.
+
+### Fixed
+- **One settings folder on Linux:** Nota kept its files in two folders, `~/.config/nota`
+  and `~/.config/Nota`; the audio and MIDI device choice and the plugin list went to the
+  second. Everything now lives in `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`), and on the
+  first launch Nota moves the files over from `~/.config/Nota` — nothing to set up again.
+- **Popping out the piano roll no longer crashes on Linux:** opening Devices / Clip in its
+  own window could close Nota at once on Linux ("Attempt to call InvalidateArrange on wrong
+  LayoutManager"). The editor's pending layout in the main window is now finished before it
+  moves to the new window, and the same on the way back.
+- **The transport meter says what it measures:** it read "CPU" but showed only the audio
+  engine's load, so it sat far below the system monitor. It is now labelled **DSP** — the
+  share of each audio buffer the engine needs, which is what causes dropouts — and its
+  tooltip adds the CPU used by the whole Nota process over the last few seconds, in the
+  same scale as your system monitor (Windows: of all CPUs; macOS and Linux: of one core).
+  Instrument cards that showed the engine load now say DSP too.
+- **Less CPU while idle:** Nota no longer redraws its meters, playhead and CPU read-out
+  ~30 times a second when nothing on them has changed. It skips them entirely while the
+  window is minimized, and on Linux the plug-in message pump slows down when no plug-in
+  needs it. Most noticeable on Linux, where Nota used much more CPU than other DAWs.
+- **New tracks scroll into view:** a track added to a full arrangement was drawn under the
+  pinned Return and Master rows. The arrangement now scrolls to show it, and the pinned
+  rows sit on a line of their own.
+- **The Session toolbar fits small windows:** controls no longer run off the edge — when
+  space runs out, the least-used ones move into a "⋯" menu. The inspector is narrower and
+  can be hidden with the new Inspector key (the sidebar icon); Nota remembers your choice.
+- **Modular lists your tracks on open:** opening Modular after loading a project showed an
+  empty track list. It now lists the tracks and opens on the first one, and an empty
+  project says "No tracks yet".
+
 ## [0.53.1] — 2026-10-15
 
 ### Added

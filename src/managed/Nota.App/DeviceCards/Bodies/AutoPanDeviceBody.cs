@@ -35,7 +35,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "PANNER";   // the processing type, shown as the header badge
+    public string? Subtitle => "Panner";   // the processing type, shown as the header badge
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -80,7 +80,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null) => new()
-        { Text = t, FontSize = 7, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.7, VerticalAlignment = VerticalAlignment.Center };
+        { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -103,16 +103,15 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             return g;
         }
 
-        Border Island(Control head, Control body, double width = double.NaN)
+        RuleSection Island(Control head, Control body, double width = double.NaN)
         {
             var headBar = new Border
             {
                 Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(8, 0, 3, 0), Child = head,
             };
-            return new Border
+            return new RuleSection
             {
-                Width = width, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-                ClipToBounds = true, Child = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), body } },
+                Width = width, Child = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), body } },
             };
         }
         static Grid HeadRow(Control left, Control right)
@@ -142,7 +141,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         Learn(waveSeg, Waveform);
         ToolTip.SetTip(waveSeg, "The LFO shape. S&H draws a random step every cycle; the right channel plays the same steps Phase later");
 
-        var big = Mono("", 26, AccentBright); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
+        var big = Mono("", 26, TextPrimary); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
         var bigSub = new TextBlock { FontSize = 8, Foreground = TextSecondary };
         var period = Mono("", 7, TextTertiary); period.Margin = new Thickness(0, 2, 0, 0);
         readouts.Add(() =>
@@ -160,7 +159,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
                 bigSub.Text = "Hz · free";
                 period.Text = "period " + Ms(PeriodMs());
             }
-            big.Foreground = On() ? AccentBright : NotaPalette.TextAxis;
+            big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
         });
         var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
         ToolTip.SetTip(bigBlock, "The LFO rate: in Hz, or the note value it takes from the tempo");
@@ -171,7 +170,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             snap: v => OrbitMath.DivNorm(OrbitMath.DivIndex(v)));
         readouts.Add(() => { rateRow.IsVisible = !Synced(); divRow.IsVisible = Synced(); });
         var shapeRow = Slider("SHAPE", Shape, v => PctF(v), "Shape — sharpens Sine, Tri and Saw toward a square; on S&H it is Glide, the slide from one step to the next", out var shapeLbl, 38, 46);
-        readouts.Add(() => shapeLbl.Text = WaveI() == 4 ? "GLIDE" : "SHAPE");
+        readouts.Add(() => shapeLbl.Text = WaveI() == 4 ? "Glide" : "Shape");
 
         var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 6, Margin = new Thickness(8, 6) };
         leftBody.Children.Add(waveSeg);
@@ -189,7 +188,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         var legend = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 5, 0),
-            Children = { LegendItem("L", AccentBright), LegendItem("R", NotaPalette.TealBright), waveWord },
+            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", NotaPalette.TealBright), waveWord },
         };
         var graph = new OrbitGainView { Value = () => (P(Amount), P(Phase)) };
         graph.GestureBegin += () => { Begin(Amount); Begin(Phase); };
@@ -197,12 +196,12 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         graph.Changed += (a, ph) => { Raw(Amount, a); Raw(Phase, ph); RefreshAll(); };
         graph.ResetRequested += () => { Reset(Amount); Reset(Phase); RefreshAll(); };
         Learn(graph, Amount);
-        ToolTip.SetTip(graph, "Both channels' gain over two LFO cycles — L brass, R teal, Phase later — with the floor the depth reaches. Drag up / down for Amount, left / right for Phase; double-click resets both.");
+        ToolTip.SetTip(graph, "Both channels' gain over two LFO cycles — L neutral, R teal, Phase later — with the floor the depth reaches. Drag up / down for Amount, left / right for Phase; double-click resets both.");
 
         var panBar = new OrbitPanBar { VerticalAlignment = VerticalAlignment.Center };
         var panTxt = Mono("", 8, TextPrimary); panTxt.TextAlignment = TextAlignment.Right; panTxt.Width = 28;
-        var lTag = Mono("L", 7, AccentBright); lTag.FontWeight = FontWeight.Bold;
-        var rTag = Mono("R", 7, NotaPalette.TealBright); rTag.FontWeight = FontWeight.Bold;
+        var lTag = Mono("L", 7, NotaPalette.VizInk); lTag.FontWeight = FontWeight.Medium;
+        var rTag = Mono("R", 7, NotaPalette.TealBright); rTag.FontWeight = FontWeight.Medium;
         var panRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 6, Height = 14, Margin = new Thickness(0, 4, 0, 0) };
         panRow.Children.Add(lTag);
         panRow.Children.Add(Col(panBar, 1));
@@ -222,7 +221,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         {
             string m = Mode();
             modeWord.Text = m;
-            modeWord.Foreground = m == "auto-pan" ? AccentBright : m == "tremolo" ? NotaPalette.TealBright : TextSecondary;
+            modeWord.Foreground = m == "auto-pan" ? TextPrimary : m == "tremolo" ? NotaPalette.TealBright : TextSecondary;
         });
         ToolTip.SetTip(modeWord, "What the phase makes: tremolo near 0°, auto-pan near 180°, an offset pan between");
 
@@ -283,7 +282,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             {
                 Spacing = 5, Children =
                 {
-                    MeterRow("OUT L", AccentBright, Brass, S_OutPeakL, S_GainL),
+                    MeterRow("OUT L", NotaPalette.VizInk, NotaPalette.VizInk, S_OutPeakL, S_GainL),
                     MeterRow("OUT R", NotaPalette.TealBright, NotaPalette.TealBright, S_OutPeakR, S_GainR),
                 },
             },
@@ -320,7 +319,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             }
             else foot = NotaNum.F($"Phase {Deg():0}°: the channels are offset, the pan moves unevenly");
             statusLeft.Text = foot;
-            statusLeft.Foreground = warn ? AccentBright : TextSecondary;
+            statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
             double sr = Sc(S_SampleRate);
             statusRight.Text = (sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · ") : "") + NotaNum.F($"{Bpm():0.##}\u2009BPM · ") + (Synced() ? "retrig bar" : "free run");
         });
@@ -332,7 +331,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {

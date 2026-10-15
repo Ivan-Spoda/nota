@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Nota Velocity TRANSFER plot (almanac mockups 1a / 1b): input velocity across, output up.
+// Nota Velocity transfer plot (almanac mockups 1a / 1b): input velocity across, output up.
 // In a sunken well: the Out range as two dashed lines, the band Random can spread a note over
-// (a brass wash around the curve, clipped to the range), the transfer curve in brass and the
-// last 12 notes as dots — older ones fainter, the newest a Brass Light dot with a halo. The
+// (a neutral wash around the curve, clipped to the range), the transfer curve in neutral ink and
+// the last 12 notes as dots — older ones fainter, the newest a full dot with a halo, and an accent ring that pops as a note plays. The
 // full view adds the centre cross and the dashed identity diagonal.
 //
 // Motion: the curve and band glide to a new setting (a mode switch or a preset morphs rather
@@ -28,11 +28,11 @@ internal sealed class VelocityTransferViz : Control
     private static readonly IBrush Cross = NotaPalette.GridBeat;
     private static readonly IBrush Limit = NotaPalette.BorderStrong;
     private static readonly IBrush Diag = NotaPalette.BorderDefault;
-    private static readonly IBrush Band = NotaPalette.Wash(NotaPalette.Accent, 0x1F);
-    private static readonly IBrush Curve = NotaPalette.Accent;
+    private static readonly IBrush Band = NotaPalette.Wash(NotaPalette.VizInk, 0x1F);
+    private static readonly IBrush Curve = NotaPalette.VizInk;
     private static readonly IBrush CurveOff = NotaPalette.BorderStrong;
-    private static readonly IBrush Latest = NotaPalette.AccentBright;
-    private static readonly IBrush Halo = NotaPalette.Wash(NotaPalette.AccentBright, 0x40);
+    private static readonly IBrush Latest = NotaPalette.VizInk;
+    private static readonly IBrush Halo = NotaPalette.Wash(NotaPalette.VizInk, 0x40);
 
     private const int N = 41;   // curve samples across the input
     private const double PopMs = 220, RingMs = 650;
@@ -152,7 +152,7 @@ internal sealed class VelocityTransferViz : Control
             if (!latest)
             {
                 double a = 0.25 + 0.5 * (i + 12 - n) / 12.0;
-                var ink = _bypassed ? CurveOff : NotaPalette.Wash(NotaPalette.Accent, (byte)Math.Round(a * 255));
+                var ink = _bypassed ? CurveOff : NotaPalette.Wash(NotaPalette.VizInk, (byte)Math.Round(a * 255));
                 double r = Full ? 2.5 : 2;
                 ctx.DrawEllipse(ink, null, p, r, r);
                 continue;

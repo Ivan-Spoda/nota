@@ -3,7 +3,7 @@
 //
 // A performance wheel — the pitch-bend / modulation pair every hardware synth puts left of
 // the keys, drawn flat to the almanac: a sunken pill, a hairline border, tick marks and a
-// Brass Light bar at the value. Nota Operator's card keeps both on screen on every tab.
+// neutral bar at the value (accent while dragged). Nota Operator's card keeps both on screen on every tab.
 //
 // Interaction matches the knob contract: vertical drag (up increases) over the wheel's own
 // height, Shift/Ctrl/⌘ for fine, a click never jumps the value, double-click restores the
@@ -25,7 +25,7 @@ internal sealed class PerformWheel : Control
     private static readonly IBrush Face = NotaPalette.SurfaceRaised;
     private static readonly IBrush Edge = NotaPalette.BorderDefault;
     private static readonly IBrush Tick = NotaPalette.BorderStrong;
-    private static readonly IBrush Bar = NotaPalette.AccentBright;
+    private static readonly IBrush Bar = NotaPalette.VizInk;
     private static readonly IBrush BarOff = NotaPalette.TextTertiary;
 
     private double _norm;
@@ -80,10 +80,22 @@ internal sealed class PerformWheel : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_drag) return;
-        _drag = false;
+        _drag = false; InvalidateVisual();
         e.Pointer.Capture(null);
         if (Spring) Write(Default);
         GestureEnd?.Invoke();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): spring back, end the gesture and drop the accent.
+        if (_drag)
+        {
+            _drag = false; InvalidateVisual();
+            if (Spring) Write(Default);
+            GestureEnd?.Invoke();
+        }
+        base.OnPointerCaptureLost(e);
     }
 
     private void Write(double v)
@@ -116,6 +128,6 @@ internal sealed class PerformWheel : Control
         double pad = 3;
         double y = pad + (1 - _norm) * (h - pad * 2);
         bool live = Math.Abs(_norm - Default) > 1e-3;
-        ctx.DrawRectangle(live ? Bar : BarOff, null, new Rect(1.5, y - 1, w - 3, 2), 1, 1);
+        ctx.DrawRectangle(_drag ? NotaPalette.Accent : live ? Bar : BarOff, null, new Rect(1.5, y - 1, w - 3, 2), 1, 1);
     }
 }

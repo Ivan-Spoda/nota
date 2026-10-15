@@ -3,13 +3,13 @@
 //
 // Nota Auto Shift (device kind 10) card windows, all read from the engine's telemetry
 // (AutoShift.h scopeRead), so the picture is what the corrector does:
-//  · AsPill — the PITCH column: IN (where the voice sits in the detection range, brass,
-//    rising from the bottom) or CORR (the correction now, teal, bipolar about the centre).
+//  · AsPill — the Pitch column: In (where the voice sits in the detection range, neutral
+//    ink, rising from the bottom) or Corr (the correction now, teal, bipolar about the centre).
 //  · AsTraceView — the Trace and MIDI tabs: the detected pitch (teal dots) and the output
-//    (brass line) over the last ~2 s on note lanes of the active scale, the target lane lit;
+//    (neutral line) over the last ~2 s on note lanes of the active scale, the target lane lit;
 //    in MIDI mode the source's notes are drawn as blocks on their lanes.
 //  · AsHistView — the Scale tab: how long each pitch class was sung (decaying over ~16
-//    bars), in-scale columns brass, sung out-of-scale ones teal. Clicking a column toggles
+//    bars), in-scale columns neutral ink, sung out-of-scale ones teal. Clicking a column toggles
 //    that note in the scale.
 
 using System;
@@ -26,7 +26,7 @@ internal sealed class AsPill : Control
     private double _v = double.NaN;
     /// <summary>Bipolar: the fill hangs from the centre (the correction); else it rises from the bottom.</summary>
     public bool Bipolar { get; init; }
-    public IBrush Ink { get; init; } = NotaPalette.Accent;
+    public IBrush Ink { get; init; } = NotaPalette.VizInk;
 
     public AsPill() { Width = 16; }
 
@@ -164,8 +164,8 @@ internal sealed class AsTraceView : Control
                 double y = Y(note), bh = Math.Max(4, laneH * 0.7);
                 bool now = k >= _n;
                 var r = new Rect(X(s), y - bh / 2, Math.Max(2, X(k - 1) - X(s)), bh);
-                ctx.DrawRectangle(NotaPalette.Wash(NotaPalette.Accent, now ? (byte)0x4C : (byte)0x2E),
-                    new Pen(now ? NotaPalette.AccentBright : NotaPalette.Accent, now ? 1.2 : 1), new RoundedRect(r, 2));
+                ctx.DrawRectangle(now ? NotaPalette.Wash(NotaPalette.Accent, 0x4C) : NotaPalette.Wash(NotaPalette.VizInk, 0x2E),
+                    new Pen(now ? NotaPalette.AccentBright : NotaPalette.VizInk, now ? 1.2 : 1), new RoundedRect(r, 2));
             }
         }
 
@@ -174,7 +174,7 @@ internal sealed class AsTraceView : Control
         for (int k = 0; k < _n; k += 2)
             if (_det[k] > 0) ctx.DrawEllipse(dot, null, new Point(X(k), Y(_det[k])), 0.9, 0.9);
 
-        // Output: brass line, broken where unvoiced.
+        // Output: neutral line, broken where unvoiced.
         StreamGeometry? geo = null; StreamGeometryContext? gc = null;
         Point last = default; bool any = false;
         void Flush() { if (gc != null) { gc.Dispose(); ctx.DrawGeometry(null, NotaGraph.PrimaryPen, geo!); gc = null; geo = null; } }
@@ -187,7 +187,7 @@ internal sealed class AsTraceView : Control
             last = p; any = k == _n - 1;
         }
         Flush();
-        if (any) ctx.DrawEllipse(NotaPalette.Accent, new Pen(NotaGraph.Ground, 1), last, 2.6, 2.6);
+        if (any) ctx.DrawEllipse(NotaPalette.VizInk, new Pen(NotaGraph.Ground, 1), last, 2.6, 2.6);
 
         // Lane labels, the target lit.
         for (int i = 0; i < nl; i++)
@@ -196,8 +196,8 @@ internal sealed class AsTraceView : Control
             var ft = NotaGraph.AxisText(Names[((m % 12) + 12) % 12] + (m / 12 - 1), m == tgtNote ? NotaPalette.AccentBright : null, 6);
             ctx.DrawText(ft, new Point(4, LaneY(i) - ft.Height / 2));
         }
-        if (_midiMode) NotaGraph.Legend(ctx, w - 5, 2, ("MIDI", NotaPalette.AccentBright, NotaGraph.Mark.Area), ("input", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
-        else NotaGraph.Legend(ctx, w - 5, 2, ("input", NotaPalette.TealBright, NotaGraph.Mark.Dashed), ("corrected", NotaPalette.AccentBright, NotaGraph.Mark.Line));
+        if (_midiMode) NotaGraph.Legend(ctx, w - 5, 2, ("MIDI", NotaPalette.VizInk, NotaGraph.Mark.Area), ("input", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
+        else NotaGraph.Legend(ctx, w - 5, 2, ("input", NotaPalette.TealBright, NotaGraph.Mark.Dashed), ("corrected", NotaPalette.VizInk, NotaGraph.Mark.Line));
         var t0 = NotaGraph.AxisText("−" + _window, null, 6);
         ctx.DrawText(t0, new Point(gx, h - t0.Height - 1));
         var t1 = NotaGraph.AxisText("now", null, 6);
@@ -262,14 +262,14 @@ internal sealed class AsHistView : Control
             bool inScale = (_mask >> i & 1) != 0;
             double v = Math.Clamp(_h[i], 0, 1);
             double bh = Math.Max(1.5, v * (bot - top));
-            IBrush fill = inScale ? (i == _key ? NotaPalette.Accent : NotaPalette.Wash(NotaPalette.Accent, 0x8C))
+            IBrush fill = inScale ? (i == _key ? NotaPalette.VizInk : NotaPalette.Wash(NotaPalette.VizInk, 0x8C))
                         : v > 0.08 ? NotaPalette.Wash(NotaPalette.Teal, 0x99) : NotaPalette.BorderDefault;
             var r = new Rect(6 + i * gw + gap / 2, bot - bh, gw - gap, bh);
             if (i == _hover) ctx.FillRectangle(NotaPalette.Wash(NotaPalette.BorderStrong, 0x30), new Rect(6 + i * gw + 1, top - 2, gw - 2, bot - top + 2));
             ctx.DrawRectangle(fill, null, new RoundedRect(r, 2, 2, 0, 0));
         }
-        var title = new FormattedText("SUNG NOTES", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansBold, 7, NotaGraph.TitleInk);
+        var title = new FormattedText("Sung notes", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 7, NotaGraph.TitleInk);
         ctx.DrawText(title, new Point(5, 3));
-        NotaGraph.Legend(ctx, w - 5, 2, ("in scale", NotaPalette.AccentBright, NotaGraph.Mark.Area), ("out of scale" + _outName, NotaPalette.TealBright, NotaGraph.Mark.Area));
+        NotaGraph.Legend(ctx, w - 5, 2, ("in scale", NotaPalette.VizInk, NotaGraph.Mark.Area), ("out of scale" + _outName, NotaPalette.TealBright, NotaGraph.Mark.Area));
     }
 }

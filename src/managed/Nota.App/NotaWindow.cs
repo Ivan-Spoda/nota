@@ -37,7 +37,7 @@ public abstract class NotaWindow : Window
     /// Linux keeps the native frame either way.</summary>
     protected NotaWindow(double ownTitleBarHeight)
     {
-        Background = NotaPalette.BgApp;
+        Background = NotaPalette.Panel;   // a dialog body is the panel tone
 
         // Body + learn glass share the space below the title bar (glass on top).
         var bodyLayer = new Panel();
@@ -50,7 +50,7 @@ public abstract class NotaWindow : Window
         // Linux: keep the native OS window frame (GNOME/KDE draw their own title bar with
         // the window Title) — no extended client area, no custom bar. Matches MainWindow's
         // Linux treatment. macOS/Windows get the frameless modern chrome with a slim custom
-        // title bar (extend the client area, 36px band), so every window reads as one family.
+        // title bar (extend the client area, a 32px raised band), so every window reads as one family.
         if (!OperatingSystem.IsLinux() && ownTitleBarHeight > 0)
         {
             ExtendClientAreaToDecorationsHint = true;
@@ -59,14 +59,14 @@ public abstract class NotaWindow : Window
         else if (!OperatingSystem.IsLinux())
         {
             ExtendClientAreaToDecorationsHint = true;
-            ExtendClientAreaTitleBarHeightHint = 36;
+            ExtendClientAreaTitleBarHeightHint = 32;
 
             var titleText = _chromeTitle = new TextBlock
             {
-                Classes = { "Caption" },
+                Classes = { "Heading" },
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Foreground = Res("Brush.TextSecondary"),
+                Foreground = Res("Brush.TextPrimary"),
             };
             titleText[!TextBlock.TextProperty] = this[!TitleProperty];   // mirror the window Title
 
@@ -84,12 +84,13 @@ public abstract class NotaWindow : Window
 
             var bar = _chromeBar = new Border
             {
-                Height = 36,
-                Background = Res("Brush.ChromeBg"),
-                BorderBrush = Res("Brush.BorderDefault"),
+                Height = 32,
+                Background = Res("Brush.SurfaceRaised"),
+                BorderBrush = Res("Brush.Seam"),
                 BorderThickness = new Thickness(0, 0, 0, 1),
                 Child = row,
             };
+            bar.BindResource(Border.BoxShadowProperty, "Shadow.Raised");   // the raised header's bevel
             bar.PointerPressed += OnChromePressed;
 
             DockPanel.SetDock(bar, Dock.Top);

@@ -40,3 +40,37 @@ internal sealed class FakeMosaicPacks(params MosaicPackPreset[] presets) : IMosa
     public string? Resolve(string reference) => null;
     public double? DetectNote(string path) => null;
 }
+
+/// <summary>In-memory favourites (no tags), for the browser's favourites-first ordering.</summary>
+internal sealed class FakeBrowserLibrary : IBrowserLibrary
+{
+    private readonly HashSet<string> _favorites = new(StringComparer.Ordinal);
+    public IReadOnlyList<BrowserTag> Tags => Array.Empty<BrowserTag>();
+    public bool IsFavorite(string deviceKey) => _favorites.Contains(deviceKey);
+    public void SetFavorite(string deviceKey, bool on) { if (on) _favorites.Add(deviceKey); else _favorites.Remove(deviceKey); }
+    public IReadOnlyList<string> TagIdsFor(string deviceKey) => Array.Empty<string>();
+    public void AssignTag(string deviceKey, string tagId, bool on) { }
+    public BrowserTag CreateTag(string title, string color) => new() { Id = title, Title = title, Color = color };
+    public void UpdateTag(string id, string title, string color) { }
+    public void DeleteTag(string id) { }
+    public void Save() { }
+    public event Action? Changed { add { } remove { } }
+}
+
+/// <summary>A list of scanned plug-ins, each described the way the plug-in host does:
+/// "Name | Format | inst|fx | Vendor | Category". <see cref="Set"/> stands in for a rescan.</summary>
+internal sealed class FakePluginCatalog(params string[] initial) : IPluginCatalog
+{
+    private string[] descriptions = initial;
+    public void Set(params string[] list) => descriptions = list;
+    public int Scan(string workerPath) => descriptions.Length;
+    public int Count => descriptions.Length;
+    public string? Description(int index) => index >= 0 && index < descriptions.Length ? descriptions[index] : null;
+    public string? Id(int index) => index >= 0 && index < descriptions.Length ? $"fake:{index}" : null;
+    public int IndexOfId(string identifier)
+        => identifier.StartsWith("fake:", StringComparison.Ordinal) && int.TryParse(identifier[5..], out var i) && i < descriptions.Length ? i : -1;
+    public void AddScanPath(string dir) { }
+    public void RemoveScanPath(int index) { }
+    public int ScanPathCount => 0;
+    public string? ScanPath(int index) => null;
+}

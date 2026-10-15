@@ -5,11 +5,11 @@
 //   • RandomModel — the device's roll, ported exactly from MidiRandom.h (hash, draw, the per-bar
 //     key), applied to a one-bar demo phrase of eight eighth notes. So the picture is what the
 //     device plays: with the seed Locked it is the very roll you hear, every bar.
-//   • RandomOutputViz — the OUTPUT window: each input note as a dashed outline, the output as a
-//     brass fill (brightness = velocity, the Timing delay as a shift right), a thin link when the
+//   • RandomOutputViz — the Output window: each input note as a dashed outline, the output as a
+//     neutral fill (brightness = velocity, the Timing delay as a shift right), a thin link when the
 //     pitch moved, × on a skipped note, octave lines (C) and a playhead; the note under the
-//     playhead lights Brass Light. The full view adds the C labels in a left gutter.
-//   • RandomHistViz — the DICE histogram: 1500 draws from the same generator for the current
+//     playhead lights in accent. The full view adds the C labels in a left gutter.
+//   • RandomHistViz — the Dice histogram: 1500 draws from the same generator for the current
 //     distribution and seed, in 17 bins across −max … centre … +max.
 
 using System;
@@ -146,8 +146,8 @@ internal sealed class RandomOutputViz : Control
     private static readonly IBrush Quarter = NotaPalette.GraphBorder;
     private static readonly IBrush Eighth = NotaPalette.SurfaceCard;
     private static readonly IBrush Link = NotaPalette.BorderStrong;
-    private static readonly IBrush Fill = NotaPalette.Accent;
-    private static readonly IBrush FillLit = NotaPalette.AccentBright;
+    private static readonly IBrush Fill = NotaPalette.VizInk;
+    private static readonly IBrush FillLit = NotaPalette.AccentBright;   // the note under the playhead
     private static readonly IBrush OutlineHit = NotaPalette.TextMuted;
     private static readonly IBrush OutlineMiss = NotaPalette.TextDisabled;
     private static readonly IBrush Mark = NotaPalette.TextMuted;
@@ -238,8 +238,8 @@ internal sealed class RandomHistViz : Control
 {
     private static readonly IBrush Well = NotaPalette.BgSunken;
     private static readonly IBrush Edge = NotaPalette.GraphBorder;
-    private static readonly IBrush Bar = NotaPalette.Ink("#B8862E");
-    private static readonly IBrush Centre = NotaPalette.AccentBright;
+    private static readonly IBrush Bar = NotaPalette.Wash(NotaPalette.VizInk, 0xA0);
+    private static readonly IBrush Centre = NotaPalette.VizInk;
 
     private double[] _bins = Array.Empty<double>();
     private int _dist = -1, _seed = -1;

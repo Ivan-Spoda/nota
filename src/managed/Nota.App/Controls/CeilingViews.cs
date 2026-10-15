@@ -4,13 +4,13 @@
 // Nota Ceiling (device kind 14) card windows, read from the engine's telemetry
 // (Ceiling.h scopeRead) so the picture is what the limiter does:
 //  · CeLevelView — the Level tab: the last 4 s as columns — the input behind (teal), the part
-//    over the ceiling (red), the limited output (brass) — with the ceiling line, and the
+//    over the ceiling (red), the limited output (neutral ink) — with the ceiling line, and the
 //    reduction hanging under it in a strip. Drag the ceiling line up or down.
 //  · CeReductionView — the Reduction tab: the reduction over 4 s hanging from 0 dB, teal where
 //    a transient got through to the clip, the window's mean dashed; the scale follows the
 //    deepest reduction (3 / 6 / 12 / 24 dB).
-//  · CeLoudnessView — the Loudness tab: momentary (teal), short-term (brass) and integrated
-//    (Ink) over the last 60 s around the Target, with the ±1 LU band. Drag the target line.
+//  · CeLoudnessView — the Loudness tab: momentary (teal), short-term (neutral ink) and
+//    integrated (rose) over the last 60 s around the Target, with the ±1 LU band. Drag the target line.
 // Drag contract from ShDragView: left button only, a gesture per drag, double-click resets
 // the handle, right-click bubbles to the MIDI-learn menu.
 
@@ -92,22 +92,22 @@ internal sealed class CeLevelView : ShDragView
                 if (_out[i] > Lo)
                 {
                     double oy = Y(_out[i]);
-                    ctx.DrawRectangle(NotaPalette.Accent, null, new Rect(x, oy, bw, bot - oy), 1, 1);
+                    ctx.DrawRectangle(NotaPalette.VizInk, null, new Rect(x, oy, bw, bot - oy), 1, 1);
                 }
                 // Reduction strip under the plot (0 … −12 dB hanging).
                 double g = Math.Clamp(_gr[i] / 12.0, 0, 1);
                 if (g > 0.005)
-                    ctx.FillRectangle(NotaPalette.AccentBright, new Rect(x, h - StripH - 2, bw, g * (StripH - 3)));
+                    ctx.FillRectangle(NotaPalette.VizInk, new Rect(x, h - StripH - 2, bw, g * (StripH - 3)));
             }
         }
         ctx.DrawLine(NotaGraph.FramePen, new Point(x0, h - StripH - 4), new Point(x1, h - StripH - 4));
         // Ceiling line (drag it).
-        ctx.DrawLine(new Pen(NotaPalette.AccentBright, Dragging ? 1.6 : 1), new Point(x0, cy), new Point(x1, cy));
-        TextR(ctx, NotaNum.F($"{_ceil:0.0}"), x1 - 2, cy - 10, NotaPalette.AccentBright);
+        ctx.DrawLine(new Pen(Dragging ? NotaPalette.Accent : NotaPalette.VizInk, Dragging ? 1.6 : 1), new Point(x0, cy), new Point(x1, cy));
+        TextR(ctx, NotaNum.F($"{_ceil:0.0}"), x1 - 2, cy - 10, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         Text(ctx, "0", x0 + 2, Y(0) - 9);
         NotaGraph.Title(ctx, frame, Title);
         NotaGraph.Legend(ctx, w - 6, 3, ("in", NotaPalette.TealBright, NotaGraph.Mark.Area),
-            ("out", NotaPalette.AccentBright, NotaGraph.Mark.Area), ("over", NotaPalette.DangerBright, NotaGraph.Mark.Area));
+            ("out", NotaPalette.VizInk, NotaGraph.Mark.Area), ("over", NotaPalette.DangerBright, NotaGraph.Mark.Area));
         Text(ctx, "−4 s", x0 + 2, h - StripH - 15);
         TextR(ctx, "now", x1 - 2, h - StripH - 15);
     }
@@ -158,18 +158,18 @@ internal sealed class CeReductionView : Avalonia.Controls.Control
             {
                 if (_gr[i] < 0.02) continue;
                 double x = x0 + i * cw;
-                ctx.DrawRectangle(_clip[i] > 0.5f ? NotaPalette.Teal : NotaPalette.AccentBright, null,
+                ctx.DrawRectangle(_clip[i] > 0.5f ? NotaPalette.Teal : NotaPalette.VizInk, null,
                     new Rect(x, top, Math.Max(0.6, cw - gap), Y(_gr[i]) - top), 1, 1);
             }
         }
         if (_avg > 0.05)
         {
             double ay = Y(_avg);
-            ctx.DrawLine(new Pen(NotaPalette.AccentDim, 1, new DashStyle(new double[] { 3, 3 }, 0)), new Point(x0, ay), new Point(x1, ay));
+            ctx.DrawLine(new Pen(NotaPalette.TextSecondary, 1, new DashStyle(new double[] { 3, 3 }, 0)), new Point(x0, ay), new Point(x1, ay));
         }
         NotaGraph.Title(ctx, frame, "Reduction");
-        NotaGraph.Legend(ctx, w - 6, 3, ("GR", NotaPalette.AccentBright, NotaGraph.Mark.Area),
-            ("to the clip", NotaPalette.TealBright, NotaGraph.Mark.Area), ("mean", NotaPalette.AccentDim, NotaGraph.Mark.Dashed));
+        NotaGraph.Legend(ctx, w - 6, 3, ("GR", NotaPalette.VizInk, NotaGraph.Mark.Area),
+            ("to the clip", NotaPalette.TealBright, NotaGraph.Mark.Area), ("mean", NotaPalette.TextSecondary, NotaGraph.Mark.Dashed));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "−4 s");
         ctx.DrawText(NotaGraph.AxisText("now"), new Point(x1 - 16, h - 11));
     }
@@ -219,8 +219,8 @@ internal sealed class CeLoudnessView : ShDragView
         foreach (double d in new[] { -4.0, 4.0 }) ctx.DrawLine(NotaGraph.GridPen, new Point(x0, Y(_center + d)), new Point(x1, Y(_center + d)));
         // Tolerance band ±1 LU and the target.
         double ty = Y(_target);
-        ctx.FillRectangle(NotaPalette.Wash(NotaPalette.Accent, 0x14), new Rect(x0, Y(_target + 1), x1 - x0, Y(_target - 1) - Y(_target + 1)));
-        ctx.DrawLine(new Pen(Dragging ? NotaPalette.AccentBright : NotaPalette.AccentDim, 1, new DashStyle(new double[] { 3, 3 }, 0)), new Point(x0, ty), new Point(x1, ty));
+        ctx.FillRectangle(NotaPalette.Wash(NotaPalette.VizInk, 0x14), new Rect(x0, Y(_target + 1), x1 - x0, Y(_target - 1) - Y(_target + 1)));
+        ctx.DrawLine(new Pen(Dragging ? NotaPalette.Accent : NotaPalette.TextSecondary, 1, new DashStyle(new double[] { 3, 3 }, 0)), new Point(x0, ty), new Point(x1, ty));
 
         void Curve(float[] v, IPen pen)
         {
@@ -242,15 +242,15 @@ internal sealed class CeLoudnessView : ShDragView
         }
         Curve(_m, NotaGraph.SecondaryPen(NotaPalette.Teal, 1));
         Curve(_s, NotaGraph.PrimaryPen);
-        Curve(_i, NotaGraph.SecondaryPen(NotaPalette.TextPrimary, 1.2));
-        if (_n > 0 && _s[_n - 1] > -69f) NotaGraph.Node(ctx, new Point(x1, Math.Clamp(Y(_s[_n - 1]), 14, h - 13)), true);
+        Curve(_i, NotaGraph.SecondaryPen(NotaPalette.Rose, 1.2));
+        if (_n > 0 && _s[_n - 1] > -69f) NotaGraph.Node(ctx, new Point(x1, Math.Clamp(Y(_s[_n - 1]), 14, h - 13)), false);
 
         Text(ctx, NotaNum.F($"{_center + 4:0}"), x0 + 2, Y(_center + 4) - 9);
-        Text(ctx, NotaNum.F($"{_target:0}"), x0 + 2, ty - 9, NotaPalette.AccentBright);
+        Text(ctx, NotaNum.F($"{_target:0}"), x0 + 2, ty - 9, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         Text(ctx, NotaNum.F($"{_center - 4:0}"), x0 + 2, Y(_center - 4) - 9);
         NotaGraph.Title(ctx, frame, "Loudness");
-        NotaGraph.Legend(ctx, w - 6, 3, ("M", NotaPalette.TealBright, NotaGraph.Mark.Line), ("S", NotaPalette.AccentBright, NotaGraph.Mark.Line),
-            ("I", NotaPalette.TextPrimary, NotaGraph.Mark.Line), ("target", NotaPalette.AccentDim, NotaGraph.Mark.Dashed));
+        NotaGraph.Legend(ctx, w - 6, 3, ("M", NotaPalette.TealBright, NotaGraph.Mark.Line), ("S", NotaPalette.VizInk, NotaGraph.Mark.Line),
+            ("I", NotaPalette.RoseBright, NotaGraph.Mark.Line), ("target", NotaPalette.TextSecondary, NotaGraph.Mark.Dashed));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "−60 s");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "now");
     }

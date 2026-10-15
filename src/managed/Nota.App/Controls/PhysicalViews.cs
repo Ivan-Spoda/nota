@@ -19,7 +19,7 @@ internal sealed class PhysPartialsView : VtWindowBase
 {
     private (double Ratio, double Amp, double Tau)[] _modes = Array.Empty<(double, double, double)>();
     private (double Ratio, double Amp, double Tau)[] _ghost = Array.Empty<(double, double, double)>();
-    private string _title = "PARTIALS", _footer = "";
+    private string _title = "Partials", _footer = "";
     private double _maxRatio = double.PositiveInfinity;
     private bool _dim;
 
@@ -81,7 +81,7 @@ internal sealed class PhysPartialsView : VtWindowBase
                 ctx.DrawLine(ghostPen, new Point(x, bot), new Point(x, bot - m.Amp / ghostMax * (bot - top)));
             }
 
-            var ink = _dim ? NotaPalette.TextDisabled : NotaPalette.Accent;
+            var ink = _dim ? NotaPalette.TextDisabled : NotaPalette.VizInk;
             double tau0 = _modes.Length > 0 ? Math.Max(1e-3, _modes[0].Tau) : 1;
             for (int i = 0; i < _modes.Length; i++)
             {
@@ -93,11 +93,11 @@ internal sealed class PhysPartialsView : VtWindowBase
                 byte a = (byte)Math.Clamp(90 + 165 * Math.Min(1, m.Tau / tau0), 60, 255);
                 var c = ((ISolidColorBrush)ink).Color;
                 ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B)), null, new Rect(x - 1.5, bot - bh, 3, bh), 1, 1);
-                if (i == 0) ctx.DrawEllipse(_dim ? NotaPalette.TextDisabled : NotaPalette.AccentBright, null, new Point(x, bot - bh - 3), 1.8, 1.8);
+                if (i == 0) ctx.DrawEllipse(_dim ? NotaPalette.TextDisabled : NotaPalette.VizInk, null, new Point(x, bot - bh - 3), 1.8, 1.8);
             }
         }
 
-        ctx.DrawText(NotaGraph.AxisText(_title, NotaGraph.TitleInk), new Point(6, 3));
+        ctx.DrawText(NotaGraph.AxisText(NotaText.Label(_title), NotaGraph.TitleInk), new Point(6, 3));
         if (_footer.Length > 0)
         {
             var ft = NotaGraph.AxisText(_footer, NotaGraph.AxisInk);

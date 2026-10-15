@@ -29,16 +29,11 @@ internal sealed class CommandPaletteView : UserControl
 {
     public const double CardWidth = 640, ListMax = 404;
 
-    private static readonly Dictionary<string, string> Icons = new()
+    private static readonly Dictionary<string, GlyphKind> Icons = new()
     {
-        ["action"] = "M5 7 L10 12 L5 17 M12 17 H19",
-        ["track"] = "M4 7 H20 M4 12 H20 M4 17 H13",
-        ["device"] = "M4 5 H20 V19 H4 Z M9 12 A3 3 0 1 0 15 12 A3 3 0 1 0 9 12",
-        ["plugin"] = "M9 3 V7 M15 3 V7 M6 7 H18 V11 A6 6 0 0 1 6 11 Z M12 17 V21",
-        ["preset"] = "M7 4 H17 V20 L12 16 L7 20 Z",
-        ["modular"] = "M4 7 A2.5 2.5 0 1 0 9 7 A2.5 2.5 0 1 0 4 7 M15 17 A2.5 2.5 0 1 0 20 17 A2.5 2.5 0 1 0 15 17 M8.5 8.5 L15.5 15.5",
+        ["action"] = GlyphKind.Action, ["track"] = GlyphKind.Track, ["device"] = GlyphKind.Device,
+        ["plugin"] = GlyphKind.Plug, ["preset"] = GlyphKind.Preset, ["modular"] = GlyphKind.Patch,
     };
-    private const string SearchIcon = "M10.5 4 A6.5 6.5 0 1 0 10.5 17 A6.5 6.5 0 1 0 10.5 4 M15.5 15.5 L21 21";
 
     private readonly PaletteSearch _search;
     private readonly PaletteIndex _index;
@@ -90,13 +85,13 @@ internal sealed class CommandPaletteView : UserControl
             VerticalAlignment = VerticalAlignment.Center, Child = _pillText, IsVisible = false,
         };
         var fieldGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 8 };
-        fieldGrid.Children.Add(Icon(SearchIcon, 14, NotaPalette.TextSecondary, 2));
+        fieldGrid.Children.Add(Icon(GlyphKind.Search, 20, NotaPalette.TextSecondary));
         Grid.SetColumn(_input, 1); fieldGrid.Children.Add(_input);
         Grid.SetColumn(_pill, 2); fieldGrid.Children.Add(_pill);
         var field = new Border
         {
             Height = 38, Padding = new Thickness(10, 0, 6, 0), Background = NotaPalette.BgSunken,
-            BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
+            BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
             Child = fieldGrid, Margin = new Thickness(10, 10, 10, 8),
         };
 
@@ -141,12 +136,19 @@ internal sealed class CommandPaletteView : UserControl
         DockPanel.SetDock(footer, Dock.Bottom); body.Children.Add(footer);
         body.Children.Add(listWrap);
 
+        // A floating layer, so it alone in the window casts a blurred shadow (Shadow.Modal):
+        // the outer border carries it, the inner one clips the content to the 4px corners.
+        var face = new Border
+        {
+            Background = NotaPalette.Panel, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
+            CornerRadius = NotaRadius.Modal, ClipToBounds = true, Child = body,
+        };
         _card = new Border
         {
             Width = CardWidth, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
-            Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Body, ClipToBounds = true, Child = body,
+            CornerRadius = NotaRadius.Modal, Child = face,
         };
+        _card.BindResource(Border.BoxShadowProperty, "Shadow.Modal");
         // Clicks outside the card close the palette; nothing dims the window (CP-17).
         var catcher = new Border { Background = Brushes.Transparent };
         catcher.PointerPressed += (_, e) => { e.Handled = true; Close(); };
@@ -285,7 +287,7 @@ internal sealed class CommandPaletteView : UserControl
     private static Control Header(string label)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6, Height = 24, Margin = new Thickness(12, 0) };
-        var t = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.Bold, LetterSpacing = 0.9, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
+        var t = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
         var line = new Border { Height = 1, Background = NotaPalette.GraphBorder, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 7) };
         g.Children.Add(t);
         Grid.SetColumn(line, 1); g.Children.Add(line);
@@ -300,7 +302,7 @@ internal sealed class CommandPaletteView : UserControl
             PaletteKind.Device => it.IsPlugin ? "plugin" : "device",
             PaletteKind.Track => "track", PaletteKind.Preset => "preset", PaletteKind.Modular => "modular", _ => "action",
         };
-        var icon = Icon(Icons[iconKey], 15, NotaPalette.TextMuted, 1.6);
+        var icon = Icon(Icons[iconKey], 20, NotaPalette.TextMuted);
         icon.Tag = "icon";
 
         var name = new TextBlock { FontSize = 12.5, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center };
@@ -312,7 +314,7 @@ internal sealed class CommandPaletteView : UserControl
         line1.Children.Add(name);
         line1.Children.Add(sub);
         var text = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { line1 } };
-        if (reason.Length > 0) text.Children.Add(Mono(10, NotaPalette.AccentHover, reason));
+        if (reason.Length > 0) text.Children.Add(Mono(10, NotaPalette.TextSecondary, reason));
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         if (hit.Disabled && hit.Why.Length > 0)
@@ -363,7 +365,7 @@ internal sealed class CommandPaletteView : UserControl
             {
                 Foreground = kind switch
                 {
-                    2 => disabled ? NotaPalette.AccentDim : NotaPalette.AccentHover,
+                    2 => disabled ? NotaPalette.TextFaint : NotaPalette.TextSecondary,
                     1 => NotaPalette.TextTertiary,
                     _ => disabled ? NotaPalette.TextMuted : NotaPalette.TextPrimary,
                 },
@@ -385,7 +387,7 @@ internal sealed class CommandPaletteView : UserControl
             var panel = (Panel)row.Child!;
             foreach (var c in panel.Children)
                 if (c is Border { Tag: "edge" } edge) edge.Background = on ? NotaPalette.Accent : Brushes.Transparent;
-            if (((Grid)panel.Children[0]).Children[0] is Path icon) icon.Stroke = on ? NotaPalette.Accent : NotaPalette.TextMuted;
+            if (((Grid)panel.Children[0]).Children[0] is Glyph icon) icon.Foreground = on ? NotaPalette.Accent : NotaPalette.TextMuted;
         }
         if (_sel >= 0 && _sel < _rowControls.Count) _rowControls[_sel].BringIntoView();
     }
@@ -532,11 +534,9 @@ internal sealed class CommandPaletteView : UserControl
         Text = text, FontSize = size, FontFamily = NotaFonts.MonoFamily, Foreground = ink, VerticalAlignment = VerticalAlignment.Center,
     };
 
-    private static Path Icon(string data, double size, IBrush stroke, double thickness) => new()
-    {
-        Data = Geometry.Parse(data), Width = size, Height = size, Stretch = Stretch.Uniform, Stroke = stroke, StrokeThickness = thickness,
-        StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, VerticalAlignment = VerticalAlignment.Center,
-    };
+    // A shared-set icon in a square box: the 16-unit grid scaled as a whole, so the kinds keep
+    // their optical balance (the icon body is about two thirds of the box).
+    private static Glyph Icon(GlyphKind kind, double size, IBrush ink) => new(kind, size) { Foreground = ink };
 }
 
 /// <summary>The line that confirms what the palette did, with Undo (design: bottom-centre, 4 s).</summary>

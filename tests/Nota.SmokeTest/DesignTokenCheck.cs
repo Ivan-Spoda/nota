@@ -1,27 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The palette lives in two files that nothing but discipline kept in step:
-// Theme/NotaTheme.axaml serves XAML through {DynamicResource Brush.*}, and
-// Theme/NotaPalette.cs serves the custom-drawn layer, which cannot cheaply
-// resolve a resource inside a Render override. A token changed in one and
-// missed in the other is invisible until someone opens the other variant.
+// Colour has one home (spec 011): the theme files in Theme/Themes/*.json. NotaPalette
+// declares one slot per token by name and re-tints it from the active theme, and
+// NotaThemeService publishes those same brushes to XAML under their Brush.* keys
+// (NotaPalette.KeyMap). So instead of keeping two copies of a palette in step, these
+// checks keep the *wiring* honest — read as text, with no reference to Nota.App, no
+// Avalonia and no UI thread:
 //
-// So this reads both as text — no reference to Nota.App, no Avalonia, no UI
-// thread — and enforces what the two files claim about each other:
+//   1. NotaTheme.axaml holds no colour at all (no brush, colour or shadow resource);
+//   2. every Brush.* key a style or view names is in KeyMap, so it resolves to a slot;
+//   3. every Shadow.* key a style names is one NotaThemeService builds.
 //
-//   1. the Dark and Light dictionaries declare the same keys;
-//   2. a NotaPalette slot tagged `// Brush.Key` holds the same dark/light pair
-//      that NotaTheme.axaml gives that key;
-//   3. every key NotaPalette.KeyMap hands out actually exists in the theme.
-//
-// See DESIGN.md § How theming works.
+// The theme files themselves are checked in DesignTokenCheck.Themes.cs.
+// See DESIGN.md § Colour themes.
 
 using System.Text.RegularExpressions;
 
 namespace Nota.SmokeTest;
 
-internal static class DesignTokenCheck
+internal static partial class DesignTokenCheck
 {
     public static IEnumerable<(bool Ok, string Label)> Run()
     {
@@ -32,76 +30,47 @@ internal static class DesignTokenCheck
             yield break;
         }
 
-        var themePath = Path.Combine(root, "src/managed/Nota.App/Theme/NotaTheme.axaml");
-        var palettePath = Path.Combine(root, "src/managed/Nota.App/Theme/NotaPalette.cs");
-        if (!File.Exists(themePath) || !File.Exists(palettePath))
-        {
-            yield return (false, "both palette files found");
-            yield break;
-        }
+        var app = Path.Combine(root, "src/managed/Nota.App");
+        var theme = File.ReadAllText(Path.Combine(app, "Theme/NotaTheme.axaml"));
+        var palette = File.ReadAllText(Path.Combine(app, "Theme/NotaPalette.cs"));
+        var service = File.ReadAllText(Path.Combine(app, "Theme/NotaThemeService.cs"));
 
-        var theme = File.ReadAllText(themePath);
-        var palette = File.ReadAllText(palettePath);
+        // 1. A colour in the XAML would be a second copy that no theme switch reaches.
+        var inXaml = Regex.Matches(theme, """<(?<t>SolidColorBrush|Color|BoxShadows)\s+x:Key="(?<k>[^"]+)">""")
+            .Select(m => m.Groups["k"].Value).ToArray();
+        yield return (inXaml.Length == 0 && !theme.Contains("<ResourceDictionary.ThemeDictionaries>"),
+            inXaml.Length == 0 ? "NotaTheme.axaml holds no colour (the theme files are the only home)"
+                               : $"colour resources left in NotaTheme.axaml: {string.Join(", ", inXaml.Take(8))}");
 
-        var dark = Brushes(theme, "Dark");
-        var light = Brushes(theme, "Light");
+        // 2. KeyMap is what NotaThemeService publishes, so a key missing from it is a
+        //    DynamicResource that resolves to nothing — the control keeps a stale colour.
+        var keyMap = KeyMapKeys(palette);
+        yield return (keyMap.Count > 0, $"NotaPalette.KeyMap parsed ({keyMap.Count} keys)");
+        var referenced = Files(app, "*.*", SearchOption.AllDirectories)
+            .Where(f => (f.EndsWith(".cs") || f.EndsWith(".axaml")) && !f.Contains("/obj/") && !f.Contains("/bin/"))
+            .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"(?:DynamicResource |"")(?<key>Brush\.\w+)[}""]").Select(m => m.Groups["key"].Value))
+            .Distinct().Where(k => !keyMap.Contains(k)).OrderBy(k => k).ToArray();
+        yield return (referenced.Length == 0,
+            referenced.Length == 0 ? "every referenced Brush.* key is published (in KeyMap)"
+                                   : $"references to unpublished brush keys: {string.Join(", ", referenced)}");
 
-        // 1. Both variants must declare the same keys: a token added to one branch
-        //    and not the other is a colour that vanishes when the variant flips.
-        var onlyDark = dark.Keys.Except(light.Keys).OrderBy(k => k).ToArray();
-        var onlyLight = light.Keys.Except(dark.Keys).OrderBy(k => k).ToArray();
-        yield return (onlyDark.Length == 0 && onlyLight.Length == 0,
-            onlyDark.Length == 0 && onlyLight.Length == 0
-                ? $"NotaTheme Dark and Light declare the same {dark.Count} keys"
-                : $"NotaTheme variants disagree — only Dark: [{string.Join(", ", onlyDark)}]; only Light: [{string.Join(", ", onlyLight)}]");
+        // 3. Shadows are values built from theme colours on every switch.
+        var built = Regex.Matches(service, @"res\[""(?<k>Shadow\.\w+)""\]").Select(m => m.Groups["k"].Value).ToHashSet();
+        var shadowRefs = Files(app, "*.*", SearchOption.AllDirectories)
+            .Where(f => (f.EndsWith(".cs") || f.EndsWith(".axaml")) && !f.Contains("/obj/") && !f.Contains("/bin/"))
+            .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"(?:DynamicResource |"")(?<key>Shadow\.\w+)[}""]").Select(m => m.Groups["key"].Value))
+            .Distinct().Where(k => !built.Contains(k)).OrderBy(k => k).ToArray();
+        yield return (built.Count == 4 && shadowRefs.Length == 0,
+            shadowRefs.Length == 0 ? $"every Shadow.* key is built from the theme ({string.Join(", ", built.OrderBy(k => k))})"
+                                   : $"Shadow.* keys nothing builds: {string.Join(", ", shadowRefs)}");
+    }
 
-        // 2. Every mirrored slot must carry the theme's pair. A slot claims its
-        //    mirror in a trailing comment: T("#dark", "#light"); // Brush.Key — note
-        var slot = new Regex(
-            """public\s+static\s+readonly\s+SolidColorBrush\s+(?<name>\w+)\s*=\s*T\(\s*"(?<d>#[0-9A-Fa-f]{6,8})"\s*,\s*"(?<l>#[0-9A-Fa-f]{6,8})"\s*\)\s*;\s*//\s*(?<key>Brush\.\w+)""",
-            RegexOptions.Compiled);
-
-        var mismatched = new List<string>();
-        int mirrored = 0;
-        foreach (Match m in slot.Matches(palette))
-        {
-            var key = m.Groups["key"].Value;
-            if (!dark.TryGetValue(key, out var td) || !light.TryGetValue(key, out var tl))
-            {
-                mismatched.Add($"{m.Groups["name"].Value} claims {key}, which the theme does not declare");
-                continue;
-            }
-            mirrored++;
-            var sd = m.Groups["d"].Value;
-            var sl = m.Groups["l"].Value;
-            if (!Same(sd, td)) mismatched.Add($"{key} dark: palette {sd} vs theme {td}");
-            if (!Same(sl, tl)) mismatched.Add($"{key} light: palette {sl} vs theme {tl}");
-        }
-
-        yield return (mirrored > 0, $"NotaPalette mirrors {mirrored} theme keys by name");
-        yield return (mismatched.Count == 0,
-            mismatched.Count == 0
-                ? "every mirrored slot matches the theme in both variants"
-                : $"palette/theme drift ({mismatched.Count}): {string.Join("; ", mismatched.Take(8))}");
-
-        // 3. KeyMap is how a code-built view resolves a token by its XAML key, so
-        //    every key it offers has to be a key the theme really defines.
+    private static HashSet<string> KeyMapKeys(string palette)
+    {
         var keyMap = Regex.Match(palette, @"KeyMap\s*=\s*new\([^)]*\)\s*\{(?<body>.*?)\n    \};", RegexOptions.Singleline);
-        var unknown = new List<string>();
-        int mapped = 0;
-        if (keyMap.Success)
-        {
-            foreach (Match m in Regex.Matches(keyMap.Groups["body"].Value, @"\[""(?<key>Brush\.\w+)""\]"))
-            {
-                mapped++;
-                if (!dark.ContainsKey(m.Groups["key"].Value)) unknown.Add(m.Groups["key"].Value);
-            }
-        }
-        yield return (keyMap.Success && mapped > 0, $"NotaPalette.KeyMap parsed ({mapped} keys)");
-        yield return (unknown.Count == 0,
-            unknown.Count == 0
-                ? "every KeyMap key exists in NotaTheme"
-                : $"KeyMap offers keys the theme lacks: {string.Join(", ", unknown)}");
+        return keyMap.Success
+            ? Regex.Matches(keyMap.Groups["body"].Value, @"\[""(?<key>Brush\.\w+)""\]").Select(m => m.Groups["key"].Value).ToHashSet()
+            : new HashSet<string>();
     }
 
     /// <summary>Geometry: Radius.* / Control.* / Space.* in NotaTheme.axaml must equal the
@@ -165,6 +134,29 @@ internal static class DesignTokenCheck
         var gradients = Offenders(@"\b(?:Linear|Radial|Conic)GradientBrush\b|NotaPalette\.VGradient\(");
         yield return (gradients.Length == 0,
             gradients.Length == 0 ? "no gradients in views" : $"gradients in: {string.Join(", ", gradients)}");
+
+        // A Rectangle's RadiusX/RadiusY is a corner radius too, so it keeps the 0/1/2/3/4
+        // scale (spec 012 R9: the add-device targets drew at 7 and 6). Ratchet in
+        // RadiusAllowList.txt (path + "RadiusX = n") with today's offenders.
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var offScale = new List<Hit>();
+        foreach (var f in SourceFiles(app, ".cs", ".axaml"))
+        {
+            int n = 0;
+            foreach (var line in File.ReadLines(f))
+            {
+                n++;
+                var code = f.EndsWith(".cs") ? CodeOf(line) : Regex.Replace(line, "<!--.*?-->", "");
+                foreach (Match m in Regex.Matches(code, @"\bRadius(?<axis>[XY])\s*=\s*""?(?<v>[0-9]+(?:\.[0-9]+)?)\b"))
+                    if (!new[] { 0d, 1, 2, 3, 4 }.Contains(double.Parse(m.Groups["v"].Value, inv)))
+                        offScale.Add(new Hit(RelManaged(root, f), n, $"Radius{m.Groups["axis"].Value} = {m.Groups["v"].Value}"));
+            }
+        }
+        var list = ReadRatchet(Path.Combine(root, RatchetDir, "RadiusAllowList.txt"));
+        var radiusUsed = new HashSet<(string, string)>();
+        yield return RatchetVerdict("Rectangle radius off the 0/1/2/3/4 scale", offScale, list.ToHashSet(), radiusUsed);
+        yield return RatchetStale("radius allow-list", list, radiusUsed);
+        yield return (true, $"radius allow-list: {list.Distinct().Count()} entries (ratchet: may only shrink)");
     }
 
     /// <summary>Type: the theme and NotaFonts point at the same bundled Geist files, and no
@@ -274,6 +266,7 @@ internal static class DesignTokenCheck
             ("vowel-dropped parameter label", new("\"(FDBK|FEEDB|FB|ATK|DEC|SUS|REL|LVL|DET|SPR|QNT|PIT|TRANSP|AMT|VOL|POS|EMPH|RESON)\"")),
         };
         var hits = rules.ToDictionary(r => r.Name, _ => new List<string>());
+        var minus = new List<Hit>();
         foreach (var f in Files(app, "*.cs", SearchOption.AllDirectories)
                      .Where(f => !f.Contains("/obj/") && !f.Contains("/bin/") && !f.EndsWith("NotaNum.cs")))
         {
@@ -286,10 +279,37 @@ internal static class DesignTokenCheck
                 var literals = string.Join("\n", Regex.Matches(code, "\"((?:[^\"\\\\]|\\\\.)*)\"").Select(m => m.Value));
                 foreach (var (name, re) in rules)
                     if (re.IsMatch(name.StartsWith("invariant") ? code : literals)) hits[name].Add($"{Rel(app, f)}:{n}");
+                var full = CodeOf(line);
+                foreach (var (at, body) in Literals(full))
+                    if (ShowsHyphenMinus(full, at, Unescape(body))) minus.Add(new Hit(RelManaged(root, f), n, body));
             }
         }
         foreach (var (name, _) in rules)
             yield return (hits[name].Count == 0, hits[name].Count == 0 ? $"no {name}" : $"{name}: {string.Join(", ", hits[name].Take(8))}");
+
+        // A negative number on screen takes U+2212 (spec 012 R9): a typed "-12" is a hyphen,
+        // shorter and lower than the minus every formatted readout already shows. Ratchet in
+        // NumberAllowList.txt (path + literal) with today's offenders.
+        var list = ReadRatchet(Path.Combine(root, RatchetDir, "NumberAllowList.txt"));
+        var allowed = list.ToHashSet();
+        var used = new HashSet<(string, string)>();
+        yield return RatchetVerdict("hyphen-minus before a digit in a view literal (use U+2212)", minus, allowed, used);
+        yield return RatchetStale("number allow-list", list, used);
+        yield return (true, $"number allow-list: {allowed.Count} entries (ratchet: may only shrink)");
+    }
+
+    /// <summary>A literal that puts a hyphen-minus in front of a number on screen ("-12",
+    /// "+6 / -48"). Not: format strings, key or shortcut text, path data, version strings, or
+    /// a hyphen inside a word or range ("track-1", "1-127" — the range rule is DESIGN.md's).</summary>
+    private static bool ShowsHyphenMinus(string code, int at, string text)
+    {
+        if (!Regex.IsMatch(text, @"(?<![\p{L}\p{N}_.\-])-[0-9]")) return false;
+        if (text.Contains('{') || text.Contains('#') || Regex.IsMatch(text, @"^[\s+\-0.,;%‰]*$")) return false;   // format
+        if (Regex.IsMatch(code[..at], @"(?:ToString|Format|TryParse|Parse)\(\s*$")) return false;                   // format / parse argument
+        if (Regex.IsMatch(text, @"Ctrl|Cmd|Shift|Alt\b|[⌘⌥⇧⌃]")) return false;                                    // key text
+        if (PathData.IsMatch(text) || Regex.IsMatch(text, @"[0-9]\s+[LlHhVvCcAaZz]\s*-?[0-9]")) return false;     // path data
+        if (Regex.IsMatch(text, @"\b\d+\.\d+\.\d+")) return false;                                                // version
+        return true;
     }
 
     /// <summary>Visualisers: one graph window, no fills under curves, meters on the almanac
@@ -322,7 +342,7 @@ internal static class DesignTokenCheck
 
         var arr = string.Concat(Files(app, "ArrangementView*.cs").Select(File.ReadAllText));
         yield return (!arr.Contains("PlayheadGlow") && Regex.IsMatch(arr, @"PlayheadPen = new Pen\(PlayheadBrush, 1\)"),
-            "the arrangement playhead is a 1px brass line with no glow");
+            "the arrangement playhead is a 1px accent line with no glow");
     }
 
     /// <summary>The almanac's closed list of bans (§ 9) that the other checks do not already
@@ -355,7 +375,8 @@ internal static class DesignTokenCheck
         var hits = rules.ToDictionary(r => r.Name, _ => new List<string>());
         foreach (var f in Files(app, "*.*", SearchOption.AllDirectories)
                      .Where(f => (f.EndsWith(".cs") || f.EndsWith(".axaml")) && !f.Contains("/obj/") && !f.Contains("/bin/")
-                              && !f.EndsWith("Theme/NotaPalette.cs") && !f.EndsWith("Theme/NotaTheme.axaml")))
+                              && !f.EndsWith("Theme/NotaPalette.cs") && !f.EndsWith("Theme/NotaTheme.axaml")
+                              && !f.EndsWith("Theme/NotaColourTheme.cs")))   // the theme loader parses colour values by definition
         {
             var rel = Rel(app, f);
             int n = 0;
@@ -383,9 +404,11 @@ internal static class DesignTokenCheck
         yield return (Regex.IsMatch(kit, @"HeaderH = 22;"), "device card header is 22px");
 
         // Accepted exceptions (decided 2026-09-16): parameter stubs are narrow; the Bass and
-        // Physical instruments keep their wider layouts. (Plug-ins are S 260 / L 700.)
+        // Physical instruments keep their wider layouts. (Plug-ins are S 260 / L 700.) The
+        // generic instrument card is an "Open GUI" stub, 170 wide since before it joined the
+        // shared shell (spec 012).
         var exempt = new HashSet<string> { "GenericParamDeviceBody.cs", "GenericMidiBody.cs",
-            "BassInstrumentCard.cs", "PhysicalInstrumentCard.cs" };
+            "BassInstrumentCard.cs", "PhysicalInstrumentCard.cs", "GenericInstrumentCard.cs" };
         var off = Files(Path.Combine(app, "DeviceCards"), "*.cs", SearchOption.AllDirectories)
             .Where(f => !exempt.Contains(Path.GetFileName(f)))
             .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"public double (?:Card)?Width => (?<w>[0-9]+);")
@@ -395,35 +418,290 @@ internal static class DesignTokenCheck
 
         var main = File.ReadAllText(Path.Combine(app, "MainWindow.axaml"));
         yield return (Regex.IsMatch(main, "x:Name=\"TransportBar\" DockPanel.Dock=\"Top\"[^>]*Height=\"\\{StaticResource Control.TransportBar\\}\""),
-            "transport is a 60px island at the top of the window");
+            "transport is a docked row at the top of the window");
         yield return (Regex.IsMatch(main, "<Border Grid.Column=\"1\" Classes=\"console\">"),
-            "transport console is the 42px recess inside it");
+            "transport console is the recessed group inside it");
 
         var browser = File.ReadAllText(Path.Combine(app, "BrowserView.cs"));
         yield return (Regex.IsMatch(browser, @"const double RowH = 2[6-8];"), "browser list rows are 26–28px");
     }
 
-    /// <summary>The Brush.* keys and values of one ThemeDictionary.</summary>
-    private static Dictionary<string, string> Brushes(string theme, string variant)
+    /// <summary>The Studio rules (DESIGN.md) that the older checks do not hold:
+    /// the 0/1/2/3/4 radius scale, blurred shadows only on floating layers, sentence-case
+    /// labels without tracking, values neutral at rest in the shared controls, the docked
+    /// shell's sizes, and no value left from the earlier Ember palette.</summary>
+    public static IEnumerable<(bool Ok, string Label)> RunStudio()
     {
-        var dict = new Dictionary<string, string>(StringComparer.Ordinal);
-        var block = Regex.Match(theme,
-            $"""x:Key="{variant}">(?<body>.*?)\n        </ResourceDictionary>""", RegexOptions.Singleline);
-        if (!block.Success) return dict;
-        foreach (Match m in Regex.Matches(block.Groups["body"].Value,
-                     """<SolidColorBrush\s+x:Key="(?<key>Brush\.\w+)">(?<val>#[0-9A-Fa-f]{6,8})</SolidColorBrush>"""))
-            dict[m.Groups["key"].Value] = m.Groups["val"].Value;
-        return dict;
+        var root = RepoRoot();
+        if (root is null) { yield return (false, "repo root located"); yield break; }
+        var app = Path.Combine(root, "src/managed/Nota.App");
+        var theme = File.ReadAllText(Path.Combine(app, "Theme/NotaTheme.axaml"));
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+        // Radius: 0 docked · 1 plot bars · 2 inner keys, rows, clips · 3 controls, cards · 4 modals.
+        var radii = Regex.Matches(theme, """<CornerRadius x:Key="(?<k>Radius\.\w+)">(?<v>[0-9.]+)</CornerRadius>""")
+            .Where(m => !new[] { 0d, 1, 2, 3, 4 }.Contains(double.Parse(m.Groups["v"].Value, inv)))
+            .Select(m => $"{m.Groups["k"].Value} {m.Groups["v"].Value}").ToArray();
+        yield return (radii.Length == 0,
+            radii.Length == 0 ? "every Radius.* is on the 0/1/2/3/4 scale" : $"radii off the scale: {string.Join(", ", radii)}");
+
+        // A blurred shadow means the element floats. Only Shadow.Popover / Shadow.Modal may
+        // carry a blur; every other shadow is a bevel or an edge. They are built from the
+        // theme in NotaThemeService, one res["Shadow.*"] = … statement each.
+        var service = File.ReadAllText(Path.Combine(app, "Theme/NotaThemeService.cs"));
+        var blurred = Regex.Matches(service, @"res\[""(?<k>Shadow\.\w+)""\]\s*=(?<v>[^;]+);")
+            .Where(m => m.Groups["v"].Value.Contains("Blur") && m.Groups["k"].Value is not ("Shadow.Popover" or "Shadow.Modal"))
+            .Select(m => m.Groups["k"].Value).ToList();
+        yield return (blurred.Count == 0,
+            blurred.Count == 0 ? "only Shadow.Popover / Shadow.Modal carry a blur (floating layers)" : $"blurred shadows on docked surfaces: {string.Join(", ", blurred.Distinct())}");
+        var axamlShadows = Files(app, "*.axaml", SearchOption.AllDirectories)
+            .Where(f => !f.Contains("/obj/") && !f.Contains("/bin/") && !f.EndsWith("Theme/NotaTheme.axaml"))
+            .Where(f => Regex.IsMatch(File.ReadAllText(f), """BoxShadow="(?!\{)"""))
+            .Select(f => Rel(app, f)).ToArray();
+        yield return (axamlShadows.Length == 0,
+            axamlShadows.Length == 0 ? "views take shadows from Shadow.* resources only" : $"literal BoxShadow in: {string.Join(", ", axamlShadows)}");
+
+        // No shouting: labels are sentence case with no tracking. The theme's text classes
+        // carry no positive LetterSpacing, NotaType's tracking constants are 0, and the shared
+        // label builders do not upper-case.
+        var tracked = Regex.Matches(theme, """<Setter Property="LetterSpacing" Value="(?<v>[0-9.]+)"/>""")
+            .Where(m => double.Parse(m.Groups["v"].Value, inv) > 0).Count();
+        yield return (tracked == 0, tracked == 0 ? "no tracked (letter-spaced) text class in the theme" : $"{tracked} text style(s) still set LetterSpacing");
+        // …nor do views: a positive LetterSpacing anywhere in the app is tracking by the back door.
+        // The one exception is data, not a label: the Remote pairing code, spaced to be read aloud.
+        var viewTracking = Directory.EnumerateFiles(app, "*.*", SearchOption.AllDirectories)
+            .Where(f => (f.EndsWith(".cs") || f.EndsWith(".axaml")) && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"LetterSpacing\s*=\s*""?(?<v>[0-9.]+)")
+                .Where(m => double.Parse(m.Groups["v"].Value, inv) > 0)
+                .Select(_ => Path.GetRelativePath(app, f)))
+            .Where(r => r.Replace('\\', '/') != "Remote/ConnectPhoneView.cs").Distinct().ToArray();
+        yield return (viewTracking.Length == 0,
+            viewTracking.Length == 0 ? "no view sets a positive LetterSpacing" : $"positive LetterSpacing in: {string.Join(", ", viewTracking)}");
+        var fonts = File.ReadAllText(Path.Combine(app, "Theme/NotaFonts.cs"));
+        var trackConsts = Regex.Matches(fonts, @"(?<n>\w+Tracking)\s*=\s*(?<v>[0-9.]+)").Where(m => double.Parse(m.Groups["v"].Value, inv) != 0).Select(m => m.Groups["n"].Value).ToArray();
+        yield return (trackConsts.Length == 0, trackConsts.Length == 0 ? "NotaType tracking constants are 0" : $"tracking left in NotaType: {string.Join(", ", trackConsts)}");
+        var shouters = new[] { "DeviceCardKit.cs", "Controls/NotaGraph.cs", "ClipEditorKit.cs", "DeviceChainView.Shell.cs", "../Nota.Application/Palette/PaletteSearch.cs" }
+            .Where(f => File.ReadAllText(Path.Combine(app, f)).Contains("ToUpperInvariant()")).ToArray();
+        yield return (shouters.Length == 0,
+            shouters.Length == 0 ? "the shared label builders do not upper-case (NotaText.Label)" : $"upper-casing label builders: {string.Join(", ", shouters)}");
+
+        // Live or chosen: the shared value controls draw a resting value in neutral ink.
+        var knob = File.ReadAllText(Path.Combine(app, "Controls/Knob.cs"));
+        var graph = File.ReadAllText(Path.Combine(app, "Controls/NotaGraph.cs"));
+        var slider = File.ReadAllText(Path.Combine(app, "Controls/SliderTrack.cs"));
+        yield return (knob.Contains("RestArc = NotaPalette.VizInk") && graph.Contains("PrimaryPen = new Pen(NotaPalette.VizInk")
+                      && slider.Contains("Fill = NotaPalette.VizInk"),
+            "knob arcs, slider fills and graph curves are neutral at rest (accent only while live)");
+
+        // The docked shell: a 44px transport row with a 30px console, panels on a 1px seam.
+        var geo = File.ReadAllText(Path.Combine(app, "Theme/NotaGeometry.cs"));
+        yield return (Regex.IsMatch(geo, @"TransportBar = 44;") && Regex.IsMatch(geo, @"Console = 30;") && Regex.IsMatch(geo, @"Gutter = 1;"),
+            "transport row 44 · console 30 · panels meet on a 1px seam");
+
+        // No value of the earlier Ember palette is in a Studio theme (the Ember themes are
+        // Ember by definition — spec 011 FR-016).
+        var studio = string.Join("\n", Directory.EnumerateFiles(Path.Combine(app, "Theme/Themes"), "studio-*.json").Select(File.ReadAllText));
+        var left = EmberHexes.Where(h => studio.Contains(h, StringComparison.OrdinalIgnoreCase)).ToArray();
+        yield return (studio.Length > 0 && left.Length == 0,
+            left.Length == 0 ? "no Ember palette value in the Studio themes" : $"Ember values in Studio themes: {string.Join(", ", left)}");
     }
 
-    // #RRGGBB and #FFRRGGBB name the same colour; compare on the opaque form.
-    private static bool Same(string a, string b) => Norm(a) == Norm(b);
+    // Signature values of the Ember palette (0.52.1): brass accents, warm grounds.
+    private static readonly string[] EmberHexes = { "#D8A03D", "#0B0A09", "#141310", "#E9E4D8", "#A87415", "#EAE5D7", "#241F17", "#F0C060" };
 
-    private static string Norm(string hex)
+    /// <summary>Icons: one icon set. Glyph draws every icon from its own path data, so path
+    /// geometry anywhere else in the app is an icon drawn outside the set (spec 012 R8).
+    /// Today's call sites sit in IconAllowList.txt as a per-file count that may only go down
+    /// — a file above its count has a new inline icon, a file below it must lower the count.
+    /// See DESIGN.md § Controls.</summary>
+    public static IEnumerable<(bool Ok, string Label)> RunIcons()
     {
-        hex = hex.TrimStart('#').ToUpperInvariant();
-        if (hex.Length == 8 && hex.StartsWith("FF", StringComparison.Ordinal)) hex = hex[2..];
-        return hex;
+        var root = RepoRoot();
+        if (root is null) { yield return (false, "repo root located"); yield break; }
+        var app = Path.Combine(root, "src/managed/Nota.App");
+
+        var parse = new Regex(@"\b(?:Stream|Path)?Geometry\.Parse\(");
+        var xamlPath = new Regex(@"\b(?:Data|Figures)=""\s*[MmFf]|<(?:StreamGeometry|PathGeometry)\b[^>]*>\s*[MmFf]");
+        var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        foreach (var f in SourceFiles(app, ".cs", ".axaml").Where(f => !Norm(f).EndsWith("/Controls/Glyph.cs")))
+        {
+            int n = 0;
+            if (f.EndsWith(".cs"))
+                foreach (var line in File.ReadLines(f))
+                {
+                    var code = CodeOf(line);
+                    // A parsed constant and the constant itself are two sites: both go when
+                    // the icon becomes a Glyph kind.
+                    n += Math.Max(parse.Matches(code).Count,
+                        Literals(code).Count(l => PathData.IsMatch(Unescape(l.Body))));
+                }
+            else
+                n = xamlPath.Matches(BlankXmlComments(File.ReadAllText(f))).Count;
+            if (n > 0) counts[RelManaged(root, f)] = n;
+        }
+
+        var allowed = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var (path, key) in ReadRatchet(Path.Combine(root, RatchetDir, "IconAllowList.txt")))
+            allowed[path] = int.TryParse(key, out var c) ? c : 0;
+        var over = counts.Where(kv => kv.Value > allowed.GetValueOrDefault(kv.Key))
+            .Select(kv => $"{kv.Key} ({kv.Value}, allowed {allowed.GetValueOrDefault(kv.Key)})").ToArray();
+        yield return (over.Length == 0,
+            over.Length == 0 ? "no new icon geometry outside Glyph (Geometry.Parse, Data=\"M…\", path strings)"
+                             : $"icon geometry outside Glyph: {string.Join(", ", over.Take(8))}");
+        var slack = allowed.Where(kv => kv.Value > counts.GetValueOrDefault(kv.Key))
+            .Select(kv => $"{kv.Key} {kv.Value} → {counts.GetValueOrDefault(kv.Key)}").ToArray();
+        yield return (slack.Length == 0,
+            slack.Length == 0 ? "icon allow-list counts are tight" : $"icon allow-list above today's count (lower it): {string.Join(", ", slack.Take(8))}");
+        yield return (true, $"icon allow-list: {allowed.Values.Sum()} sites in {allowed.Count} files (ratchet: may only shrink)");
+    }
+
+    // ---- shared by the ratchet checks (labels, icons, minus signs, radii) ---------------
+    //
+    // A ratchet starts green by listing today's offenders in a text file next to this one,
+    // so the check lands before the fixes do. Every later change can only remove lines:
+    // a new offender fails, and so does a line that no longer matches anything (stale).
+
+    private const string RatchetDir = "tests/Nota.SmokeTest";
+
+    /// <summary>The regular string literals on a C# line (comment already stripped), with
+    /// their index and body as written. Interpolated, verbatim and raw strings are not
+    /// returned — their text is built, not written — but a regular literal inside an
+    /// interpolation hole is.</summary>
+    private static List<(int Index, string Body)> Literals(string code)
+    {
+        var list = new List<(int, string)>();
+        for (int i = 0; i < code.Length;)
+            i = code[i] is '"' or '\'' or '$' or '@' ? Lex(code, i, list) : i + 1;
+        return list;
+    }
+
+    /// <summary>Scans the literal that starts at <paramref name="i"/> (if one does) and returns
+    /// the index after it, adding regular string literals to <paramref name="list"/>.</summary>
+    private static int Lex(string s, int i, List<(int, string)> list)
+    {
+        char c = s[i];
+        if (c == '\'')
+        {
+            for (i++; i < s.Length && s[i] != '\''; i += s[i] == '\\' ? 2 : 1) { }
+            return i + 1;
+        }
+        if (c == '"')
+        {
+            if (i + 2 < s.Length && s[i + 1] == '"' && s[i + 2] == '"') return s.Length;   // raw string: rest of the line
+            int start = i;
+            for (i++; i < s.Length && s[i] != '"'; i += s[i] == '\\' ? 2 : 1) { }
+            list.Add((start, s[(start + 1)..Math.Min(i, s.Length)]));
+            return i + 1;
+        }
+        int j = i;
+        while (j < s.Length && s[j] is '$' or '@') j++;
+        if (j >= s.Length || s[j] != '"') return i + 1;                                   // @identifier, $ elsewhere
+        bool verbatim = s[i..j].Contains('@'), interpolated = s[i..j].Contains('$');
+        int depth = 0;
+        for (i = j + 1; i < s.Length;)
+        {
+            char d = s[i];
+            if (depth > 0)
+            {
+                if (d is '"' or '\'' or '$' or '@') { i = Lex(s, i, list); continue; }
+                if (d == '{') depth++; else if (d == '}') depth--;
+                i++;
+            }
+            else if (d == '"')
+            {
+                if (verbatim && i + 1 < s.Length && s[i + 1] == '"') { i += 2; continue; }
+                return i + 1;
+            }
+            else if (d == '\\' && !verbatim) i += 2;
+            else if (d == '{' && interpolated)
+            {
+                if (i + 1 < s.Length && s[i + 1] == '{') { i += 2; continue; }
+                depth = 1; i++;
+            }
+            else i++;
+        }
+        return i;
+    }
+
+    /// <summary>SVG path data: an optional fill rule (F0/F1), then a move-to with two coordinates.</summary>
+    private static readonly Regex PathData = new(@"^\s*(?:F[01]\s*)?[Mm]\s*-?[0-9.]+[\s,]+-?[0-9.]");
+
+    private readonly record struct Hit(string Path, int Line, string Key);
+
+    private static string Norm(string path) => path.Replace('\\', '/');
+
+    /// <summary>Path relative to src/managed with forward slashes — the allow-list key.</summary>
+    private static string RelManaged(string root, string file) => Norm(Path.GetRelativePath(Path.Combine(root, "src/managed"), file));
+
+    private static IEnumerable<string> SourceFiles(string dir, params string[] exts) =>
+        Directory.EnumerateFiles(dir, "*.*", SearchOption.AllDirectories)
+            .Where(f => exts.Any(e => f.EndsWith(e)) && !Norm(f).Contains("/obj/") && !Norm(f).Contains("/bin/"))
+            .OrderBy(f => f, StringComparer.Ordinal);
+
+    /// <summary>A C# line without its // comment; a // inside a string or char literal stays
+    /// (the older checks split on "//" and lose the rest of a line holding a URL).</summary>
+    private static string CodeOf(string line)
+    {
+        var scratch = new List<(int, string)>();
+        for (int i = 0; i < line.Length;)
+        {
+            if (line[i] == '/' && i + 1 < line.Length && line[i + 1] == '/') return line[..i];
+            i = line[i] is '"' or '\'' or '$' or '@' ? Lex(line, i, scratch) : i + 1;
+        }
+        return line;
+    }
+
+    /// <summary>axaml with its comments blanked out; line breaks stay so line numbers hold.</summary>
+    private static string BlankXmlComments(string text) =>
+        Regex.Replace(text, "<!--.*?-->", m => Regex.Replace(m.Value, "[^\n]", " "), RegexOptions.Singleline);
+
+    /// <summary>The text a C# literal body stands for (\" \\ \uXXXX …).</summary>
+    private static string Unescape(string body)
+    {
+        try { return Regex.Unescape(body); } catch (ArgumentException) { return body; }
+    }
+
+    /// <summary>A ratchet allow-list: one `path&lt;TAB&gt;key&lt;TAB&gt;# reason` per line, where
+    /// path is relative to src/managed. Blank lines and lines starting with # are comments.</summary>
+    private static List<(string Path, string Key)> ReadRatchet(string file)
+    {
+        var list = new List<(string, string)>();
+        if (!File.Exists(file)) return list;
+        foreach (var raw in File.ReadLines(file))
+        {
+            if (raw.Length == 0 || raw.StartsWith('#')) continue;
+            var parts = raw.Split('\t');
+            if (parts.Length >= 2) list.Add((parts[0].Trim(), parts[1]));
+        }
+        return list;
+    }
+
+    /// <summary>One rule's verdict against a path+key ratchet. Allow-listed hits pass and are
+    /// marked used, so the caller can report the entries nothing matched.</summary>
+    private static (bool Ok, string Label) RatchetVerdict(string what, IReadOnlyList<Hit> hits,
+        HashSet<(string, string)> allowed, HashSet<(string, string)> used)
+    {
+        var fresh = new List<Hit>();
+        foreach (var h in hits)
+            if (allowed.Contains((h.Path, h.Key))) used.Add((h.Path, h.Key));
+            else fresh.Add(h);
+        var listed = hits.Count - fresh.Count;
+        return fresh.Count == 0
+            ? (true, $"no {what} ({listed} allow-listed)")
+            : (false, $"{what}: {string.Join(", ", fresh.Take(8).Select(h => $"{h.Path}:{h.Line} \"{h.Key}\""))}"
+                      + (fresh.Count > 8 ? $" (+{fresh.Count - 8} more)" : ""));
+    }
+
+    /// <summary>Entries that matched nothing: the offender was fixed, so the line must go.</summary>
+    private static (bool Ok, string Label) RatchetStale(string list, IEnumerable<(string Path, string Key)> entries,
+        HashSet<(string, string)> used)
+    {
+        var stale = entries.Distinct().Where(e => !used.Contains(e)).Select(e => $"{e.Path} \"{e.Key}\"").ToArray();
+        return stale.Length == 0
+            ? (true, $"{list} has no stale entries")
+            : (false, $"stale {list} entries (fixed — remove them): {string.Join(", ", stale.Take(8))}"
+                      + (stale.Length > 8 ? $" (+{stale.Length - 8} more)" : ""));
     }
 
     // The rules match paths written with '/' ("/obj/", "Theme/NotaPalette.cs"); Windows

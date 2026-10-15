@@ -87,7 +87,7 @@ public sealed partial class SessionView
 
     private static TextBlock SectionHead(string text) => new()
     {
-        Text = text, FontSize = 9, FontWeight = FontWeight.Bold, Foreground = NotaPalette.TextMuted,
+        Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextMuted,
     };
 
     // A labelled value well (LENGTH, LOOP, START…): a click opens its choices when it has any.
@@ -116,7 +116,7 @@ public sealed partial class SessionView
         return new StackPanel
         {
             Spacing = 4,
-            Children = { new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.Bold, Foreground = NotaPalette.TextTertiary }, well },
+            Children = { new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary }, well },
         };
     }
 
@@ -205,7 +205,7 @@ public sealed partial class SessionView
                 };
                 grid.Children.Add(sw);
             }
-        return new StackPanel { Spacing = 7, Children = { SectionHead("COLOR"), grid } };
+        return new StackPanel { Spacing = 7, Children = { SectionHead("Color"), grid } };
     }
 
     // ---- clip ---------------------------------------------------------------------------
@@ -222,8 +222,8 @@ public sealed partial class SessionView
         }
         var brush = ClipBrush(c, scene);
         double len = _engine.SessionSlotLength(id, scene);
-        string kind = c.IsInstrument ? "MIDI" : "AUDIO";
-        s.Children.Add(Title(brush, ClipName(c, scene), $"{c.Name.ToUpperInvariant()} · {SceneName(scene).ToUpperInvariant()} · {kind}"));
+        string kind = c.IsInstrument ? "MIDI" : "Audio";
+        s.Children.Add(Title(brush, ClipName(c, scene), $"{c.Name} · {SceneName(scene)} · {NotaText.Label(kind)}"));
 
         _inspPreview = new InspectorPreview(this, c, scene, brush);
         s.Children.Add(new Border
@@ -234,14 +234,14 @@ public sealed partial class SessionView
 
         bool loop = p.Loop != 0;
         s.Children.Add(TwoUp(
-            Field("LENGTH", FormatLength(len), NotaPalette.TextPrimary, a => Pick(a, LengthSteps, b => Math.Abs(b - len) < 1e-6,
+            Field("Length", FormatLength(len), NotaPalette.TextPrimary, a => Pick(a, LengthSteps, b => Math.Abs(b - len) < 1e-6,
                 b => { _engine.SetSessionSlotLength(id, scene, b); RefreshSlot(id, scene); })),
-            Field("LOOP", loop ? "On" : "Off · one-shot", loop ? NotaPalette.TextPrimary : NotaPalette.Warning, _ => Set(x => { x.Loop = loop ? 0 : 1; return x; })),
-            Field("START", "1.1.1", NotaPalette.TextSecondary, null),
-            Field("LOOP END", FormatPosition(len), NotaPalette.TextSecondary, null)));
+            Field("Loop", loop ? "On" : "Off · one-shot", loop ? NotaPalette.TextPrimary : NotaPalette.Warning, _ => Set(x => { x.Loop = loop ? 0 : 1; return x; })),
+            Field("Start", "1.1.1", NotaPalette.TextSecondary, null),
+            Field("Loop end", FormatPosition(len), NotaPalette.TextSecondary, null)));
 
         var launch = new StackPanel { Spacing = 10 };
-        launch.Children.Add(SectionHead("LAUNCH"));
+        launch.Children.Add(SectionHead("Launch"));
         var modes = Segmented(ModeLabels, Math.Clamp(p.LaunchMode, 0, 3), i => Set(x => { x.LaunchMode = i; return x; }));
         ToolTip.SetTip(modes, "Trigger starts · Gate plays while held · Toggle starts and stops · Repeat retriggers while held");
         launch.Children.Add(modes);
@@ -262,8 +262,8 @@ public sealed partial class SessionView
         bool follow = _engine.SessionFollow;
         var fa = new StackPanel { Spacing = 10 };
         var faHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        faHead.Children.Add(SectionHead("FOLLOW ACTION"));
-        if (!follow) { var off = Mono("OFF GLOBALLY", 9, NotaPalette.TextTertiary); Grid.SetColumn(off, 1); faHead.Children.Add(off); }
+        faHead.Children.Add(SectionHead("Follow action"));
+        if (!follow) { var off = Mono("Off globally", 9, NotaPalette.TextTertiary); Grid.SetColumn(off, 1); faHead.Children.Add(off); }
         fa.Children.Add(faHead);
         string ActionLabel(int a) => Array.Find(FollowActions, x => (int)x.Action == a).Label ?? "None";
         Control ActionRow(string slot, int action, Action<int> setAction, Control chance)
@@ -369,17 +369,17 @@ public sealed partial class SessionView
                 Spacing = 4,
                 Children =
                 {
-                    new TextBlock { Text = "TEMPO", FontSize = 9, FontWeight = FontWeight.Bold, Foreground = NotaPalette.TextTertiary },
+                    new TextBlock { Text = "Tempo", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary },
                     new Border { Height = NotaSize.Shell, CornerRadius = NotaRadius.Badge, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = row },
                 },
             };
             ToolTip.SetTip(tempo, "Tempo set when the scene launches · drag to change");
         }
         else
-            tempo = Field("TEMPO", "—", NotaPalette.TextDisabled, _ =>
+            tempo = Field("Tempo", "—", NotaPalette.TextDisabled, _ =>
                 Set(x => { x.Tempo = GetTempo?.Invoke().Bpm ?? 120; return x; }));
         string sig = p.SigNum > 0 && p.SigDen > 0 ? $"{p.SigNum}/{p.SigDen}" : "—";
-        var sigField = Field("SIGNATURE", sig, p.SigNum > 0 ? NotaPalette.TextPrimary : NotaPalette.TextDisabled, a =>
+        var sigField = Field("Signature", sig, p.SigNum > 0 ? NotaPalette.TextPrimary : NotaPalette.TextDisabled, a =>
             Pick(a, Array.ConvertAll(Signatures, x => ((x.Num, x.Den), x.Num == 0 ? "None" : $"{x.Num}/{x.Den}")),
                 v => v.Num == p.SigNum && v.Den == p.SigDen, v => Set(x => { x.SigNum = v.Num; x.SigDen = v.Den; return x; })));
         s.Children.Add(TwoUp(tempo, sigField));
@@ -409,7 +409,7 @@ public sealed partial class SessionView
     private void BuildEmptyInspector(StackPanel s, Column c, int scene)
     {
         bool rec = _recTrack == c.TrackId && _recScene == scene;
-        s.Children.Add(Title(NotaPalette.BorderStrong, rec ? "Recording" : "Empty slot", $"{c.Name.ToUpperInvariant()} · {SceneName(scene).ToUpperInvariant()}"));
+        s.Children.Add(Title(NotaPalette.BorderStrong, rec ? "Recording" : "Empty slot", $"{c.Name} · {SceneName(scene)}"));
         bool stop = _engine.GetSessionSlotStopButton(c.TrackId, scene);
         var rows = new StackPanel { Spacing = 8 };
         rows.Children.Add(Row("Stop button", Chip(stop ? "On" : "Removed", false, _ => { _engine.SetSessionSlotStopButton(c.TrackId, scene, !stop); RefreshSlot(c.TrackId, scene); })));

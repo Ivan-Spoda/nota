@@ -20,7 +20,7 @@
 //               Humanize / Reset on Voice.
 //
 // Everything live comes from the engine's telemetry (PendulumModel), so the lanes are the
-// balls the audio thread is actually swinging. Brass is the parameter, teal is where a
+// balls the audio thread is actually swinging. Neutral ink is the parameter, teal is where a
 // ball is going and the spread (modulation). Every control is a plugin param →
 // automation / persist / clone, and the card follows automation live.
 
@@ -40,7 +40,7 @@ namespace Nota.App;
 internal sealed class PendulumInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
-    public string Subtitle => "GEN KEYS";
+    public string Subtitle => "Gen keys";
     public double CardWidth => 700;
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active)
@@ -86,14 +86,14 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         var lanes = new PendulumLanesView { VerticalAlignment = VerticalAlignment.Stretch };
         ToolTip.SetTip(lanes, "One lane per ball: x is pitch, low to high. Crossing a chord degree plays that note; teal shows the wall ahead");
         var bar = new PendulumBarView { Height = BarH };
-        ToolTip.SetTip(bar, "The bar: generated notes land on the 1/16 grid — brass this bar, deep brass the last bar ahead of the playhead");
+        ToolTip.SetTip(bar, "The bar: generated notes land on the 1/16 grid — this bar in neutral ink with the note just played in accent, the last bar dimmer ahead of the playhead");
         var ballList = new PendulumBallList();
         var voiceBars = new PendulumVoiceBars { VerticalAlignment = VerticalAlignment.Center };
 
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold,
-            LetterSpacing = NotaType.KnobLabelTracking, Foreground = c ?? TextTertiary,
+            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
         static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
@@ -171,7 +171,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             int voices = snap.Live ? snap.Voices : Math.Max(0, engine.InstrumentVoiceCount(track));
             lastNote.Text = $"last note {PendulumModel.NoteName(snap.LastPitch)} · {voices} {(voices == 1 ? "voice" : "voices")}";
             double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
-            meta.Text = $"{voices}/{PendulumModel.Voices} voices · {NotaNum.Unit(sr / 1000, "0.#", "kHz")} · {NotaNum.Bpm(engine.Bpm)} BPM · CPU {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
+            meta.Text = $"{voices}/{PendulumModel.Voices} voices · {NotaNum.Unit(sr / 1000, "0.#", "kHz")} · {NotaNum.Bpm(engine.Bpm)} BPM · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
             status.Text = Summary();
         }
 
@@ -220,7 +220,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             return row;
         }
 
-        // A rail button: raised at rest; a latching one turns brass-washed while on.
+        // A rail button: raised at rest; a latching one turns accent-washed while on.
         Border RailButton(string text, Action click, Func<bool>? on = null, string? id = null, double height = 16)
         {
             var tb = new TextBlock
@@ -357,7 +357,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         var tabPanel = SectionBox(tabGrid);
 
         // ---- rail · the balls ---------------------------------------------------------
-        var railCap = Cap("BALLS"); railCap.LetterSpacing = NotaType.SectionLabelTracking; railCap.Margin = new Thickness(8, 0, 0, 0);
+        var railCap = Cap("BALLS"); railCap.Margin = new Thickness(8, 0, 0, 0);
         var railSub = Mono("rate · phase · note", TextTertiary); railSub.HorizontalAlignment = HorizontalAlignment.Right; railSub.Margin = new Thickness(0, 0, 8, 0);
         var railHead = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         railHead.Children.Add(railCap);
@@ -573,7 +573,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
                 bool on = i == tab;
                 tabCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
                 tabCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                tabTexts[i].Foreground = on ? AccentBright : TextTertiary;
+                tabTexts[i].Foreground = on ? TextPrimary : TextTertiary;
                 tabTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 bodies[i].IsVisible = on;
             }
@@ -602,7 +602,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
 
         DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.Gutter, Children = { statusHost, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
 
         ctx.AddDeviceRefresher(Live);
         ctx.SetInstLiveViz(Refresh);
@@ -612,11 +612,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
     }
 
     // A section: card ground, hairline, radius 6 — the almanac's section box.
-    private static Border SectionBox(Control child) => new()
-    {
-        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = child,
-    };
+    private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
 
     // A section's own header strip: a hairline under it, nothing else.
     private static Border HeaderStrip(Control child) => new()

@@ -10,8 +10,8 @@
 </div>
 
 <style>
-  .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px; border: 1px dashed var(--border); border-radius: 6px; }
-  .t { font-size: 15px; font-weight: 600; color: var(--ink1); }
-  .s { font-size: 12px; line-height: 1.6; color: var(--ink4); max-width: 280px; }
-  .btn { height: 44px; padding: 0 18px; font-size: 13px; color: var(--ink1); }
+  .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px; border-radius: 3px; background: var(--panel); box-shadow: 0 0 0 1px var(--seam); }
+  .t { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .s { font-size: 12px; line-height: 1.6; color: var(--text-tertiary); max-width: 280px; }
+  .btn { height: 44px; padding: 0 18px; font-size: 13px; }
 </style>

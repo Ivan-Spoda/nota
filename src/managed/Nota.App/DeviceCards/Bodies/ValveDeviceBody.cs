@@ -47,7 +47,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "AMP SIM";
+    public string? Subtitle => "Amp sim";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -105,8 +105,10 @@ internal sealed class ValveDeviceBody : IDeviceBody
         }
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        // An acronym NotaText.Label does not know (OS, GR) keeps its case: the label as written.
+        static TextBlock Acr(string t, IBrush? c = null) { var tb = Caps(t, c); tb.Text = t; return tb; }
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -220,12 +222,12 @@ internal sealed class ValveDeviceBody : IDeviceBody
         // A list box: [name ▾] opens the entries; the wheel steps through them.
         Control Drop(int p, string[] names, string tip)
         {
-            var name = new TextBlock { FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = AccentBright, VerticalAlignment = VerticalAlignment.Center };
+            var name = new TextBlock { FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
             var box = new Border
             {
-                Height = 16, MinWidth = 74, Background = Sunken, BorderBrush = Brass, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 16, MinWidth = 74, Background = Sunken, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
                 Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-                Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 7) { Foreground = NotaPalette.AccentDim, Margin = new Thickness(6, 0, 0, 0) }, Dock.Right), name } },
+                Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, Margin = new Thickness(6, 0, 0, 0) }, Dock.Right), name } },
             };
             readouts.Add(() => name.Text = names[Idx(p)]);
             ToolTip.SetTip(box, tip);
@@ -294,7 +296,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
             return new DockPanel { Children = { Docked(lb, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = f } } };
         }
         var stageTitle = Caps("STAGE"); stageTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var stageGain = Mono("", 7, AccentBright); stageGain.HorizontalAlignment = HorizontalAlignment.Center;
+        var stageGain = Mono("", 7, TextPrimary); stageGain.HorizontalAlignment = HorizontalAlignment.Center;
         var stageOut = Mono("", 7, TextPrimary); stageOut.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() =>
         {
@@ -303,11 +305,11 @@ internal sealed class ValveDeviceBody : IDeviceBody
             stageTitle.Foreground = Sc(S_InPk) > 0.01 ? AccentBright : TextTertiary;   // lit while signal passes
         });
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        faders.Children.Add(StageFader(Gain, "GAIN", Brass, "Gain — how hard the signal hits the preamp. Double-click resets."));
+        faders.Children.Add(StageFader(Gain, "GAIN", NotaPalette.VizInk, "Gain — how hard the signal hits the preamp. Double-click resets."));
         faders.Children.Add(Col(StageFader(Output, "OUT", Teal, "Output — the master level after the cabinet, ±12 dB. Double-click resets."), 1));
-        var stageCol = new Border
+        var stageCol = new RuleSection
         {
-            Width = 56, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
+            Width = 56, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(stageTitle, Dock.Top), Docked(stageOut, Dock.Bottom), Docked(stageGain, Dock.Bottom), faders } },
         };
         DockPanel.SetDock(stageCol, Dock.Left);
@@ -332,7 +334,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
             readouts.Add(() => thd.Text = "THD " + ThdF(Sc(S_Thd)));
             var count = Mono("", 7, TextTertiary);
             readouts.Add(() => count.Text = NotaNum.F($"{Idx(Model) + 1} / {Models.Length}"));
-            var head = HeadRow(Row(6, Caps("MODEL"), ModelDrop(), count, new Border { Width = 4 }, Caps("OS"), Seg(OS, OsNames)), thd);
+            var head = HeadRow(Row(6, Caps("MODEL"), ModelDrop(), count, new Border { Width = 4 }, Acr("OS"), Seg(OS, OsNames)), thd);
             var knobs = KnobRow(new[]
             {
                 K(Bass, "BASS", Ten),
@@ -362,7 +364,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
             ToolTip.SetTip(cabView, "The cabinet as the mic hears it, with the low / high cuts — dashed is the same cab and mic on axis at the cap, 5 cm away. Drag sideways to move the mic off axis, up to bring it closer.");
             Learn(cabView, Axis);
 
-            var loss = Mono("", 7, AccentBright);
+            var loss = Mono("", 7, TextSecondary);
             readouts.Add(() => loss.Text = On(CabOn) ? NotaNum.F($"{Sc(S_CabLossDb):+0.0;−0.0;0.0} dB @ 4 k") : "cabinet off");
             var mics = IndexChips(Mic, Mics);
             ToolTip.SetTip(mics, "Mic — Dynamic: the classic close mic; Condenser: brighter, less proximity bass; Ribbon: dark, the most proximity bass");
@@ -395,10 +397,10 @@ internal sealed class ValveDeviceBody : IDeviceBody
             ToolTip.SetTip(harm, "The harmonics the preamp adds at the input's level (the fundamental at the top). Drag up or down for the gain.");
             Learn(harm, Gain);
 
-            var peak = Mono("", 7, AccentBright);
+            var peak = Mono("", 7, TextSecondary);
             readouts.Add(() => peak.Text = DbfsF(Sc(S_OutPk)));
             var even = ToggleLatch(EvenOnly, () => "Even only", "Even only — the preamp adds even harmonics only: warmth without the fizz of the odd ones");
-            var head = HeadRow(Row(6, Caps("MODEL"), ModelDrop(), new Border { Width = 4 }, Caps("OS"), Seg(OS, OsNames), even), peak);
+            var head = HeadRow(Row(6, Caps("MODEL"), ModelDrop(), new Border { Width = 4 }, Acr("OS"), Seg(OS, OsNames), even), peak);
             var knobs = KnobRow(new[]
             {
                 K(Gain, "GAIN", Ten),
@@ -418,24 +420,24 @@ internal sealed class ValveDeviceBody : IDeviceBody
         Control Box(Func<string> title, Func<string> line1, Func<string> line2, Func<bool>? lit = null)
         {
             var t = Caps("");
-            var l1 = Mono("", 9, AccentBright);
+            var l1 = Mono("", 9, TextPrimary);
             var l2 = Mono("", 8, TextSecondary);
             l1.TextTrimming = l2.TextTrimming = TextTrimming.CharacterEllipsis;
             var b = new Border { Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 2, Children = { t, l1, l2 } } };
             readouts.Add(() =>
             {
-                t.Text = title(); l1.Text = line1(); l2.Text = line2();
-                bool on = lit?.Invoke() ?? false;
-                b.BorderBrush = on ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
-                t.Foreground = on ? AccentBright : TextTertiary;
+                t.Text = NotaText.Label(title()); l1.Text = line1(); l2.Text = line2();
+                bool on = lit?.Invoke() ?? false;   // the box that describes the tab in view
+                b.BorderBrush = on ? NotaPalette.BorderStrong : NotaPalette.GraphBorder;
+                t.Foreground = on ? TextSecondary : TextTertiary;
             });
             return b;
         }
         static Control LabelRow(string label, Control c, double labW = 40)
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{labW},*")) };
-            g.Children.Add(new TextBlock { Text = label, FontSize = 7, FontWeight = FontWeight.Bold, Foreground = TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center });
+            g.Children.Add(new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center });
             g.Children.Add(Col(c, 1));
             return g;
         }
@@ -501,7 +503,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
                     Caps("OUTPUT"),
                     Line("in", () => DbF(Sc(S_InPk))),
                     Line("out", () => DbF(Sc(S_OutPk))),
-                    Line("THD", () => ThdF(Sc(S_Thd)), AccentBright) } },
+                    Line("THD", () => ThdF(Sc(S_Thd)), TextPrimary) } },
             };
             var sliders = new StackPanel { Spacing = 6, Children = {
                 SliderRow("MIX", Mix, Pct),
@@ -541,9 +543,9 @@ internal sealed class ValveDeviceBody : IDeviceBody
 
         var centre = TabFrame(new[] { "Amp", "Cab", "Harmonics" }, centreHost, CentreBody, false, t => { centreTab = t; Refresh(); }, extras);
         var rightFrame = TabFrame(new[] { "Cabinet", "Output" }, rightHost, RightBody, true, _ => RefreshAll(), null);
-        var right = new Border { Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip
@@ -601,7 +603,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { stageCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -633,7 +635,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
                     btns[i].Background = on ? Card2 : Brushes.Transparent;
                     btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
                     var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? AccentBright : TextTertiary;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
                     tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }

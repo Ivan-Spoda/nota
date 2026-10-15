@@ -181,8 +181,39 @@ public sealed partial class ArrangementView
             return null;
         }
 
+        // Row seams (specs/015): the thin band on a track row's bottom edge resizes the row —
+        // checked before clips, trims and automation so the band always means "resize".
+        private static readonly Cursor RowResizeCursor = new(StandardCursorType.SizeNorthSouth);
+        private bool _rowSeamCursorOn;
+
+        private bool RowSeamPressed(PointerPressedEventArgs e)
+        {
+            var pt = e.GetCurrentPoint(this);
+            if (!pt.Properties.IsLeftButtonPressed) return false;
+            int row = _o.RowSeamAtY(pt.Position.Y);
+            if (row < 0) return false;
+            int trackId = _o._tracks[row].Id;
+            e.Handled = true;
+            if (e.ClickCount == 2) { _o.ResetRowHeight(trackId); return true; }
+            _o.BeginRowResize(trackId, pt.Position.Y, e.KeyModifiers);
+            e.Pointer.Capture(this);
+            return true;
+        }
+
+        // Hover over a row seam owns the cursor; leaving it hands the cursor back.
+        private bool RowSeamHover(Point pos)
+        {
+            bool on = _o.RowSeamAtY(pos.Y) >= 0;
+            if (on == _rowSeamCursorOn) return on;
+            _rowSeamCursorOn = on;
+            _resizeCursorOn = false;   // the clip-edge cursor state restarts from Arrow
+            Cursor = on ? RowResizeCursor : ArrowCursor;
+            return on;
+        }
+
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
+            if (RowSeamPressed(e)) return;
             if (_o._automationMode) { AutoPointerPressed(e); return; }
             var pt = e.GetCurrentPoint(this);
             var hit = HitTest(pt.Position, out double beat);
@@ -330,6 +361,9 @@ public sealed partial class ArrangementView
 
         protected override void OnPointerMoved(PointerEventArgs e)
         {
+            if (_o.IsRowResizing) { _o.UpdateRowResize(e.GetPosition(this).Y); return; }
+            if (e.GetCurrentPoint(this).Properties is { IsLeftButtonPressed: false, IsRightButtonPressed: false }
+                && RowSeamHover(e.GetPosition(this))) return;
             if (_o._automationMode) { AutoPointerMoved(e); return; }
             var pos = e.GetPosition(this);
             _lastPos = pos;
@@ -495,6 +529,7 @@ public sealed partial class ArrangementView
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
+            if (_o.IsRowResizing) { e.Pointer.Capture(null); _o.EndRowResize(); return; }
             if (_o._automationMode) { AutoPointerReleased(e); return; }
             var eng = _o._engine;
 
@@ -1190,7 +1225,7 @@ public sealed partial class ArrangementView
             // Audio clip → stems (AI model) and → MIDI: Convert / Slice to New MIDI Track.
             if (!clip.IsMidi)
             {
-                var stems = new MenuItem { Header = "Separate Stems…", Icon = MenuKit.Icon(GlyphKind.Stems) };
+                var stems = new MenuItem { Header = "Separate stems…", Icon = MenuKit.Icon(GlyphKind.Stems) };
                 stems.Click += (_, _) => _o.SeparateStemsRequested?.Invoke(trackId, idx);
 
                 var convert = new MenuItem { Header = "Convert", Icon = MenuKit.Icon(GlyphKind.Arrow) };
@@ -1200,13 +1235,13 @@ public sealed partial class ArrangementView
                     if (enabled) mi.Click += (_, _) => _o.ConvertClipRequested?.Invoke(trackId, idx, mode);
                     return mi;
                 }
-                convert.Items.Add(ConvItem("Convert Melody to New MIDI Track", ClipConvertMode.Melody, true));
+                convert.Items.Add(ConvItem("Convert melody to new MIDI track", ClipConvertMode.Melody, true));
                 convert.Items.Add(ConvItem("Convert Harmony to New MIDI Track", ClipConvertMode.Harmony, true));
                 convert.Items.Add(ConvItem("Convert Drums to New MIDI Track", ClipConvertMode.Drums, true));
-                convert.Items.Add(ConvItem("Slice to New MIDI Track", ClipConvertMode.Slice, true));
+                convert.Items.Add(ConvItem("Slice to new MIDI track", ClipConvertMode.Slice, true));
                 if (_o.CanTranscribe?.Invoke() == false)
                 {
-                    var better = new MenuItem { Header = "Get the AI Model for Melody & Harmony…" };
+                    var better = new MenuItem { Header = "Get the AI model for melody & harmony…" };
                     better.Click += (_, _) => _o.TranscriptionModelRequested?.Invoke();
                     convert.Items.Add(new Separator());
                     convert.Items.Add(better);
@@ -1222,7 +1257,7 @@ public sealed partial class ArrangementView
             {
                 var toSession = new MenuItem { Header = inGroup ? "Copy selection to Session" : "Copy to Session", Icon = MenuKit.Icon(GlyphKind.Grid), InputGesture = MenuKit.CopyToOtherViewKey };
                 toSession.Click += (_, _) => { EnsureSelected(); _o.CopySelectionToSession(); };
-                var toScene = new MenuItem { Header = "Copy to Scene", Icon = MenuKit.Icon(GlyphKind.Grid) };
+                var toScene = new MenuItem { Header = "Copy to scene", Icon = MenuKit.Icon(GlyphKind.Grid) };
                 for (int s = 0; s < eng.SceneCount; s++)
                 {
                     int sc = s;
@@ -1342,7 +1377,7 @@ public sealed partial class ArrangementView
                         DrawRecPeaks(ctx, re, rr);
                         if (rr.Width > 34)
                         {
-                            var ft = new FormattedText("REC", CultureInfo.InvariantCulture,
+                            var ft = new FormattedText("Rec", CultureInfo.InvariantCulture,
                                 FlowDirection.LeftToRight, NotaFonts.SansBold, 9, RecText);
                             Glyph.Draw(ctx, GlyphKind.Record, new Rect(rr.X + 5, rr.Y + 3 + (ft.Height - 7) / 2, 7, 7), RecText);
                             ctx.DrawText(ft, new Point(rr.X + 16, rr.Y + 3));
@@ -1549,10 +1584,12 @@ public sealed partial class ArrangementView
             double x0 = _o.BeatToX(c.StartBeat);
             double x1 = _o.BeatToX(c.StartBeat + c.LengthBeats);
             if (x1 < 0 || x0 > w || c.LengthBeats <= 0) return;
-            var (fill, _, _, content) = ClipColors(colorIndex);
+            var (_, _, _, body) = ClipColors(colorIndex);
+            // The clip: a flat body in the track colour, radius 2, no outline; its notes and
+            // waveform in a deeper shade of it; selection adds a 1px accent edge.
+            var content = ClipInk(colorIndex);
             var rect = new Rect(x0, y + 2, Math.Max(2, x1 - x0), rowH - 4);
-            // A flat body in the track tint, radius 2, no outline; selection adds a 1px brass edge.
-            ctx.DrawRectangle(fill, selected ? ClipSelBorder : null, rect, NotaRadius.ClipValue, NotaRadius.ClipValue);
+            ctx.DrawRectangle(body, selected ? ClipSelBorder : null, rect, NotaRadius.ClipValue, NotaRadius.ClipValue);
 
             // Resize-edge affordance: a bright bar on the edge a drag would trim.
             if (edgeHi != Drag.None)
@@ -1568,24 +1605,27 @@ public sealed partial class ArrangementView
             if (c.IsMidi) DrawNotes(ctx, c, contentRect, content, pitches);
             else DrawWaveform(ctx, c, contentRect, content);
 
-            // 2px band in the track colour along the top edge: the clip's family marker.
+            // The title band: the track colour mixed 30% toward black across the top, the
+            // accent when the clip is selected; the name sits on it in derived ink. It is drawn
+            // over the content — the content area and the ADSR frame keep their geometry.
+            // A row too short for a band keeps the 2px family marker.
+            bool tall = rect.Height > TitleBandH * 2.5;
+            var band = selected ? NotaPalette.Accent : ClipBand(colorIndex);
             if (rect.Width > 3)
-                ctx.FillRectangle(content, new Rect(rect.X + 1, rect.Y + 1, rect.Width - 2, BandH));
+            {
+                using var bc = ctx.PushClip(new RoundedRect(rect, NotaRadius.ClipValue));
+                ctx.FillRectangle(band, new Rect(rect.X, rect.Y, rect.Width, tall ? TitleBandH : BandH + 1));
+            }
 
-            if (rect.Width > 24 && rect.Height > 14 && ShowsLabel(c))
+            if (tall && rect.Width > 24 && ShowsLabel(c))
             {
                 // The clip's own name (set via its menu) wins; otherwise the track name.
                 string text = string.IsNullOrEmpty(c.Name) ? label : c.Name;
                 var ft = new FormattedText(text, CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, Typeface.Default, 9, content)
+                    FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 9.5, NotaPalette.InkOn(band))
                 { MaxTextWidth = Math.Max(8, rect.Width - 10), Trimming = TextTrimming.CharacterEllipsis };
-                var plate = new Rect(rect.X + 1, rect.Y + BandH + 1,
-                                     Math.Min(rect.Width - 2, ft.Width + 8), ft.Height + 2);
                 using var _ = ctx.PushClip(rect);
-                // A soft plate keeps the name readable over a dense waveform without
-                // reintroducing a full-width strip.
-                ctx.FillRectangle(LabelPlate, plate);
-                ctx.DrawText(ft, new Point(rect.X + 5, rect.Y + BandH + 2));
+                ctx.DrawText(ft, new Point(rect.X + 5, rect.Y + (TitleBandH - ft.Height) / 2));
             }
 
             if (!c.IsMidi && row >= 0) DrawAdsr(ctx, c, trackId, row, selected, content, NotaPalette.BgSunken);
@@ -1596,7 +1636,8 @@ public sealed partial class ArrangementView
                 ctx.DrawRectangle(InactiveVeil, null, rect.Deflate(1), NotaRadius.ClipValue, NotaRadius.ClipValue);
         }
 
-        private const double BandH = 2;   // clip colour band along the top edge
+        private const double BandH = 2;         // the content area starts under this (ADSR frame, notes)
+        private const double TitleBandH = 12;   // the drawn title band over the top of the content
 
         // The clip's ADSR: the curve whenever it shapes the clip, the handles while the clip is
         // hovered, selected or being edited. Drawn in the clip's own colour; the hot handle is brass.
@@ -1755,6 +1796,8 @@ public sealed partial class ArrangementView
             ctx.DrawGeometry(brush, null, geo);
         }
 
+        private static readonly IPen AutoCurvePen = new Pen(NotaPalette.VizInk, 1.6);
+
         private void DrawAutomation(DrawingContext ctx, double w)
         {
             var (rLo, rHi) = _o.VisibleRowRange();
@@ -1765,8 +1808,10 @@ public sealed partial class ArrangementView
                 ctx.FillRectangle(AutoScrim, new Rect(0, y, w, RowH(i)));
                 if (_o.IsSlimRowAt(i)) continue;   // a slim group bar has no room for an envelope
 
-                var (fill, _, strip, content) = ClipColors(t.ColorIndex);
-                var pen = new Pen(content, 1.6);
+                // Automation: the curve and its points in neutral viz ink; only the
+                // point or segment under the pointer takes the accent.
+                var content = NotaPalette.VizInk;
+                var pen = AutoCurvePen;
 
                 var ordered = t.AutoPoints.OrderBy(p => p.Beat).ToList();
                 if (ordered.Count == 0)
@@ -1827,9 +1872,9 @@ public sealed partial class ArrangementView
                 // Target-selector pill (top-left) — width fits the label, text centred.
                 double pillW = PillWidth(t.AutoLabel);
                 var pill = PillRect(i, pillW);
-                ctx.DrawRectangle(strip, null, pill, 3, 3);
+                ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, pill, NotaRadius.ControlValue, NotaRadius.ControlValue);
                 var ft = new FormattedText(t.AutoLabel, CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, Typeface.Default, 9, content);
+                    FlowDirection.LeftToRight, NotaFonts.SansMedium, 9, NotaPalette.TextPrimary);
                 using (ctx.PushClip(pill))
                     ctx.DrawText(ft, new Point(pill.X + 6, pill.Y + (PillH - ft.Height) / 2));
             }

@@ -68,7 +68,9 @@ lighter path — see the end of this section.**
 (wrapper), `IAudioEngine.cs` (interface); `Nota.Application/Palette/BuiltinDeviceCatalog.cs`
 (the one device list the browser and the command palette read: name, `Kind = N`, sub text **and
 a semantic descriptor** — role, aliases, character, sound/source, genre, a one-line
-description; the palette smoke test `--palette` fails without a role and aliases);
+description; the palette smoke test `--palette` fails without a role and aliases), and its
+browser category in `Nota.Application/Palette/DeviceCategories.cs` (the category chip it is listed
+under — Synths, Dynamics…; the `-- design: browser --` check fails until it has one);
 `DeviceInsertService.CreateInstrumentTrack` in Nota.Presentation (`N => Engine.Add…` — the
 one place drag & drop, the browser and the palette create the track);
 `ProjectService.cs` (`{ Kind: N }`) + `PresetService.cs` (`N =>`); rack/drum
@@ -94,7 +96,7 @@ No track, no C ABI, no `Engine.h` method: effects are added generically by
   `getState`/`setState`, no per-kind managed persist code.
 - **Managed:** `DeviceCardFactory` `[kind] = new NameDeviceBody()`; a
   `BuiltinDeviceCatalog.cs` entry (`AudioEffect`, kind N, with its semantic descriptor —
-  role, aliases, character, source, task). The add/drop path (`DeviceInsertService`) is
+  role, aliases, character, source, task) and its category in `DeviceCategories.cs`. The add/drop path (`DeviceInsertService`) is
   already generic. Factory presets get their descriptor from their folder and name
   (`PresetDescriptors`); a new folder whose name isn't vocabulary goes into its folder map.
 
@@ -102,7 +104,7 @@ No track, no C ABI, no `Engine.h` method: effects are added generically by
 
 Mirror an existing `MidiDevice` (e.g. `Arpeggiator.h`) with `midiKind()`; register
 in the engine's MIDI-device factory + `MidiDeviceCardFactory` `[kind]` + a `MidiEffect`
-entry with its descriptor in `BuiltinDeviceCatalog.cs`. Params/persist/clone are generic like audio effects. Cards sit
+entry with its descriptor in `BuiltinDeviceCatalog.cs` (and its category in `DeviceCategories.cs`). Params/persist/clone are generic like audio effects. Cards sit
 **before** the instrument in the chain.
 
 ## 3. Editor card architecture

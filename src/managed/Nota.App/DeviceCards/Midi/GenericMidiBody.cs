@@ -32,7 +32,7 @@ internal sealed class GenericMidiBody : IMidiDeviceBody
             var value = new TextBlock { Text = FmtParam(v, integral), FontSize = 9, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Right };
             value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
             var top = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            top.Children.Add(new TextBlock { Text = engine.MidiEffectParamName(track, index, i).ToUpperInvariant(), FontSize = 9, Foreground = TextTertiary });
+            top.Children.Add(new TextBlock { Text = NotaText.Label(engine.MidiEffectParamName(track, index, i)), FontSize = 9, Foreground = TextTertiary });
             Grid.SetColumn(value, 1); top.Children.Add(value);
             var bar = new Knob((v - min) / Math.Max(1e-6f, max - min), 1.0) { Accent = true, HorizontalAlignment = HorizontalAlignment.Center,
                 Default = (engine.MidiEffectParamDefault(track, index, pi) - min) / Math.Max(1e-6f, max - min) };

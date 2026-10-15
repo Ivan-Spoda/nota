@@ -52,7 +52,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
     };
 
     private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
-    private static readonly IBrush Panel = NotaPalette.TextOnAccent; // dark ink over an engaged fill
+    private static readonly IBrush Panel = NotaPalette.SurfaceCard;   // a section box on the panel tone
     private static readonly IBrush Border2 = NotaPalette.BorderDefault;
     private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
     private static readonly IBrush Inset = NotaPalette.BgSunken;
@@ -69,7 +69,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "HYBRID";
+    public string? Subtitle => "Hybrid";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -126,7 +126,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         string Interval() => Sel(ShimmerPitch, 3) switch { 0 => "−12\u2009st", 1 => "+7\u2009st", _ => "+12\u2009st" };
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new() { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? MutedC, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new() { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? MutedC, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -182,7 +182,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             return row;
         }
         Control Bar(int p, Func<double, string> fmt, Func<bool>? dim = null, double valW = 26)
-            => HBar(p, () => P(p), v => Raw(p, (float)v), fmt, Amber, dim, valW);
+            => HBar(p, () => P(p), v => Raw(p, (float)v), fmt, NotaPalette.VizInk, dim, valW);
         Control SliderRow(string label, int p, Func<double, string> fmt, double labW = 48, Func<bool>? dim = null, double valW = 26)
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{labW},*")), VerticalAlignment = VerticalAlignment.Center };
@@ -270,25 +270,25 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             f.DragEnded += () => End(p);
             readouts.Add(() => f.Set(P(p)));
             MidiLearn.Bind(f, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
-            ToolTip.SetTip(f, split ? "Blend — convolution (slate, top) ⇄ algorithm (brass, bottom). Double-click: 50 / 50" : "Dry/Wet — double-click resets");
+            ToolTip.SetTip(f, split ? "Blend — convolution (slate, top) ⇄ algorithm (neutral, bottom). Double-click: 50 / 50" : "Dry/Wet — double-click resets");
             var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
-            if (!split) readouts.Add(() => lb.Foreground = P(DryWet) > 0.995f || On(WetOnly) ? AmberLit : MutedC);
+            if (!split) readouts.Add(() => lb.Foreground = P(DryWet) > 0.995f || On(WetOnly) ? TxtC : MutedC);
             return new DockPanel { Children = { Docked(lb, Dock.Bottom), f } };
         }
-        var blendTxt = Mono("", 7, AmberLit); blendTxt.HorizontalAlignment = HorizontalAlignment.Center;
+        var blendTxt = Mono("", 7, TxtC); blendTxt.HorizontalAlignment = HorizontalAlignment.Center;
         var wetTxt = Mono("", 7, TxtC); wetTxt.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() =>
         {
             float b = P(Blend);
             blendTxt.Text = NotaNum.F($"{(1 - b) * 100:0} / {b * 100:0}");
             bool wo = On(WetOnly);
-            wetTxt.Text = wo ? "SEND" : NotaNum.F($"{P(DryWet) * 100:0}\u2009%");
-            wetTxt.Foreground = wo || P(DryWet) > 0.995f ? AmberLit : TxtC;
+            wetTxt.Text = wo ? "Send" : NotaNum.F($"{P(DryWet) * 100:0}\u2009%");
+            wetTxt.Foreground = wo || P(DryWet) > 0.995f ? NotaPalette.TextPrimary : TxtC;
         });
         var blendTitle = Caps("BLEND"); blendTitle.HorizontalAlignment = HorizontalAlignment.Center;
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
         faders.Children.Add(Fader(Blend, true, "C/A")); faders.Children.Add(Col(Fader(DryWet, false, "WET"), 1));
-        var blendCol = new Border { Width = 56, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
+        var blendCol = new RuleSection { Width = 56, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(blendTitle, Dock.Top), Docked(wetTxt, Dock.Bottom), Docked(blendTxt, Dock.Bottom), faders } } };
         DockPanel.SetDock(blendCol, Dock.Left);
 
@@ -324,7 +324,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                     if (irList[i].Cat != lastCat)
                     {
                         if (lastCat.Length > 0) fly.Items.Add(new Separator());
-                        fly.Items.Add(new MenuItem { Header = irList[i].Cat, IsEnabled = false, FontSize = 9 });
+                        fly.Items.Add(new MenuItem { Header = NotaText.Label(irList[i].Cat), IsEnabled = false, FontSize = 9 });
                         lastCat = irList[i].Cat;
                     }
                     int iv = i;
@@ -356,7 +356,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             irView.TrimChanged += (s, e) => { Raw(IrStart, (float)s); Raw(IrDecay, (float)e); };
             irView.DragStarted += h => Begin(h == 1 ? IrStart : IrDecay);
             irView.DragEnded += h => End(h == 1 ? IrStart : IrDecay);
-            ToolTip.SetTip(irView, "Drag the brass lines to trim the IR (Start · Decay); double-click resets. Drop an audio file here to load it.");
+            ToolTip.SetTip(irView, "Drag the trim lines to trim the IR (Start · Decay); double-click resets. Drop an audio file here to load it.");
             readouts.Add(() =>
             {
                 string sig = NotaNum.F($"{Sel(IrSelect, IrCount)}|{Sc(S_IrSeconds):0.000}|{Sc(S_IrChannels)}|{Sc(S_UserIr)}");
@@ -449,7 +449,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             };
             eq.DragStarted += h => { if (h == 0) { Begin(EqLowCut); Begin(EqLowGain); } else { Begin(EqHighCut); Begin(EqHighShelf); } };
             eq.DragEnded += h => { if (h == 0) { End(EqLowCut); End(EqLowGain); } else { End(EqHighCut); End(EqHighShelf); } };
-            ToolTip.SetTip(eq, "Brass handle: low cut (X) + low shelf (Y) · grey handle: high cut (X) + high shelf (Y)");
+            ToolTip.SetTip(eq, "Left handle: low cut (X) + low shelf (Y) · right handle: high cut (X) + high shelf (Y)");
             readouts.Add(() => eq.Set(P(EqLowCut), P(EqLowGain), P(EqHighShelf), P(EqHighCut)));
             var eqKnobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), Height = 50 };
             eqKnobs.Children.Add(K(EqLowCut, "LOW-CUT", LowCutF, 30, 48));
@@ -472,7 +472,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             // Shimmer
             bool ShimDim() => Sel(AlgoMode, 4) != 3;
             var shimCap = Caps("SHIMMER · PITCH SHIFT");
-            readouts.Add(() => { shimCap.Text = ShimDim() ? "SHIMMER · SHIMMER MODE ONLY" : "SHIMMER · PITCH SHIFT"; shimCap.Foreground = ShimDim() ? DimC : MutedC; });
+            readouts.Add(() => { shimCap.Text = ShimDim() ? "Shimmer · shimmer mode only" : "Shimmer · pitch shift"; shimCap.Foreground = ShimDim() ? DimC : MutedC; });
             var interval = Row(5, Caps("INTERVAL"), Seg(ShimmerPitch, new[] { "−12", "+7", "+12" }));
             var shimGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
             shimGrid.Children.Add(K(ShimmerAmount, "AMOUNT", v => Pct(v), 28, 44, ChamberInk.Mauve));
@@ -504,7 +504,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                 g.Children.Add(Toggle(onP, ""));
                 g.Children.Add(Col(Caps(name), 1));
                 var bar = HBar(Blend, () => conv ? 1 - P(Blend) : P(Blend), v => Raw(Blend, (float)(conv ? 1 - v : v)),
-                    v => ShortDb(ShareDb(v)), conv ? ChamberInk.Slate : Amber, () => !On(onP), 26);
+                    v => ShortDb(ShareDb(v)), conv ? ChamberInk.Slate : NotaPalette.VizInk, () => !On(onP), 26);
                 ToolTip.SetTip(bar, conv ? "Convolution share of the blend (drags Blend)" : "Algorithm share of the blend (drags Blend)");
                 g.Children.Add(Col(bar, 2));
                 return g;
@@ -562,7 +562,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             qual.Children.Add(Col(qseg, 1));
             var mid = new StackPanel { Spacing = 6, Children = {
                 SliderRow("WIDTH", WidthP, v => NotaNum.F($"{v * 200:0}"), 48),
-                SliderRow("MONO f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}"), 48),
+                SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}"), 48),
                 qual } };
             var wetOnly = Toggle(WetOnly, "Wet only (send)");
             ToolTip.SetTip(wetOnly, "Wet only — 100\u2009% wet, no dry: for a return / send track");
@@ -594,7 +594,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                     extras.Text = Sc(S_KernelSeconds) > 0 ? NotaNum.F($"{ts} · {Sc(S_KernelSeconds):0.0}\u2009s IR") : ts;
                     extras.Foreground = MutedC; break;
                 case 1:
-                    extras.Text = On(Freeze) ? "FREEZE active" : On(Routing) && On(ConvOn) ? "fed by convolution" : "";
+                    extras.Text = On(Freeze) ? "Freeze active" : On(Routing) && On(ConvOn) ? "fed by convolution" : "";
                     extras.Foreground = On(Freeze) ? AmberLit : MutedC; break;
                 default:
                     extras.Text = Sel(EqPosition, 3) switch { 0 => "at the input, before both engines", 2 => "at the output, dry + wet", _ => "on the tail, before Dry/Wet" };
@@ -605,9 +605,9 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         Control RightBody(int t) => rightBodies[t] ??= t == 1 ? OutputTab() : LevelsTab();
         var centre = TabFrame(new[] { "Convolution", "Algorithm", "EQ · Mod" }, centreHost, CentreBody, false, t => { centreTab = t; foreach (var a in readouts) a(); }, extras);
         var rightFrame = TabFrame(new[] { "Levels", "Output" }, rightHost, RightBody, true, _ => { foreach (var a in readouts) a(); }, null);
-        var right = new Border { Width = 186, Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Panel, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip
@@ -649,7 +649,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { blendCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = RailBg, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -670,7 +670,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                 {
                     bool on = i == sel;
                     btns[i].Background = on ? TabBg : Brushes.Transparent; btns[i].BorderBrush = on ? Amber : Brushes.Transparent;
-                    var tb = (TextBlock)btns[i].Child!; tb.Foreground = on ? AmberLit : MutedC; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                    var tb = (TextBlock)btns[i].Child!; tb.Foreground = on ? NotaPalette.TextPrimary : MutedC; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }
             var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };

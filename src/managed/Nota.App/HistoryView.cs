@@ -38,7 +38,6 @@ internal sealed class HistoryView : UserControl
 {
     private const double RowH = 26;
     private const double LaneW = 12;
-    private const string IconStar = "M12 3 L14.5 9 L21 9.3 L16 13.5 L17.7 20 L12 16.2 L6.3 20 L8 13.5 L3 9.3 L9.5 9 Z";
 
     private readonly IProjectHistory _history;
     private readonly IHistoryHost _host;
@@ -54,7 +53,7 @@ internal sealed class HistoryView : UserControl
     private readonly Button _options = new()
     {
         Classes = { "ghost" }, Width = 22, Height = 22, Padding = new Thickness(0), Margin = new Thickness(6, 0, 0, 0),
-        Content = new Path { Data = Geometry.Parse("M4 7 H20 M7 12 H17 M10 17 H14"), Stretch = Stretch.Uniform, Width = 12, Height = 10, StrokeThickness = 1.6, StrokeLineCap = PenLineCap.Round },
+        Content = new Glyph(GlyphKind.Options, 16),
     };
     private ProjectHistoryState _state = ProjectHistoryState.Empty;
     private Dictionary<string, int> _numbers = new();   // version id -> 1-based number in save order
@@ -65,7 +64,7 @@ internal sealed class HistoryView : UserControl
         _history = history;
         _host = host;
 
-        var caption = new TextBlock { Text = "VERSIONS", Classes = { "GroupLabel" }, VerticalAlignment = VerticalAlignment.Center };
+        var caption = new TextBlock { Text = "Versions", Classes = { "GroupLabel" }, VerticalAlignment = VerticalAlignment.Center };
         _summary.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Height = RowH, Margin = new Thickness(10, 8, 6, 4) };
         header.Children.Add(caption);
@@ -74,7 +73,7 @@ internal sealed class HistoryView : UserControl
         Grid.SetColumn(_options, 2);
         header.Children.Add(_options);
         _options.Click += (_, _) => BuildOptionsMenu().ShowAt(_options);
-        ((Path)_options.Content!).BindResource(Shape.StrokeProperty, "Brush.TextTertiary");
+        ((Glyph)_options.Content!).BindResource(Glyph.ForegroundProperty, "Brush.TextTertiary");
         ToolTip.SetTip(_options, "Clean up the history");
 
         _empty.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
@@ -167,8 +166,8 @@ internal sealed class HistoryView : UserControl
         grid.Children.Add(name);
         if (v.Starred)
         {
-            var star = new Path { Data = Geometry.Parse(IconStar), Stretch = Stretch.Uniform, Width = 9, Height = 9, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
-            star.BindResource(Shape.FillProperty, "Brush.Accent");
+            var star = new Glyph(GlyphKind.StarFilled, 12) { Margin = new Thickness(6, 0, 0, 0) };
+            star.BindResource(Glyph.ForegroundProperty, "Brush.Accent");
             Grid.SetColumn(star, 3);
             grid.Children.Add(star);
         }

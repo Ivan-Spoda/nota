@@ -35,12 +35,10 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
     internal static readonly string[] Modes = { "Sync", "ms", "Gate %" };
     internal static readonly string[] Divs = { "1/32", "1/16", "1/8", "1/4", "1/2", "1/1", "1/8.", "1/4T" };
 
-    private static readonly IBrush Ground = NotaPalette.SurfaceInset;
-    private static readonly IBrush Island = NotaPalette.SurfaceCard;
+    private static readonly IBrush Ground = NotaPalette.SurfaceCard;   // the card surface: sections sit on it, divided by rules (spec 012)
     private static readonly IBrush Bd = NotaPalette.BorderDefault;
     private static readonly IBrush Rule = NotaPalette.GraphBorder;
     private static readonly IBrush Well = NotaPalette.BgSunken;
-    private static readonly IBrush BrassLit = NotaPalette.AccentBright;
     private static readonly IBrush Txt = NotaPalette.TextPrimary;
     private static readonly IBrush Sub = NotaPalette.TextSecondary;
     private static readonly IBrush Muted = NotaPalette.TextMuted;
@@ -63,11 +61,11 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         if (!IsMini(e, t, index))
         {
-            var tag = Mono("", Cap, 8); tag.LetterSpacing = 0.6;
+            var tag = Mono("", Cap, 8);
             var bpm = Mono("", Cap, 8);
             void Sync()
             {
-                tag.Text = Modes[Math.Clamp((int)Math.Round(e.MidiEffectGetParam(t, index, PMode)), 0, 2)].ToUpperInvariant();
+                tag.Text = Modes[Math.Clamp((int)Math.Round(e.MidiEffectGetParam(t, index, PMode)), 0, 2)];
                 bpm.Text = $"{e.Bpm:0.0} BPM";
             }
             Sync();
@@ -112,8 +110,8 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
     internal static string Signed(double v) => (v > 0.004 ? "+" : v < -0.004 ? "−" : "") + $"{Math.Abs(Math.Round(v * 100)):0}\u2009%";
 
     // ---- small builders -------------------------------------------------------------------------
-    private static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-    { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, LetterSpacing = 0.8, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
+    private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+    { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
     private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
     { Text = t, FontSize = fs, FontFamily = NotaFonts.MonoFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
     private static T WithDock<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -170,7 +168,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             Learn(modeSeg, PMode, "Mode");
             ToolTip.SetTip(modeSeg, "Sync: a tempo division · ms: a fixed time · Gate %: a share of how long each note was held");
 
-            var bigVal = Mono("", BrassLit, 18); bigVal.FontWeight = FontWeight.Medium; bigVal.LetterSpacing = -0.3;
+            var bigVal = Mono("", Txt, 18); bigVal.FontWeight = FontWeight.Medium; bigVal.LetterSpacing = -0.3;
             var bigSub = Mono("", Cap, 7); bigSub.VerticalAlignment = VerticalAlignment.Bottom; bigSub.Margin = new Thickness(0, 0, 0, 4);
             var valRow = new DockPanel { Children = { WithDock(bigSub, Dock.Right), bigVal } };
             bigSub.HorizontalAlignment = HorizontalAlignment.Right;
@@ -287,7 +285,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             ToolTip.SetTip(modeChip, "Length mode: Sync / ms / Gate % — click for the next, Shift-click for the previous");
             Learn(modeChip, PMode, "Mode");
 
-            var val = Mono("", BrassLit, 9); val.FontWeight = FontWeight.Medium;
+            var val = Mono("", Txt, 9); val.FontWeight = FontWeight.Medium;
             var sub = Mono("", Cap, 7);
             var head = new DockPanel { Height = 14, Children = { WithDock(modeChip, Dock.Left), WithDock(sub, Dock.Right), val } };
 
@@ -308,8 +306,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             {
                 WithDock(head, Dock.Top), WithDock(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 4), Child = gate },
             } };
-            var island = new Border { Background = Island, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-                Padding = new Thickness(6, 5, 6, 0), Child = inner };
+            var island = new RuleSection { Padding = new Thickness(6, 5, 6, 0), Child = inner };
             readouts.Add(() =>
             {
                 modeTb.Text = Modes[Mode(G)];
@@ -354,15 +351,14 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             return new Border { Height = 20, BorderBrush = Bd, BorderThickness = new Thickness(0, 0, 0, 1), Child = d };
         }
 
-        Border IslandBox(Control head, Control content, double width)
+        Decorator IslandBox(Control head, Control content, double width)
         {
-            var b = new Border { Background = Island, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true,
-                Child = new DockPanel { Children = { WithDock(head, Dock.Top), content } } };
+            var b = DeviceCardKit.Section(new DockPanel { Children = { WithDock(head, Dock.Top), content } });
             if (!double.IsNaN(width)) b.Width = width;
             return b;
         }
 
-        // A MODIFIERS slider: caps label + value (brass once moved off neutral), the track, a hint.
+        // A MODIFIERS slider: label + value (primary text once moved off neutral), the track, a hint.
         Control ModSlider(string label, int p, bool bipolar, string hint)
         {
             var l = Caps(label);
@@ -382,8 +378,8 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
                 double x = G(p);
                 if (!trk.Dragging) trk.Norm = toNorm();
                 bool mod = Math.Abs(x) > 0.004;
-                l.Foreground = mod ? BrassLit : Cap;
-                v.Foreground = mod ? BrassLit : Txt;
+                l.Foreground = mod ? Txt : Cap;
+                v.Foreground = Txt;
                 v.Text = bipolar ? Signed(x) : $"±{Math.Round(x * 100):0}\u2009%";
             });
             return new StackPanel { Spacing = 2, Children =
@@ -423,7 +419,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             var v = Mono("", Sub, 7); v.HorizontalAlignment = HorizontalAlignment.Center;
             readouts.Add(() => { double n = norm(); if (!knob.Dragging && Math.Abs(knob.Value - n) > 1e-6) knob.Value = n; v.Text = text(); });
             return new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.SizeNorthSouth),
-                Children = { knob, new TextBlock { Text = label, FontSize = 7, FontWeight = FontWeight.Bold, LetterSpacing = 0.6, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, v } };
+                Children = { knob, new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, v } };
         }
     }
 }

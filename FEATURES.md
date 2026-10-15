@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.53.1** (plus changes in development on `main`). This document describes what is
+**0.55.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -33,7 +33,8 @@ Contents
   MIDI, **VST3** hosting. Distributed as an Inno Setup installer
   (`Nota-Setup-<version>-x64.exe`; arm64 is also built).
 - **Linux**: PulseAudio/ALSA (via miniaudio), ALSA MIDI (RtMidi), **VST3** hosting.
-  Distributed as a portable **AppImage** (`Nota-<version>-<arch>`).
+  Distributed as a portable **AppImage** (`Nota-<version>-<arch>`). Settings live in
+  `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`).
 
 Architecture: engine and DSP in C++20 (CMake + Ninja), UI in .NET 10 / Avalonia 12 (C#),
 with a C ABI + P/Invoke boundary between them. Plugin hosting is isolated in a separate
@@ -53,7 +54,7 @@ JUCE module; the engine core is JUCE-free.
   and **Delay** (Nota Delay), both Wet Only — ready to send to; it opens unmodified, with
   nothing to undo.
 - **Version history**: every save records a version inside the project. The browser's
-  **History** tab draws them as a branching tree (the current one has a brass dot), each
+  **History** tab draws them as a branching tree (the current one has an orange dot), each
   described by what it changed ("Added Bass · Tempo 120.00 → 124.00"); switch
   to any version, open one as a copy, or name, note, star and delete versions. Saving on top
   of an older version branches. **Save Version with Note…** (⌥⌘S). The tab's menu deletes all
@@ -71,6 +72,8 @@ JUCE module; the engine core is JUCE-free.
   - **Launch quantize** (Q): None … 1/16 … 4 Bars — applied when launching slots and
     scenes in Session.
   - **Position**: clicking the readout toggles bars ↔ time (mm:ss.ms).
+  - **DSP meter**: the share of each audio buffer the engine needs; its tooltip adds the
+    CPU used by the whole Nota process, in the system monitor's scale.
 - **Tempo (BPM)** and **time signature** (edited by dragging; the denominator snaps to a
   power of two), grid and quantization.
 - **Tap tempo**: a TAP cell beside the BPM (and *Tap Tempo* in the command palette) sets the
@@ -82,10 +85,14 @@ JUCE module; the engine core is JUCE-free.
 
 ---
 
-Three top-level views, switched from the toolbar (**Arrangement · Session · Modular**);
-the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
+## Views
 
-- **Arrangement View** — a linear timeline, floating on the app ground as its own island:
+Three top-level views, switched by three icon keys in the transport (**Arrangement ·
+Session · Modular**; each names its view in a tooltip); the mixer opens as a separate
+floating window (**View → Mixer**, ⌘M) that is as wide as its channel strips, follows the
+track count and closes with Escape.
+
+- **Arrangement View** — a linear timeline:
   place, move, trim and duplicate clips; the snap grid (below); scroll and zoom;
   recording into the arrangement (audio and MIDI); split at the cursor or across a
   selection (Cmd/Ctrl+E cuts every track in the selection); clip scrubbing on the ruler.
@@ -101,6 +108,13 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
     there, double-click to rename, drag its body or edges to move and resize it (always on
     whole bars). Its menu loops the section, selects it as a time range across every track,
     duplicates it or deletes it. Saved with the project; View ▸ Toggle sections hides it.
+  - **Resizable tracks and track list** — drag a track's bottom edge (header or lane) to
+    set its height, 30–256 px, with a light snap to Compact / Standard / Large; a
+    multi-selection resizes together, ⌥-drag resizes every track, double-click resets.
+    The track menu's **Track height** sets a size for the selection or all tracks. Headers
+    fit their height: one line (name, M / S / arm) when short, input, fader and pan on rows
+    of their own when tall. Drag the seam between headers and lanes to set the header
+    width (160–480 px). Both are saved with the project.
   - **Group rows are slim** — a group collapses to a titled bar with its disclosure,
     mute/solo and level, and opens to the full control set when selected, so groups read as
     families rather than as more tracks. A track without a colour of its own takes its
@@ -121,19 +135,21 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   (trim brackets, warp markers and envelope points snap); ⌘1 / ⌘2 narrow / widen (in Auto,
   the density), ⌘3 triplets, ⌘4 snap on / off, ⌘5 Auto ↔ fixed (also Edit → Grid), acting
   on the editor used last. Hold ⌥ to drag freely; clip edges still attract a dragged clip.
-- **Session View** — a clip grid (tracks × scenes) with an inspector: named, coloured clips
-  with note / waveform previews and a progress pie on the clip's own clock; selection apart
-  from launching, keyboard editing (arrows, Return, ⌘C/X/V, ⌘D, ⌘I, F2, Delete) and drag
-  between slots; launch modes (Trigger / Gate / Toggle / Repeat), per-clip quantize, legato,
-  one-shot, velocity amount and follow actions with a global switch; scenes with names,
-  colours, tempo / signature and scene follow, inserted, duplicated, captured and reordered
-  without stopping playback; Session Rec with fixed length; group columns that fold;
-  returns + master; I/O · Sends · Mixer sections; removable stop buttons; per-track
-  Back to Arrangement; and moving material between Session and Arrangement — the clipboard
-  works both ways, and **⌘⇧C** (**Copy to Session** / **Copy to Arrangement** / **Copy to
-  Scene**) sends clips, slots or a whole scene across with notes, envelopes, warp, pitch and
-  gain, as one undo step.
-- **Modular View** — a signal-graph editor for the track's chain, on its own island: MIDI FX → instrument →
+- **Session View** — a clip grid (tracks × scenes) with an inspector that the toolbar's
+  **Inspector** key (the sidebar icon) shows or hides (remembered); on a narrow window the least-used
+  toolbar controls fold into a **⋯** menu. Named, coloured clips with note / waveform
+  previews and a progress pie on the clip's own clock; selection apart from launching,
+  keyboard editing (arrows, Return, ⌘C/X/V, ⌘D, ⌘I, F2, Delete) and drag between slots;
+  launch modes (Trigger / Gate / Toggle / Repeat), per-clip quantize, legato, one-shot,
+  velocity amount and follow actions with a global switch; scenes with names, colours,
+  tempo / signature and scene follow, inserted, duplicated, captured and reordered without
+  stopping playback; Session rec with fixed length; group columns that fold; returns +
+  master; I/O · Sends · Mixer sections; removable stop buttons; per-track Back to
+  Arrangement; and moving material between Session and Arrangement — the clipboard works
+  both ways, and **⌘⇧C** (**Copy to Session** / **Copy to Arrangement** / **Copy to
+  scene**) sends clips, slots or a whole scene across with notes, envelopes, warp, pitch
+  and gain, as one undo step.
+- **Modular View** — a signal-graph editor for the track's chain: MIDI FX → instrument →
   effects shown as nodes you can expand, bypass, duplicate, delete and reorder right on the
   canvas (node positions are saved with the project), plus a **Global view** that shows
   tracks as islands with cross-track connections. Its centrepiece is **CV modulation** —
@@ -162,13 +178,13 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   pasted tracks land after the selected track, in its group.
 - **Per track**: volume, pan (bipolar bar), mute, solo, arm (ready to record).
   Double-click resets to the default.
-- **Pan law** (per project, in the Mixer footer: **PAN LAW** Stereo / Balance): under
+- **Pan law** (per project, in the Mixer footer: **Pan law** Stereo / Balance): under
   Stereo, panning a stereo track or return moves its whole image — at full pan both
   channels play from one side; under Balance the opposite channel fades out. Mono
   material and centred tracks sound the same either way. New projects use Stereo; projects
   from earlier versions keep Balance and are marked **Older project**. Switching is
   click-free during playback and one undo step. Groups keep their balance (marked **BAL**).
-- **Stereo Map** (Mixer window, **Strips | Stereo Map** in its title bar): every track,
+- **Stereo Map** (Mixer window, **Strips | Stereo map** in its title bar): every track,
   return and the master as a dot at its pan (left–right) and fader (up–down), with a measured
   cloud — where the sound really sits, how wide it is (from the phase correlation) and how
   loud — and the master correlation under the map. Drag a dot to set pan and volume at once
@@ -275,6 +291,11 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   permissions (play only / play and control) in **Settings → Remote**. Phone notes record like
   the computer keyboard's; knobs and XY axes map through MIDI Learn (XY and tilt per track);
   several phones play at once, each on its own track, with players' names on the tracks.
+- **Nota Remote in Nota's theme**: the phone wears the colour theme Nota wears and follows
+  every change live (including Follow system); **Follow phone** (⋯ → Theme) wears the
+  In dark mode / In light mode themes by the phone's own scheme. Its screens follow the
+  Studio look — one orange accent for what is live or chosen, semantic mute / solo / arm
+  colours, sentence-case labels — and a returning phone paints in its last theme at once.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that
@@ -368,7 +389,7 @@ the mixer opens as a separate floating window (**View → Mixer**, ⌘M).
   and the whole drag is one undo step.
 - **The lane follows focus** — touch any knob or fader on any device (built-in, plugin, or
   mixer) and the automation lane switches to that parameter.
-- **Already-automated parameters are highlighted** in the target picker (a brass dot, and
+- **Already-automated parameters are highlighted** in the target picker (a dot, and
   they sort to the top of the list).
 - **Selection and paste**: shift-select a range, Cmd/Ctrl+D to duplicate, and paste that
   does not leave redundant points behind.
@@ -831,20 +852,26 @@ and user presets, automation, persistence and cloning.
   MIDI Effects**, then **Files** (with folder tree navigation), **Presets** (a tree of
   category → device → preset), **Projects**, **Map** (MIDI Learn mappings) and **History**
   (the open project's versions). A hairline
-  separates the device tabs from the library tabs, and the active one carries a brass edge.
-- **A compact index**: single-line rows, sectioned into **BUILT-IN** and **PLUG-INS** with
-  counts, so it is clear where Nota's own devices end and the scanned plug-ins begin. The
-  "Nota" prefix drops to tertiary ink — names scan on their distinctive word — and the
-  device type sits at the right edge as a quiet tag (a plug-in's tag names its format and
-  vendor, which tells the AU and VST3 builds of one plug-in apart). The name always wins
-  the room: the tag gives way rather than truncating it.
+  separates the device tabs from the library tabs, and the active one carries an orange edge.
+- **Category chips**: above each device tab's list, one chip per kind of device — Synths /
+  Keys & physical / Drums / Samplers / Racks; EQ & filter / Dynamics / Reverb & delay /
+  Modulation / Distortion / Pitch & time / Utility / Racks; Generate / Shape. A click
+  narrows the list to that category, and a second click shows everything again. Each tab
+  keeps its own pick, and it combines with search and the Favorites and tag chips.
+  Installed plug-ins join the same categories from the category they report, under an
+  **Other** chip when Nota doesn't recognise it.
+- **A compact index**: single-line rows, sectioned into **Built-in** and **Plug-ins** with
+  counts, so it is clear where Nota's own devices end and the scanned plug-ins begin. Built-in devices show their short name ("Aurora" — search still matches
+  "Nota Aurora"), and the device type sits at the right edge as a quiet tag (a plug-in's
+  tag names its format and vendor, which tells the AU and VST3 builds of one plug-in
+  apart). The name always wins the room: the tag gives way rather than truncating it.
 - **Factory presets in folders**: a built-in device expands into category folders — Pads /
   Bass / Leads / Keys & Plucks … for instruments, Vocals / Drums / Mix & Bus / Mastering /
   Ambient / Sidechain … for effects, Triads / Sevenths, Grooves / Ratchets … for MIDI
   effects — with its Init loose on top. Search opens the folders around the hits, and a
   folder name ("Mastering") lists that folder in every device.
-- **View options** (the ⋮ button beside the search box): show type tags, group by source,
-  favourites first — each remembered across sessions — plus the tag editor.
+- **View options** (the ⋮ button beside the search box): show type tags, category chips,
+  group by source, favourites first — each remembered across sessions — plus the tag editor.
 - A **status line** counts what the tab is showing (`13 built-in · 4 plug-ins`), and the
   search box counts the matches.
 - **Sample player** under the Files tab: the file's real waveform (click to play from a
@@ -944,11 +971,15 @@ and user presets, automation, persistence and cloning.
   semantic hit says why it was found ("warm · pad"). Prefixes `>` `@` `+` `#` `~` (or Tab)
   filter by type; an empty query shows Recent and suggestions for the context. Ranking
   learns from what you use in the palette and the browser.
-- **Two palette variants** — **Ember Graphite** (warm graphite neutrals with a brass
-  accent; the default, and what a DAW wants for long sessions in a dark room) and
-  **Ember Paper** (the same hues and roles on a warm light ground, with brass darkened to
-  bronze so marks keep their weight). Switching applies immediately, across every open
-  window — including the custom-drawn arrangement, piano roll, mixer and device cards.
+- **Studio look, in colour themes** — **Studio Dark** (neutral studio greys with one
+  orange accent; the default, and what a DAW wants for long sessions in a dark room),
+  **Studio Light** (the same system in light greys, the orange a shade deeper), and
+  **Ember Graphite** / **Ember Paper** (warm browns with a brass accent, dark and light).
+  A theme changes colours only — track colours included — never the layout. Panels dock edge
+  to edge on thin seams; orange marks only what is playing, selected or switched on, and a
+  knob or fader turns orange while you hover or drag it; mute is amber, solo blue,
+  record-arm red; labels are in sentence case. Switching applies immediately, across every
+  open window — including the custom-drawn arrangement, piano roll, mixer and device cards.
 - **A single frameless window style**: centred title, drag by the header, the macOS
   traffic lights in a left inset (Windows gets its own title bar; Linux uses the system
   frame). **Full screen** — the macOS green button, or View → Toggle Full Screen (F11)
@@ -965,7 +996,7 @@ and user presets, automation, persistence and cloning.
   third-party attribution notices (`LICENSES/THIRD-PARTY-NOTICES.md`).
 - **Settings** — a larger window with a sidebar grouped into Devices, Plug-ins and General
   (each page with an icon and a short description), large switches, latency in
-  milliseconds, theme buttons that preview each theme, and key-cap shortcuts with a filter.
+  milliseconds, colour themes shown as miniature Nota windows, and key-cap shortcuts with a filter.
 - **Device window** (a device opened from a Drum Rack, Instrument Rack, Audio Effect Rack or
   a Nota Rhythm voice): the title bar carries the device, track, preset picker, bypass and
   S / L size switch; a footer shows where the device sits, its live voice count and type.
@@ -996,9 +1027,11 @@ and user presets, automation, persistence and cloning.
 - **Plug-ins**: scan paths, Rescan.
 - **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
 - **Library**: library folders.
-- **Appearance**: **Theme** — Ember Graphite (dark), Ember Paper (light) or System, which
-  follows the OS appearance and switches with it; the choice applies live and is
-  remembered. Also **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
+- **Appearance**: **Colour theme** — **Dark**, **Light** or **Follow system** over two
+  rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
+  miniature Nota window in its own colours. Pick one theme, or with Follow system one for
+  dark mode and one for light mode, switched with the OS appearance; the choice applies
+  live and is remembered. Also **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Shortcuts**: the shortcut list.
 - Settings, logs and autosaves live in `~/Library/Application Support/Nota/` (macOS) and

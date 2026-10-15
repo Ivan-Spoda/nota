@@ -318,7 +318,7 @@ public sealed class DrumPatternView : UserControl
             Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                Cap("PATTERN"),
+                Cap("Pattern"),
                 new TextBlock { Text = _title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center },
                 Mono($"{_pads.Count} pad{(_pads.Count == 1 ? "" : "s")} · {_steps} steps", TextTertiary),
                 Mono("click to place · shift-click accents · drag to paint", NotaPalette.TextDisabled),
@@ -326,7 +326,7 @@ public sealed class DrumPatternView : UserControl
         };
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, [DockPanel.DockProperty] = Dock.Right };
-        right.Children.Add(Cap("GRID"));
+        right.Children.Add(Cap("Grid"));
         right.Children.Add(Seg(ResNames, Array.IndexOf(Resolutions, _res), i =>
         {
             _res = _resPersist = Resolutions[i];
@@ -344,7 +344,7 @@ public sealed class DrumPatternView : UserControl
                 int lastBar = (int)Math.Ceiling(Math.Min(_steps, (p + 1) * MaxCells) / barSteps);
                 names[p] = firstBar == lastBar ? $"{firstBar}" : $"{firstBar}–{lastBar}";
             }
-            right.Children.Add(Cap("BARS"));
+            right.Children.Add(Cap("Bars"));
             right.Children.Add(Seg(names, _winStart / MaxCells, p => { _winStart = p * MaxCells; Rebuild(); }));
         }
         right.Children.Add(Chip("Clear", ClearPattern));
@@ -364,7 +364,7 @@ public sealed class DrumPatternView : UserControl
             int beat = (_winStart + g * _res) / _res;
             bool bar = beat % BeatsPerBar == 0;
             var tb = Mono(bar ? $"{beat / BeatsPerBar + 1}" : $"{beat / BeatsPerBar + 1}.{beat % BeatsPerBar + 1}",
-                          bar ? NotaPalette.AccentBright : NotaPalette.TextDisabled, 7);
+                          bar ? NotaPalette.TextSecondary : NotaPalette.TextDisabled, 7);
             tb.HorizontalAlignment = HorizontalAlignment.Left;
             Grid.SetColumn(tb, g);
             outer.Children.Add(tb);
@@ -453,7 +453,7 @@ public sealed class DrumPatternView : UserControl
         var label = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
-            Children = { Cap("VELOCITY"), _velLabel },
+            Children = { Cap("Velocity"), _velLabel },
         };
         var lane = BeatGrid(VelocityCell);
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{NameW},*"), ColumnSpacing = 8, Height = VelH, Margin = new Thickness(10, 0, 10, 0) };
@@ -470,7 +470,7 @@ public sealed class DrumPatternView : UserControl
     private Control VelocityCell(int step)
     {
         int local = step - _winStart;
-        var fill = new Border { VerticalAlignment = VerticalAlignment.Bottom, Background = NotaPalette.Accent, CornerRadius = NotaRadius.Clip };
+        var fill = new Border { VerticalAlignment = VerticalAlignment.Bottom, Background = NotaPalette.VizInk, CornerRadius = NotaRadius.Clip };
         var slot = new Panel { Background = NotaPalette.SurfaceAbyss, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), ClipToBounds = true, Children = { fill } };
         _velFills[local] = fill;
         _velSlots[local] = slot;
@@ -563,9 +563,9 @@ public sealed class DrumPatternView : UserControl
         var cell = _nameCells[r];
         if (cell is null) return;
         bool sel = r == _selRow;
-        cell.Background = sel ? NotaPalette.AccentSubtle : NotaPalette.SurfaceInset;
-        cell.BorderBrush = sel ? NotaPalette.BorderBrass : NotaPalette.BorderDefault;
-        _nameLabels[r].Foreground = sel ? NotaPalette.AccentBright : NotaPalette.TextPrimary;
+        cell.Background = sel ? NotaPalette.SurfaceHover : NotaPalette.SurfaceInset;
+        cell.BorderBrush = sel ? NotaPalette.Accent : NotaPalette.Seam;
+        _nameLabels[r].Foreground = NotaPalette.TextPrimary;
     }
 
     private void StyleCell(int r, int step, bool force = false)
@@ -629,7 +629,7 @@ public sealed class DrumPatternView : UserControl
     private static SolidColorBrush Hue(int chain) => NotaPalette.TrackBrushes[((chain % 8) + 8) % 8];
 
     private static TextBlock Cap(string text)
-        => new() { Text = text, FontSize = 8, FontWeight = FontWeight.Bold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        => new() { Text = text, FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
 
     private static TextBlock Mono(string text, IBrush colour, double size = 8)
     {

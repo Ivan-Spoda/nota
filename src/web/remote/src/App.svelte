@@ -1,6 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <script lang="ts">
   import { app } from './lib/app.svelte';
+  import { look } from './lib/theme.svelte';
   import { device, keepAwake } from './lib/device.svelte';
   import { SCREENS } from './lib/types';
   import Header from './components/Header.svelte';
@@ -22,10 +23,8 @@
   const noInstrument = $derived(t?.kind === 'audio' && (app.screen === 'Pads' || app.screen === 'Keys'));
   const dim = $derived(app.link === 'lost' || app.link === 'connecting');
 
-  $effect(() => {
-    document.documentElement.dataset.theme = app.dark ? 'dark' : 'light';
-    document.querySelector('meta[name=theme-color]')?.setAttribute('content', app.dark ? '#0B0A09' : '#DCD6C5');
-  });
+  // Wear the theme: Nota's, or under Follow phone the pick for the phone's scheme (spec 014).
+  $effect(() => look.apply(app.prefs.theme));
 </script>
 
 <!-- The first touch anywhere starts keep-awake (browsers want a gesture for it). -->
@@ -63,11 +62,9 @@
   </div>
   {#if !rail}
     <nav class="tabs" aria-label="Screens">
-      <div class="seg">
-        {#each SCREENS as s}
-          <button class:on={app.screen === s && !app.bigTransport} onclick={() => app.setScreen(s)}>{s}</button>
-        {/each}
-      </div>
+      {#each SCREENS as s}
+        <button class:on={app.screen === s && !app.bigTransport} aria-current={app.screen === s && !app.bigTransport ? 'page' : undefined} onclick={() => app.setScreen(s)}>{s}</button>
+      {/each}
     </nav>
   {/if}
   <Sheets {form} />
@@ -76,21 +73,27 @@
 
 <style>
   .shell {
-    position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--app);
+    position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg-app);
     padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
   }
   .body { flex: 1; min-height: 0; display: flex; }
   main { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; padding: 12px; transition: opacity 200ms ease-out; }
   .phoneLand main { padding: 8px 10px max(10px, env(safe-area-inset-bottom)) 10px; }
   .tablet main { padding: 18px 18px max(18px, env(safe-area-inset-bottom)); }
+  /* The link is down: touches are not sent, so the surface steps back until it returns. */
   main.dim { opacity: .35; pointer-events: none; }
-  .rail { width: 104px; flex: none; display: flex; flex-direction: column; gap: 4px; padding: 8px; border-right: 1px solid var(--hairline); }
-  .tablet .rail { padding: 12px 10px; }
-  .rail button { height: 44px; border-radius: 5px; font-size: 11px; font-weight: 600; color: var(--ink4); position: relative; transition: background-color 120ms ease-out, color 120ms ease-out; }
+
+  /* Rail (landscape, tablet): a docked panel on a seam; the chosen screen is a row with an accent tick. */
+  .rail { width: 104px; flex: none; display: flex; flex-direction: column; gap: 2px; padding: 8px 6px; background: var(--panel); border-right: 1px solid var(--seam); }
+  .tablet .rail { padding: 12px 8px; }
+  .rail button { height: 44px; border-radius: 2px; font-size: 12px; font-weight: 500; color: var(--text-muted); position: relative; transition: background-color var(--ease), color var(--ease); }
   .tablet .rail button { height: 56px; font-size: 13px; }
-  .rail button.on { background: var(--raised); color: var(--ink1); }
-  .rail button.on::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; border-radius: 1px; background: var(--accent); }
-  .tabs { flex: none; padding: 8px 12px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid var(--hairline); }
-  .tabs .seg { border-radius: 8px; }
-  .tabs .seg button { height: 44px; padding: 0; font-size: 11px; min-width: 0; border-radius: 5px; }
+  .rail button.on { background: var(--surface-hover); color: var(--text-primary); }
+  .rail button.on::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; background: var(--accent); }
+
+  /* Tabs (portrait): a docked bar; the chosen screen is primary ink with an accent line on the edge facing it. */
+  .tabs { flex: none; display: flex; padding: 0 6px max(8px, env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--seam); }
+  .tabs button { flex: 1; min-width: 0; height: 48px; font-size: 12px; font-weight: 500; color: var(--text-muted); position: relative; transition: color var(--ease); }
+  .tabs button.on { color: var(--text-primary); }
+  .tabs button.on::before { content: ''; position: absolute; left: 8px; right: 8px; top: -1px; height: 2px; background: var(--accent); }
 </style>

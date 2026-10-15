@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The graph window every visualiser lives in (almanac § Visualisations). One window, one
-// set of rules, so forty devices read as one instrument:
+// The graph window every visualiser lives in (one recessed display per device).
+// One window, one set of rules, so forty devices read as one instrument:
 //
-//   ground Well · 1px Hairline frame · radius 4 · grid lines in the Grid colour
-//   axis labels mono 7–8 in Ink 7, in the corners — never full axes with ticks
-//   a title in caps 8 at the top-left, a legend inside the window with values
-//   the primary curve 1.8px brass, secondary curves 1.2–1.6px in their chroma
-//   nodes 7px with a 2px ground-coloured ring; the active one brass, the rest Ink 3
+//   ground Well · 1px rule frame · radius 3 · grid lines in the viz-grid colour
+//   axis labels mono 7.5 in the faint ink, in the corners — never full axes with ticks
+//   a title (sentence case, 8) at the top-left, a legend inside the window with values
+//   the primary curve 1.8px in neutral viz ink, secondary curves 1.2–1.6px in their chroma
+//   nodes 7px with a 2px ground-coloured ring; the active one the accent, the rest secondary
 //   no fills under curves, no gradients
 //
 // Chromas are assigned in a fixed order when a graph carries several sources:
-// brass (primary) · teal · rose · steel. They never mean state.
+// viz ink (primary) · teal · rose · blue. They never mean state — the accent alone does.
 
 using System.Globalization;
 using Avalonia;
@@ -22,42 +22,42 @@ namespace Nota.App;
 
 internal static class NotaGraph
 {
-    public const double Radius = NotaRadius.ControlValue;   // 4
+    public const double Radius = NotaRadius.ControlValue;   // 3
     public const double PrimaryWidth = 1.8, SecondaryWidth = 1.4;
     public const double NodeD = 7, NodeRing = 2;
-    public const double AxisSize = 7, TitleSize = 8;
+    public const double AxisSize = 7.5, TitleSize = 8;
 
     public static IBrush Ground => NotaPalette.BgSunken;
     public static IBrush Frame => NotaPalette.GraphBorder;
-    public static IBrush Grid => NotaPalette.GridBeat;
+    public static IBrush Grid => NotaPalette.VizGrid;
     public static IBrush AxisInk => NotaPalette.TextAxis;
-    public static IBrush TitleInk => NotaPalette.TextTertiary;
+    public static IBrush TitleInk => NotaPalette.TextMuted;
 
-    /// <summary>The chroma for the n-th source in a graph: brass, teal, rose, steel.</summary>
+    /// <summary>The chroma for the n-th source in a graph: viz ink, teal, rose, blue.</summary>
     public static IBrush Chroma(int n) => (n % 4) switch
     {
-        0 => NotaPalette.Accent,
+        0 => NotaPalette.VizInk,
         1 => NotaPalette.Teal,
         2 => NotaPalette.Rose,
         _ => NotaPalette.Steel,
     };
 
-    public static readonly IPen GridPen = new Pen(NotaPalette.GridBeat, 1);
+    public static readonly IPen GridPen = new Pen(NotaPalette.VizGrid, 1);
     public static readonly IPen FramePen = new Pen(NotaPalette.GraphBorder, 1);
-    public static readonly IPen PrimaryPen = new Pen(NotaPalette.Accent, PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+    public static readonly IPen PrimaryPen = new Pen(NotaPalette.VizInk, PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
 
     /// <summary>A secondary curve in its chroma.</summary>
     public static IPen SecondaryPen(IBrush chroma, double width = SecondaryWidth)
         => new Pen(chroma, width, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
 
-    /// <summary>The window: well ground, hairline frame, radius 4.</summary>
+    /// <summary>The window: well ground, rule frame, radius 3.</summary>
     public static void Window(DrawingContext ctx, Rect r)
     {
         var inner = r.Deflate(0.5);
         ctx.DrawRectangle(Ground, FramePen, new RoundedRect(inner, Radius));
     }
 
-    /// <summary>An axis label in mono 7, Ink 7.</summary>
+    /// <summary>An axis label in mono 7.5, faint ink.</summary>
     public static FormattedText AxisText(string text, IBrush? ink = null, double size = AxisSize)
         => new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink ?? AxisInk);
 
@@ -73,11 +73,11 @@ internal static class NotaGraph
         ctx.DrawText(ft, new Point(x, y));
     }
 
-    /// <summary>The graph title: caps 8, top-left, inside the window.</summary>
+    /// <summary>The graph title: sentence case 8, top-left, inside the window.</summary>
     public static void Title(DrawingContext ctx, Rect r, string title)
     {
-        var ft = new FormattedText(title.ToUpperInvariant(), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            NotaFonts.SansBold, TitleSize, TitleInk) { };
+        var ft = new FormattedText(NotaText.Label(title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            NotaFonts.SansMedium, TitleSize, TitleInk) { };
         ctx.DrawText(ft, new Point(r.X + 6, r.Y + 4));
     }
 
@@ -114,11 +114,11 @@ internal static class NotaGraph
         }
     }
 
-    /// <summary>A legend row drawn inside the window: a swatch, a caps name and its value.</summary>
+    /// <summary>A legend row drawn inside the window: a swatch, a name and its value.</summary>
     public static double LegendRow(DrawingContext ctx, Point at, IBrush swatch, string name, string value)
     {
         ctx.DrawRectangle(swatch, null, new RoundedRect(new Rect(at.X, at.Y + 3, 8, 2), 1));
-        var n = new FormattedText(name.ToUpperInvariant(), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansBold, 7, TitleInk);
+        var n = new FormattedText(NotaText.Label(name), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, 7.5, TitleInk);
         var v = AxisText(value, NotaPalette.TextPrimary, 8);
         ctx.DrawText(n, new Point(at.X + 12, at.Y));
         ctx.DrawText(v, new Point(at.X + 12 + n.Width + 5, at.Y - 0.5));

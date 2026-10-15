@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Nota Grain sample view — a graph window (NotaGraph) with the sample drawn as brass bars
+// Nota Grain sample view — a graph window (NotaGraph) with the sample drawn as neutral bars
 // (scaled so its loudest peak fills the height) around a centre line and a time grid
-// labelled along the bottom. The Spray region is a Brass Wash band around the read
-// Position (a dashed brass line); each held voice's read head is a Brass Light line with a
+// labelled along the bottom. The Spray region is a neutral wash band around the read
+// Position (a dashed line); each held voice's read head is an accent line with a
 // notch on top, and the live grain cloud — every grain the engine is playing — is a teal
 // dot at its read position, high for left and low for right, larger the louder its window
 // is. Grains/sec sits in the top-left corner.
@@ -24,9 +24,10 @@ namespace Nota.App;
 internal sealed class GrainWaveViz : Control
 {
     private static readonly IPen MidLine = new Pen(NotaPalette.GridBar, 1);
-    private static readonly IPen PosPen = new Pen(NotaPalette.AccentDim, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+    private static readonly IPen PosPen = new Pen(NotaPalette.TextSecondary, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+    private static readonly IPen PosPenHot = new Pen(NotaPalette.Accent, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
     private static readonly IPen HeadPen = new Pen(NotaPalette.AccentBright, 1.2);
-    private static readonly IBrush SprayFill = NotaPalette.AccentSubtle;
+    private static readonly IBrush SprayFill = NotaPalette.Wash(NotaPalette.VizInk, 0x20);
     private static readonly IBrush[] GrainInk =
     {
         NotaPalette.Wash(NotaPalette.TealBright, 0x55), NotaPalette.Wash(NotaPalette.TealBright, 0x99),
@@ -93,11 +94,11 @@ internal sealed class GrainWaveViz : Control
     protected override void OnPointerMoved(PointerEventArgs e) { if (_drag) Apply(e.GetPosition(this)); }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
-        if (_drag) { _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); }
+        if (_drag) { _drag = false; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke(); }
     }
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
-        if (_drag) { _drag = false; GestureEnd?.Invoke(); }
+        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
     }
     private void Apply(Point p)
     {
@@ -143,11 +144,11 @@ internal sealed class GrainWaveViz : Control
         }
         ctx.DrawLine(MidLine, new Point(1, cy), new Point(W - 1, cy));
 
-        // Brass bars, one every 3 px, each the peak of its slice of the file.
+        // Neutral bars, one every 3 px, each the peak of its slice of the file.
         int n = _peaks.Length / 2;
         if (n > 0 && amp > 0)
         {
-            var bar = new Pen(NotaPalette.Accent, 1.4);
+            var bar = new Pen(NotaPalette.VizInk, 1.4);
             int bars = Math.Max(1, (int)(w / 3));
             for (int b = 0; b < bars; b++)
             {
@@ -160,7 +161,7 @@ internal sealed class GrainWaveViz : Control
         }
 
         // The set read Position — where scanning centres and grains seed.
-        if (_mode != 2) ctx.DrawLine(PosPen, new Point(px, 1), new Point(px, H - 1));
+        if (_mode != 2) ctx.DrawLine(_drag ? PosPenHot : PosPen, new Point(px, 1), new Point(px, H - 1));
 
         // Each held voice's read head.
         for (int i = 0; i < _headN && i < _heads.Length; i++)

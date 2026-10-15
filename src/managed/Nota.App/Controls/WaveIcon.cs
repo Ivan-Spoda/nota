@@ -11,10 +11,10 @@ namespace Nota.App;
     // A tiny waveform glyph (saw/square/triangle/sine) for the oscillator combo-boxes.
     internal sealed class WaveIcon : Control
     {
-        private static readonly IBrush AccentBright = NotaPalette.AccentBright;
+        private static readonly IBrush Ink = NotaPalette.VizInk;
         private readonly int _w;
         // Stroke colour (settable so selected/unselected chips can retint the glyph).
-        public IBrush Stroke { get; set; } = AccentBright;
+        public IBrush Stroke { get; set; } = Ink;
         public WaveIcon(int wave) { _w = wave; Width = 22; Height = 12; }
         public override void Render(DrawingContext ctx)
         {

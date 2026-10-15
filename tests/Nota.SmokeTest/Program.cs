@@ -59,7 +59,7 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
 // NotaTheme.axaml and NotaPalette.cs carry the same palette for two different
 // consumers and nothing but discipline kept them in step. See DESIGN.md § Enforced by tests.
 {
-    Console.WriteLine("-- design: palette mirror --");
+    Console.WriteLine("-- design: palette wiring --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.Run()) Check(ok, label);
     Console.WriteLine("-- design: geometry --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunGeometry()) Check(ok, label);
@@ -75,6 +75,20 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunNumbers()) Check(ok, label);
     Console.WriteLine("-- design: bans --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunBans()) Check(ok, label);
+    Console.WriteLine("-- design: studio --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunStudio()) Check(ok, label);
+    Console.WriteLine("-- design: themes --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunThemes()) Check(ok, label);
+    Console.WriteLine("-- design: appearance --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAppearance()) Check(ok, label);
+    Console.WriteLine("-- design: labels --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLabels()) Check(ok, label);
+    Console.WriteLine("-- design: icons --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunIcons()) Check(ok, label);
+    Console.WriteLine("-- design: browser --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunBrowser()) Check(ok, label);
+    Console.WriteLine("-- design: remote --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunRemote()) Check(ok, label);
 }
 
 // Opt-in plugin-scan check (M3-1): `--scan <path-to-nota-scanworker>`. Kept out
@@ -115,6 +129,14 @@ if (args.Length >= 1 && args[0] == "--palette")
     Console.WriteLine("-- command palette --");
     foreach (var (ok, label) in PaletteTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "PALETTE PASSED" : $"PALETTE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Browser device categories alone: `--browser`.
+if (args.Length >= 1 && args[0] == "--browser")
+{
+    Console.WriteLine("-- browser: device categories --");
+    foreach (var (ok, label) in BrowserCategoryTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "BROWSER PASSED" : $"BROWSER FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Get Plug-ins alone: `--store`; live installs from a registry index: `--store-live <index> <id>…`.
@@ -207,6 +229,14 @@ if (args.Length >= 1 && args[0] == "--bundle")
     return failures == 0 ? 0 : 1;
 }
 
+// Process CPU readout alone: `--cpu`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--cpu")
+{
+    Console.WriteLine("-- process cpu --");
+    foreach (var (ok, label) in ProcessCpuTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CPU PASSED" : $"CPU FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Tap tempo alone: `--tap`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--tap")
 {
@@ -14572,6 +14602,10 @@ Console.WriteLine("-- background audio import --");
     Check(!bvm.Effects.Any(i => i.Depth > 0), "clearing the search collapses back to devices");
 }
 
+// --- browser: device categories (spec 013) — category chips narrow the device tabs ---
+Console.WriteLine("-- browser: device categories --");
+foreach (var (ok, label) in BrowserCategoryTests.Run()) Check(ok, label);
+
 // --- browser: preset audition (offline-rendered, cached, played on the preview voice) ---
 Console.WriteLine("-- browser: preset audition --");
 foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
@@ -14599,6 +14633,9 @@ foreach (var (ok, label) in MosaicTests.Run()) Check(ok, label);
 Console.WriteLine("-- tap tempo --");
 foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
 
+Console.WriteLine("-- process cpu --");
+foreach (var (ok, label) in ProcessCpuTests.Run()) Check(ok, label);
+
 Console.WriteLine("-- snap grid --");
 foreach (var (ok, label) in SnapGridTests.Run()) Check(ok, label);
 
@@ -14619,6 +14656,7 @@ foreach (var (ok, label) in PanLawTests.Run()) Check(ok, label);
 Console.WriteLine("-- plugin host pump --");
 Check(NotaEngine.PumpPluginHost() == 0 && NotaEngine.PumpPluginHost() == 0,
     "plugin host pump: exported, non-blocking no-op with no plugin loaded");
+foreach (var (ok, label) in PumpPacerTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- mix undo --");
 foreach (var (ok, label) in MixUndoTests.Run()) Check(ok, label);

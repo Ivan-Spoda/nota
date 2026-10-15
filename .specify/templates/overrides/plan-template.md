@@ -15,7 +15,7 @@
 Consult the matching source of truth before designing:
 
 - **Engine work** → [`ARCHITECTURE.md`](../../ARCHITECTURE.md): the AR rules table is binding (AR-4 lock-free queue, AR-5 immutable snapshots, AR-6 audio-thread restrictions, AR-7 pure C ABI, AR-9 `Transport` is the only source of musical time).
-- **UI work** → [`DESIGN.md`](../../DESIGN.md) (Ember design language) and the `nota-design` skill.
+- **UI work** → [`DESIGN.md`](../../DESIGN.md) (Studio design language) and the `nota-design` skill.
 - **A built-in instrument / audio or MIDI effect** → the `nota-instrument` skill (DSP class, kind registration across C++ and C#, device-card UI).
 - **Build / packaging** → [`BUILD.md`](../../BUILD.md).
 - **Anything** → [`CONTRIBUTING.md`](../../CONTRIBUTING.md): licensing, dependency policy, PR expectations.

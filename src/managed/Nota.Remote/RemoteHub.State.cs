@@ -48,6 +48,10 @@ public sealed partial class RemoteHub
 
     private void Push(IRemoteHost host, Snapshot snap, RemoteClient c)
     {
+        // The theme first, so the phone paints its first screen in the right colours.
+        string theme = ThemeJson(host);
+        if (!ReferenceEquals(theme, c.SentTheme)) { c.Send(theme); c.SentTheme = theme; }
+
         if (_projectJson is null || _tick % 6 == 0) RefreshProject(host);
         ResolveTrack(host, c);
 
@@ -108,7 +112,7 @@ public sealed partial class RemoteHub
         {
             w.WriteString("t", "proj");
             w.WriteString("host", HostName);
-            w.WriteBoolean("dark", host.DarkTheme);
+            w.WriteBoolean("dark", host.Appearance.Active.Dark);   // for a page from an older Nota
             w.WriteStartArray("tracks");
             foreach (var r in rows)
             {
@@ -149,6 +153,48 @@ public sealed partial class RemoteHub
         });
         // Left open: Push appends the per-phone fields and the closing brace.
         _projectJson = _projectJson[..^1];
+    }
+
+    // ---- theme ----------------------------------------------------------------------
+
+    private RemoteAppearance? _themeFor;
+    private string _themeJson = "";
+
+    // What the phone wears (specs/014 contracts/theme-message.md): the theme Nota wears, the
+    // dark-mode and light-mode picks, each theme once with every token, and the two inks.
+    // Rebuilt only when the host hands over a new appearance; the same string otherwise, so
+    // Push's reference check tells a phone that already has it.
+    private string ThemeJson(IRemoteHost host)
+    {
+        var a = host.Appearance;
+        if (ReferenceEquals(a, _themeFor)) return _themeJson;
+        _themeJson = Json(w =>
+        {
+            w.WriteString("t", "theme");
+            w.WriteString("on", a.Active.Id);
+            w.WriteString("dark", a.DarkPick.Id);
+            w.WriteString("light", a.LightPick.Id);
+            w.WriteStartArray("ink");
+            w.WriteStringValue(a.InkDark);
+            w.WriteStringValue(a.InkLight);
+            w.WriteEndArray();
+            w.WriteStartObject("th");
+            var seen = new HashSet<string>();
+            foreach (var t in new[] { a.Active, a.DarkPick, a.LightPick })
+            {
+                if (!seen.Add(t.Id)) continue;
+                w.WriteStartObject(t.Id);
+                w.WriteString("name", t.Name);
+                w.WriteBoolean("dark", t.Dark);
+                w.WriteStartObject("c");
+                foreach (var (token, css) in t.Colors) w.WriteString(token, css);
+                w.WriteEndObject();
+                w.WriteEndObject();
+            }
+            w.WriteEndObject();
+        });
+        _themeFor = a;
+        return _themeJson;
     }
 
     // The pads a drum track has: a Drum Rack's chains by trigger note, Nota Rhythm's eight voices.

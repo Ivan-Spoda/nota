@@ -46,6 +46,7 @@ public sealed class RemoteClient
     public long LastActivityTicks;
 
     // What this phone was last sent, so a tick only sends what changed.
+    internal string? SentTheme;
     internal string? SentProject;
     internal string? SentWho;
     internal string? SentTransport;

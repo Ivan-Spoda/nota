@@ -46,7 +46,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "FILTER";
+    public string? Subtitle => "Filter";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -123,8 +123,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         }
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -166,7 +166,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             return seg;
         }
 
-        // Outlined chips (the mockup's TYPE / WAVE / target row): lit = brass edge + wash.
+        // Outlined chips (the mockup's Type / Wave / target row): the chosen one = accent edge + wash.
         Control Chips(string[] names, Func<int, bool> lit, Action<int> pick, int learnParam, double h = 16, double padX = 7)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
@@ -270,7 +270,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             return new DockPanel { Children = { Docked(lb, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = f } } };
         }
         var shapeTitle = Caps("SHAPE"); shapeTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var shapeFreq = Mono("", 7, AccentBright); shapeFreq.HorizontalAlignment = HorizontalAlignment.Center;
+        var shapeFreq = Mono("", 7, TextPrimary); shapeFreq.HorizontalAlignment = HorizontalAlignment.Center;
         var shapeRes = Mono("", 7, TextPrimary); shapeRes.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() =>
         {
@@ -279,11 +279,11 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             shapeTitle.Foreground = Assigned() && scN > 0 && Math.Abs(Sc(S_Cut) - P(Freq)) > 0.01 ? AccentBright : TextTertiary;
         });
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        faders.Children.Add(ShapeFader(Freq, "FRQ", Brass, S_Cut, "Cutoff — the base the modulation moves from; the dashed mark is where it is now. Double-click resets."));
+        faders.Children.Add(ShapeFader(Freq, "FRQ", NotaPalette.VizInk, S_Cut, "Cutoff — the base the modulation moves from; the dashed mark is where it is now. Double-click resets."));
         faders.Children.Add(Col(ShapeFader(Res, "RES", Teal, S_Res, "Resonance — the peak at the cutoff; the dashed mark is where it is now. Double-click resets."), 1));
-        var shapeCol = new Border
+        var shapeCol = new RuleSection
         {
-            Width = 56, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
+            Width = 56, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(shapeTitle, Dock.Top), Docked(shapeRes, Dock.Bottom), Docked(shapeFreq, Dock.Bottom), faders } },
         };
         DockPanel.SetDock(shapeCol, Dock.Left);
@@ -339,7 +339,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             envView.DragV += v => Raw(EnvAmt, (float)v);
             envView.GestureBegin += () => Begin(EnvAmt);
             envView.GestureEnd += () => End(EnvAmt);
-            ToolTip.SetTip(envView, "The input's envelope (teal) and the cutoff it drives (brass), the base cutoff dashed. Drag up or down for the amount.");
+            ToolTip.SetTip(envView, "The input's envelope (teal) and the cutoff it drives (neutral ink), the base cutoff dashed. Drag up or down for the amount.");
             Learn(envView, EnvAmt);
 
             // → Freq / → Reso: the shared Mod Target, as two switches that can both be lit.
@@ -362,8 +362,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             readouts.Add(dirSync);
             Learn(dir, EnvAmt);
             var hold = Latch(EnvHold, () => NotaNum.F($"Hold {HoldF(P(EnvHoldTime))}"), "Hold — keep the envelope at its peak for the HOLD time before it releases (∞ freezes it)");
-            var amt = Mono("", 7, AccentBright);
-            readouts.Add(() => { amt.Text = NotaNum.F($"amount {Bip(P(EnvAmt))}"); amt.Foreground = EnvAssigned() ? AccentBright : TextTertiary; });
+            var amt = Mono("", 7, TextPrimary);
+            readouts.Add(() => { amt.Text = NotaNum.F($"amount {Bip(P(EnvAmt))}"); amt.Foreground = EnvAssigned() ? TextPrimary : TextTertiary; });
             var envSw = Toggle(EnvOn, "ENV");
             ToolTip.SetTip(envSw, "Envelope follower on / off");
             var head = HeadRow(Row(6, envSw, target, dir, hold), amt);
@@ -416,11 +416,11 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             lfoView.DragH += v => Raw(LfoOffset, (float)v);
             lfoView.GestureBegin += () => { Begin(LfoAmt); Begin(LfoOffset); };
             lfoView.GestureEnd += () => { End(LfoAmt); End(LfoOffset); };
-            ToolTip.SetTip(lfoView, "The LFO's movement over the window — raw shape dashed, what the filter follows (after Smooth) in brass, the right channel in rose when stereo is on. Drag up or down for the amount, sideways for the start phase.");
+            ToolTip.SetTip(lfoView, "The LFO's movement over the window — raw shape dashed, what the filter follows (after Smooth) in neutral ink, the right channel in rose when stereo is on. Drag up or down for the amount, sideways for the start phase.");
             Learn(lfoView, LfoAmt);
 
             var waves = Chips(WaveNames, i => Sel(LfoWave, 5) == i, i => SetP(LfoWave, i / 4f), LfoWave, padX: 6);
-            var rate = Mono("", 7, AccentBright);
+            var rate = Mono("", 7, TextSecondary);
             readouts.Add(() => rate.Text = LfoHzF(LfoHz()));
             var lfoSw = Toggle(LfoOn, "LFO");
             ToolTip.SetTip(lfoSw, "LFO on / off");
@@ -522,7 +522,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
 
             // The cutoff, live: Hz · note · cents, and where the movement comes from.
             var boxTitle = Caps("CUTOFF");
-            var boxHz = Mono("", 9, AccentBright);
+            var boxHz = Mono("", 9, TextPrimary);
             var boxSub = Mono("", 8, TextSecondary);
             var box = new Border
             {
@@ -589,7 +589,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                     Caps("OUTPUT"),
                     Line("in", () => DbF(Sc(S_InPk))),
                     Line("out", () => DbF(Sc(S_OutPk))),
-                    Line("cutoff", () => HzLong(LiveHz()), AccentBright) } },
+                    Line("cutoff", () => HzLong(LiveHz()), TextPrimary) } },
             };
             var sliders = new StackPanel { Spacing = 6, Children = {
                 SliderRow("DRIVE", Drive, v => v <= 0.001 ? "off" : Pct(v)),
@@ -643,9 +643,9 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
 
         var centre = TabFrame(new[] { "Filter", "Envelope", "LFO" }, centreHost, CentreBody, false, t => { centreTab = t; Refresh(); }, extras);
         var rightFrame = TabFrame(new[] { "Mod", "Output" }, rightHost, RightBody, true, _ => RefreshAll(), null);
-        var right = new Border { Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip
@@ -691,7 +691,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { shapeCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -725,7 +725,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                     btns[i].Background = on ? Card2 : Brushes.Transparent;
                     btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
                     var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? AccentBright : TextTertiary;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
                     tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }

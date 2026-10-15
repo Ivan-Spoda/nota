@@ -43,7 +43,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "DYNAMICS";
+    public string? Subtitle => "Dynamics";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -96,8 +96,8 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         string LpF(double v) => v >= 19999 ? "off" : Hz(v);
 
         // ---- small builders ---------------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -223,7 +223,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         // LEFT — LEVEL column (threshold · make-up / key gain)
         // ======================================================================
         int centreTab = 0;
-        var thrFader = new CompFader { Ink = NotaPalette.Accent, Handle = NotaPalette.AccentBright, VerticalAlignment = VerticalAlignment.Stretch };
+        var thrFader = new CompFader { Ink = NotaPalette.VizInk, Handle = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch };
         var thrMap = Lin(Threshold);
         thrFader.Default = thrMap.N(Def(Threshold));
         thrFader.Changed += v => Raw(Threshold, thrMap.V(v));
@@ -242,7 +242,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
 
         var thrLbl = Caps("THR"); thrLbl.HorizontalAlignment = HorizontalAlignment.Center;
         var f2Lbl = Caps("MKP"); f2Lbl.HorizontalAlignment = HorizontalAlignment.Center;
-        var thrVal = Mono("", 7, AccentBright); thrVal.HorizontalAlignment = HorizontalAlignment.Center;
+        var thrVal = Mono("", 7, TextPrimary); thrVal.HorizontalAlignment = HorizontalAlignment.Center;
         var f2Val = Mono("", 7, TextPrimary); f2Val.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() =>
         {
@@ -253,16 +253,16 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             f2.Set(Lin(p2).N(P(p2)));
             thrVal.Text = Db(P(Threshold));
             f2Val.Text = SDb(P(p2));
-            f2Lbl.Text = p2 == ScGain ? "SC IN" : "MKP";
+            f2Lbl.Text = NotaText.Label(p2 == ScGain ? "SC IN" : "MKP");
             ToolTip.SetTip(f2, p2 == ScGain ? "Key gain — drives the detector harder or softer. Double-click resets." : "Make-up gain. Double-click resets.");
         });
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
         faders.Children.Add(new DockPanel { Children = { Docked(thrLbl, Dock.Bottom), thrFader } });
         faders.Children.Add(Col(new DockPanel { Children = { Docked(f2Lbl, Dock.Bottom), f2 } }, 1));
         var levelTitle = Caps("LEVEL"); levelTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var levelCol = new Border
+        var levelCol = new RuleSection
         {
-            Width = 56, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
+            Width = 56, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(levelTitle, Dock.Top), Docked(f2Val, Dock.Bottom), Docked(thrVal, Dock.Bottom), faders } },
         };
         DockPanel.SetDock(levelCol, Dock.Left);
@@ -332,7 +332,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         Control MotionTab()
         {
             var motion = new CompMotionView();
-            ToolTip.SetTip(motion, "The reduction (brass, hanging from 0 dB) against the input level (teal) — attack is the fall, release the climb back. The dashed line is the threshold.");
+            ToolTip.SetTip(motion, "The reduction (neutral ink, hanging from 0 dB) against the input level (teal) — attack is the fall, release the climb back. The dashed line is the threshold.");
             readouts.Add(() => motion.Set(envIn, envGr, scN >= kScope + 2 * EnvN ? EnvN : 0, P(Threshold), WindowMs()));
             string Measured()
             {
@@ -341,7 +341,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 return NotaNum.F($"transient {Ms(tr)} · recovery {(double.IsNaN(rec) ? "–" : Ms(rec))}");
             }
             return new DockPanel { LastChildFill = true, Margin = new Thickness(8, 5, 8, 4), Children = {
-                Docked(CharRow(() => NotaNum.F($"attack {Ms(Sc(S_AtkMs))} · release {Ms(Sc(S_RelMs))}"), () => AccentBright), Dock.Top),
+                Docked(CharRow(() => NotaNum.F($"attack {Ms(Sc(S_AtkMs))} · release {Ms(Sc(S_RelMs))}"), () => TextSecondary), Dock.Top),
                 Docked(TimingRow(true,
                     () => NotaNum.F($"GR peak {Gr(grHist.Peak)} dB · {Hits((int)WindowMs())} hits / window"),
                     Measured), Dock.Bottom),
@@ -454,20 +454,20 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 }
                 stack.Children.Add(Line("in", () => NotaNum.F($"{Lvl(LinDb(Sc(S_InRms)))} dB"), () => TextPrimary));
                 stack.Children.Add(Line("out", () => NotaNum.F($"{Lvl(LinDb(Sc(S_OutRms)))} dB"), () => Sc(S_OutPk) > 0.5 ? NotaPalette.Warning : TextPrimary));
-                stack.Children.Add(Line("GR", () => NotaNum.F($"{Gr(Sc(S_Gr))} dB"), () => AccentBright));
+                stack.Children.Add(Line("GR", () => NotaNum.F($"{Gr(Sc(S_Gr))} dB"), () => TextPrimary));
             }
             else
             {
-                var now = Mono("", 9, AccentBright);
+                var now = Mono("", 9, TextPrimary);
                 var set = Mono("", 8, TextSecondary);
                 stack.Children.Add(now); stack.Children.Add(set);
                 readouts.Add(() =>
                 {
                     now.Text = NotaNum.F($"{Gr(Sc(S_Gr))} dB · peak {Gr(grHist.Peak)}");
                     set.Text = NotaNum.F($"thresh {P(Threshold):0.0} · {RatioF(P(Ratio))} · knee {P(Knee):0.#}");
-                    bool hot = grHist.Peak >= 10;
-                    box.BorderBrush = hot ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
-                    title.Foreground = hot ? AccentBright : TextTertiary;
+                    bool hot = grHist.Peak >= 10;   // heavy reduction: a caution, not the accent
+                    box.BorderBrush = hot ? NotaPalette.Warning : NotaPalette.GraphBorder;
+                    title.Foreground = hot ? NotaPalette.Warning : TextTertiary;
                 });
             }
             return box;
@@ -548,9 +548,9 @@ internal sealed class CompressorDeviceBody : IDeviceBody
 
         var centre = TabFrame(new[] { "Curve", "Motion", "Sidechain" }, centreHost, CentreBody, false, t => { centreTab = t; Refresh(); }, extras);
         var rightFrame = TabFrame(new[] { "Dynamics", "Output" }, rightHost, RightBody, true, _ => Refresh(), null);
-        var right = new Border { Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip
@@ -580,7 +580,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { levelCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -613,7 +613,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                     btns[i].Background = on ? Card2 : Brushes.Transparent;
                     btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
                     var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? AccentBright : TextTertiary;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
                     tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }

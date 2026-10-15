@@ -48,7 +48,11 @@ public sealed partial class DeviceChainView : UserControl
     private readonly DeviceCardFactory _cardFactory = new();
     private readonly InstrumentCardFactory _instrumentFactory = new();
     private readonly MidiDeviceCardFactory _midiFactory = new();
-    private readonly StackPanel _row = new() { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(10) };
+    // The chain sits close to the panel edges: a 6px inset all round and 6px between cards —
+    // just room for the selected card's focus ring (3px gap + 1.5px ring) — so the cards fill
+    // the Devices panel instead of floating in it.
+    internal const double ChainInset = 6;
+    private readonly StackPanel _row = new() { Orientation = Orientation.Horizontal, Spacing = ChainInset, Margin = new Thickness(ChainInset) };
     private int _trackId = -1;
 
     /// <summary>Raised after a change that affects track headers (remove/reorder).</summary>
@@ -236,29 +240,29 @@ public sealed partial class DeviceChainView : UserControl
             shown++;
         }
         Control body = shown > 0 ? knobs : new TextBlock { Text = "No return tracks", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        return SimpleCard("Sends", shown > 2 ? 200 : 140, body);
+        var spec = new ShellSpec(
+            Name: "Sends", Subtitle: "", DeviceIndex: -2, Count: 0, Bypassed: false, Bypassable: false,
+            CanMove: false, CanDelete: false, PresetKind: -1, IsInstrument: false, Width: shown > 2 ? 200 : 140,
+            Kind: ChainKind.Effect, Compact: true, Utility: true);
+        return BuildCardShell(spec, new Border { Padding = new Thickness(10), Child = body });
     }
+
+    // The end of the chain: a slim "+" key. Its dashed outline shows only while a browser
+    // drag is over the chain, so an empty dock stays quiet (spec 012).
+    private Rectangle? _addDash;
 
     private Control AddDeviceCard()
     {
-        var content = new StackPanel
-        {
-            Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Children =
-            {
-                new Glyph(GlyphKind.Plus, 12) { Foreground = TextTertiary },
-                new TextBlock { Text = "Add device", FontSize = 9, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
-                new TextBlock { Text = "double-click in browser\nor drop here", FontSize = 8, Foreground = TextDisabled, TextAlignment = TextAlignment.Center },
-            },
-        };
         // Avalonia Border can't dash its own stroke; overlay a dashed rectangle.
-        var dash = new Rectangle
+        _addDash = new Rectangle
         {
-            Stroke = BorderStrong, StrokeThickness = 1,
-            StrokeDashArray = new AvaloniaList<double>(4, 3), RadiusX = 7, RadiusY = 7,
+            Stroke = BorderStrong, StrokeThickness = 1, IsVisible = false,
+            StrokeDashArray = new AvaloniaList<double>(4, 3), RadiusX = NotaRadius.ControlValue, RadiusY = NotaRadius.ControlValue,
         };
-        var host = new Grid { Children = { dash, content } };
-        return new Border { Width = 140, Height = CardH, Child = host };
+        var host = new Grid { Children = { _addDash, new Glyph(GlyphKind.Plus, 12) { Foreground = TextTertiary } } };
+        var card = new Border { Width = 28, Height = CardH, Background = Brushes.Transparent, Child = host };
+        ToolTip.SetTip(card, "Add device — double-click in the browser or drop here");
+        return card;
     }
 
 }

@@ -51,7 +51,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "LIMITER";
+    public string? Subtitle => "Limiter";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -121,8 +121,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         }
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -133,7 +133,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         void Learn(Control c, int p) => MidiLearn.Bind(c, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        // `lit` lights the label and value (the knob that matters now); `arc` recolours the arc.
+        // `lit` brightens the label and value (the knob that matters now); `arc` recolours the arc.
         Control K(int p, string name, Func<double, string> fmt, string tip, Func<bool>? lit = null, Func<bool>? teal = null)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
@@ -152,8 +152,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                 if (!knob.Dragging) { double c = N(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
                 val.Text = fmt(P(p));
                 bool on = lit?.Invoke() ?? false;
-                val.Foreground = on ? AccentBright : TextPrimary;
-                if (label is not null) label.Foreground = on ? AccentBright : TextTertiary;
+                val.Foreground = on ? TextPrimary : TextSecondary;
+                if (label is not null) label.Foreground = on ? TextSecondary : TextTertiary;
             });
             return cell;
         }
@@ -204,7 +204,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                 readouts.Add(() =>
                 {
                     bool on = lit();
-                    foreach (var c in bar.Children) if (c is TextBlock tb && tb.TextAlignment == TextAlignment.Right) tb.Foreground = on ? AccentBright : TextPrimary;
+                    foreach (var c in bar.Children) if (c is TextBlock tb && tb.TextAlignment == TextAlignment.Right) tb.Foreground = on ? TextPrimary : TextSecondary;
                 });
             return g;
         }
@@ -226,9 +226,9 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             {
                 bool h = hot();
                 name.Text = text();
-                name.Foreground = h ? AccentBright : TextPrimary;
-                box.BorderBrush = h ? Brass : BorderDef;
-                chev.Foreground = h ? NotaPalette.AccentDim : TextTertiary;
+                name.Foreground = TextPrimary;   // emphasis, not state: a stronger frame
+                box.BorderBrush = h ? NotaPalette.BorderStrong : BorderDef;
+                chev.Foreground = h ? TextSecondary : TextTertiary;
             });
             ToolTip.SetTip(box, tip);
             if (learnParam >= 0) Learn(box, learnParam);
@@ -295,7 +295,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         }
         Control Info(Func<string> text, IBrush? ink = null)
         {
-            var t = Mono("", 7, ink ?? AccentBright);
+            var t = Mono("", 7, ink ?? TextSecondary);
             readouts.Add(() => t.Text = text());
             return t;
         }
@@ -359,12 +359,12 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         // ======================================================================
         var colTitle = Caps("LIMIT"); colTitle.HorizontalAlignment = HorizontalAlignment.Center;
         var inPill = new ShPill { Ink = Teal, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
-        var grPill = new ShPill { Ink = AccentBright, FromTop = true, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
-        var outPill = new ShPill { Ink = Brass, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
+        var grPill = new ShPill { Ink = NotaPalette.VizInk, FromTop = true, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
+        var outPill = new ShPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
         ToolTip.SetTip(inPill, "The input after Gain, with the ceiling marked");
         ToolTip.SetTip(grPill, "Gain reduction, 0 … 24\u2009dB");
         ToolTip.SetTip(outPill, "The output");
-        var colGr = Mono("", 7, AccentBright); colGr.HorizontalAlignment = HorizontalAlignment.Center;
+        var colGr = Mono("", 7, TextPrimary); colGr.HorizontalAlignment = HorizontalAlignment.Center;
         var colOut = Mono("", 7, TextPrimary); colOut.HorizontalAlignment = HorizontalAlignment.Center;
         static double NormLvl(double db) => Math.Clamp((db + 48) / 60, 0, 1);   // −48 … +12 dBFS
         readouts.Add(() =>
@@ -385,9 +385,9 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         pills.Children.Add(PillCol(inPill, "IN"));
         pills.Children.Add(Col(PillCol(grPill, "GR"), 1));
         pills.Children.Add(Col(PillCol(outPill, "OUT"), 2));
-        var leftCol = new Border
+        var leftCol = new RuleSection
         {
-            Width = 64, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
+            Width = 64, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(colTitle, Dock.Top), Docked(colOut, Dock.Bottom), Docked(colGr, Dock.Bottom), pills } },
         };
         DockPanel.SetDock(leftCol, Dock.Left);
@@ -400,7 +400,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             level = new CeLevelView { CeilToNorm = db => ToN(Ceil, db) };
             WireDrag(level, Ceil);
-            ToolTip.SetTip(level, "The last 4 s: the input (teal), the part over the ceiling (red) and the output (brass), with the reduction under it. Drag the ceiling line; double-click resets.");
+            ToolTip.SetTip(level, "The last 4 s: the input (teal), the part over the ceiling (red) and the output (neutral ink), with the reduction under it. Drag the ceiling line; double-click resets.");
             var head = HeadRow(CharSeg(), Info(() => "ceiling " + CeilF(P(Ceil))));
             var knobs = KnobRow(
                 () => ScDb(S_WinInPeak) <= -119 ? "no signal" : NotaNum.F($"in {Lvl(ScDb(S_WinInPeak))} → out {Lvl(ScDb(S_WinOutPeak))}"),
@@ -423,7 +423,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             loudness = new CeLoudnessView { TargetToNorm = t => ToN(Target, t) };
             WireDrag(loudness, Target);
-            ToolTip.SetTip(loudness, "Momentary (teal), short-term (brass) and integrated (Ink) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; double-click resets.");
+            ToolTip.SetTip(loudness, "Momentary (teal), short-term (neutral ink) and integrated (rose) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; double-click resets.");
             var head = HeadRow(Row(6, CharSeg(false), Caps("TARGET"), TargetDrop()),
                 Info(() => HaveI() ? NotaNum.F($"{FromTarget():+0.0;−0.0;0.0}\u2009LU from target") : "measuring…"));
             var knobs = KnobRow(
@@ -478,7 +478,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             MeterGrid(
                 ("peak in", () => Lvl(ScDb(S_PeakInHold)), () => OverInk(ScDb(S_PeakInHold), 0)),
                 ("peak out", () => Lvl(ScDb(S_PeakOutHold)), () => TextPrimary),
-                ("max GR", () => GrF(Sc(S_MaxGrHold)), () => AccentBright),
+                ("max GR", () => GrF(Sc(S_MaxGrHold)), () => TextPrimary),
                 ("LUFS-S", () => Lufs(ScDb(S_LufsS)), () => TextPrimary),
                 ("LUFS-I", () => Lufs(ScDb(S_LufsI)), () => TextPrimary),
                 ("true pk", () => Lvl(ScDb(S_TpHold)), () => OverInk(ScDb(S_TpHold), P(Ceil)))),
@@ -486,7 +486,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
 
         Control LoudMetersTab()
         {
-            var big = Mono("", 16, AccentBright);
+            var big = Mono("", 16, TextPrimary);
             var unit = new TextBlock { Text = "LUFS", FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2) };
             var verdict = Mono("", 8, Success); verdict.HorizontalAlignment = HorizontalAlignment.Right; verdict.VerticalAlignment = VerticalAlignment.Bottom;
             readouts.Add(() =>
@@ -508,7 +508,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                     ("LUFS-S", () => Lufs(ScDb(S_LufsS)), () => TextPrimary),
                     ("LUFS-M", () => Lufs(ScDb(S_LufsM)), () => TextPrimary),
                     ("true pk", () => Lvl(ScDb(S_TpHold)), () => OverInk(ScDb(S_TpHold), P(Ceil))),
-                    ("max GR", () => GrF(Sc(S_MaxGrHold)), () => AccentBright)),
+                    ("max GR", () => GrF(Sc(S_MaxGrHold)), () => TextPrimary)),
                 LookRow(), ResetRow(true));
         }
 
@@ -527,7 +527,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             readouts.Add(() =>
             {
                 bool d = On(DeltaP);
-                t.Text = d ? "DELTA" : "DETECTOR";
+                t.Text = d ? "Delta" : "Detector";
                 t.Foreground = d ? AccentBright : TextTertiary;
                 l1.Text = d ? "hearing what it removes" : (Tp() ? "true peak · 4×" : "sample peak") + (ExtOn() ? " · key" : "");
                 l2.Text = d ? "the difference in − out" : NotaNum.F($"{KeyName()} · HP {HpF(P(ScHp))} · latency {Sc(S_Latency):0} smp");
@@ -575,9 +575,9 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             Refresh();
         }, extras);
         var rightFrame = TabFrame(new[] { "Meters", "Detector" }, rightHost, RightBody, true, t => { rightTab = t; RefreshAll(); }, null);
-        var right = new Border { Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip
@@ -612,7 +612,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { leftCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -643,7 +643,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                     btns[i].Background = on ? Card2 : Brushes.Transparent;
                     btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
                     var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? AccentBright : TextTertiary;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
                     tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }

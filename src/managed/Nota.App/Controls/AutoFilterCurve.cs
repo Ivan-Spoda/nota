@@ -22,7 +22,7 @@ namespace Nota.App;
 
 internal sealed class AutoFilterCurve : Control
 {
-    private static readonly IPen CurvePen = new Pen(NotaPalette.Accent, 1.8); // solid brass = current response
+    private static readonly IPen CurvePen = new Pen(NotaPalette.VizInk, 1.8); // solid neutral ink = current response
     private static readonly IPen SpecPen = new Pen(NotaPalette.Wash(NotaPalette.Ink("#9CB4CC"), 0x44));
     private static readonly IPen ModPen = new Pen(NotaPalette.Teal, 1.2) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) }; // dashed teal = at modulation
     private static readonly IPen RangePen = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x8C), 1);
@@ -124,9 +124,16 @@ internal sealed class AutoFilterCurve : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_drag) return;
-        _drag = false;
+        _drag = false; InvalidateVisual();
         GestureEnd?.Invoke();
         e.Pointer.Capture(null);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
 
     private void Apply(Point p)
@@ -233,7 +240,7 @@ internal sealed class AutoFilterCurve : Control
         var baseFc = HzOf(_fcNorm);
         Stroke(CurvePen, Curve(baseFc, _res));
         double cx = _fcNorm * w, cy = YForDb(MagDb(baseFc, baseFc, _res), h);
-        NotaGraph.Node(ctx, new Point(cx, cy), active: true);
+        NotaGraph.Node(ctx, new Point(cx, cy), active: _drag);
 
         // Labels: title, legend, the range corners and the cutoff under its handle.
         NotaGraph.Title(ctx, frame, "Response");
@@ -242,7 +249,7 @@ internal sealed class AutoFilterCurve : Control
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "18k Hz");
         var hz = baseFc;
         string cut = hz >= 1000 ? NotaNum.Str(hz / 1000.0, "0.0") + "k" : NotaNum.Str(hz, "0");
-        var cf = NotaGraph.AxisText(cut, NotaPalette.AccentBright);
+        var cf = NotaGraph.AxisText(cut, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         double lx = Math.Clamp(cx - cf.Width / 2, 24, Math.Max(24, w - 44 - cf.Width));
         ctx.DrawText(cf, new Point(lx, h - cf.Height - 3));
     }

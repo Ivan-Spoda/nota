@@ -1,23 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Owns which palette variant the app is wearing. Two layers have to agree:
+// Owns which colour theme the app is wearing (spec 011). Three layers have to agree:
 //
-//   • XAML  — Application.RequestedThemeVariant picks the Light/Dark branch of the
-//             ThemeDictionaries in NotaTheme.axaml (and of FluentTheme's own resources),
-//             and every {DynamicResource Brush.*} re-resolves on its own.
-//   • C#    — NotaPalette.Apply() re-tints the shared brush objects that the
-//             custom-drawn layer holds. Those changes don't reach a Render() override
-//             that never subscribed to the brush, so we force a repaint of every window.
+//   • Slots — NotaPalette.Apply() re-tints the shared brush objects. The same objects are
+//             published once into Application.Resources under their Brush.* keys, so
+//             every {DynamicResource Brush.*} in XAML follows along with no lookup.
+//   • Non-brush resources — shadows (BoxShadows) and Fluent's SystemAccentColor ramp are
+//             values, not brushes, so they are re-set from the theme on every switch.
+//   • Variant — Application.RequestedThemeVariant is the theme's kind (Dark/Light), which
+//             drives Fluent's own internals and the OS window chrome. In follow-system mode
+//             it is Default: Avalonia resolves it from the OS and raises
+//             ActualThemeVariantChanged when the OS flips, which swaps the theme.
 //
-// "System" is expressed as ThemeVariant.Default: Avalonia resolves it from the OS and
-// raises ActualThemeVariantChanged when the OS flips, which is the single place the
-// managed palette follows from.
+// Custom-drawn Render() overrides read slot colours without subscribing to them, so every
+// switch forces a repaint of every window.
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Nota.Application;
@@ -27,41 +32,82 @@ namespace Nota.App;
 internal static class NotaThemeService
 {
     private static bool _hooked;
+    private static bool _published;
+    private static AppearanceChoice _choice = new(false, Appearance.StudioDark, Appearance.StudioDark, Appearance.StudioLight);
 
-    /// <summary>Apply a mode and keep following it. Safe to call repeatedly.</summary>
-    public static void Set(AppTheme mode)
+    /// <summary>The appearance being followed.</summary>
+    public static AppearanceChoice Choice => _choice;
+
+    /// <summary>Every loaded theme id → whether it is dark — what <see cref="Appearance.Resolve"/> needs.</summary>
+    public static IReadOnlyDictionary<string, bool> KnownThemes =>
+        NotaThemes.BuiltIn.ToDictionary(t => t.Id, t => t.IsDark);
+
+    /// <summary>Wear <paramref name="choice"/> and keep following it. Safe to call repeatedly.</summary>
+    public static void Set(AppearanceChoice choice)
     {
         var app = Avalonia.Application.Current;
         if (app is null) return;
+        Publish(app);
+        _choice = choice;
 
         if (!_hooked)
         {
-            app.ActualThemeVariantChanged += (_, _) => SyncManagedPalette();
+            app.ActualThemeVariantChanged += (_, _) => { if (_choice.FollowSystem) ApplyActive(); };
             _hooked = true;
         }
 
-        app.RequestedThemeVariant = mode switch
-        {
-            AppTheme.Light => ThemeVariant.Light,
-            AppTheme.Dark => ThemeVariant.Dark,
-            _ => ThemeVariant.Default,   // follow the OS
-        };
-
-        // ActualThemeVariantChanged only fires when the resolved variant actually moved;
-        // sync unconditionally so the first call (and a no-op re-apply) still lands.
-        SyncManagedPalette();
+        if (choice.FollowSystem)
+            app.RequestedThemeVariant = ThemeVariant.Default;   // follow the OS
+        // A single theme sets its own kind inside ApplyActive.
+        ApplyActive();
     }
 
-    private static void SyncManagedPalette()
+    // The theme the choice names right now — for follow system, the one for the OS mode.
+    private static void ApplyActive()
     {
         var app = Avalonia.Application.Current;
         if (app is null) return;
+        // With no OS signal Avalonia reports Light, which is the spec's fallback too.
+        bool osDark = app.ActualThemeVariant == ThemeVariant.Dark;
+        var theme = NotaThemes.Find(_choice.Active(osDark)) ?? NotaThemes.Default;
 
-        var want = app.ActualThemeVariant == ThemeVariant.Light ? NotaThemeVariant.Light : NotaThemeVariant.Dark;
-        if (NotaPalette.Variant == want) return;
+        if (!_choice.FollowSystem)
+            app.RequestedThemeVariant = theme.IsDark ? ThemeVariant.Dark : ThemeVariant.Light;
+        if (ReferenceEquals(NotaPalette.Theme, theme)) return;
 
-        NotaPalette.Apply(want);
+        NotaPalette.Apply(theme);
+        ApplyResources(app, theme);
         RepaintEverything();
+    }
+
+    // Put the slot brushes into the application resources once. They are re-tinted in
+    // place afterwards, so the resource entries never need replacing.
+    private static void Publish(Avalonia.Application app)
+    {
+        if (_published) return;
+        foreach (var (key, brush) in NotaPalette.AllKeys) app.Resources[key] = brush;
+        _published = true;
+    }
+
+    // The resources that are values rather than brushes: Studio's elevation, built from the
+    // theme's colours (geometry is structure — specs/010 data-model § Elevation), and the
+    // accent ramp Fluent's own templates read.
+    private static void ApplyResources(Avalonia.Application app, NotaColourTheme t)
+    {
+        var res = app.Resources;
+        res["Shadow.Raised"] = new BoxShadows(new BoxShadow { IsInset = true, OffsetY = 1, Color = t["ShadowBevel"] });
+        res["Shadow.Sunken"] = new BoxShadows(new BoxShadow { IsInset = true, Spread = 1, Color = t["Rule"] });
+        res["Shadow.Popover"] = new BoxShadows(new BoxShadow { Spread = 1, Color = t["Seam"] },
+            new[] { new BoxShadow { OffsetY = 10, Blur = 28, Color = t["ShadowPopover"] } });
+        res["Shadow.Modal"] = new BoxShadows(new BoxShadow { Spread = 1, Color = t["Seam"] },
+            new[] { new BoxShadow { OffsetY = 24, Blur = 64, Color = t["ShadowModal"] } });
+
+        res["SystemAccentColor"] = t["SystemAccent"];
+        for (int i = 1; i <= 3; i++)
+        {
+            res[$"SystemAccentColorLight{i}"] = t[$"SystemAccentLight{i}"];
+            res[$"SystemAccentColorDark{i}"] = t[$"SystemAccentDark{i}"];
+        }
     }
 
     // Custom-drawn views read palette brushes inside Render() without ever binding to
@@ -75,6 +121,9 @@ internal static class NotaThemeService
     private static void Invalidate(Visual v)
     {
         v.InvalidateVisual();
+        // An open popup's content lives in its own popup root, outside the window's visual
+        // tree — reach it through the popup, or an open ComboBox list stays in the old colours.
+        if (v is Avalonia.Controls.Primitives.Popup { IsOpen: true, Child: { } content }) Invalidate(content);
         foreach (var child in v.GetVisualChildren()) Invalidate(child);
     }
 }

@@ -34,6 +34,7 @@ public sealed partial class SessionView
     private Border? _fixedSeg;
     private TextBlock? _posText, _tempoText;
     private Button? _backBtn;
+    private ToggleButton? _inspectorToggle;
     private readonly List<ToggleButton> _sectionToggles = new();
 
     /// <summary>Tempo and time signature for the toolbar readout.</summary>
@@ -42,7 +43,7 @@ public sealed partial class SessionView
     private Control BuildToolbar()
     {
         _recDot = new Glyph(GlyphKind.Record, 8);
-        _recText = new TextBlock { Text = "Session Rec", FontSize = 11, FontWeight = FontWeight.SemiBold };
+        _recText = new TextBlock { Text = "Session rec", FontSize = 11, FontWeight = FontWeight.SemiBold };
         _recBtn = new Button
         {
             Height = NotaSize.Shell, Padding = new Thickness(10, 0),
@@ -51,7 +52,7 @@ public sealed partial class SessionView
         ToolTip.SetTip(_recBtn, "Record into the armed track at the selected scene · click again to keep the take");
         _recBtn.Click += (_, _) => SessionRec();
 
-        var fixedLabel = Caps("FIXED");
+        var fixedLabel = Caps("Fixed");
         _fixedSeg = new Border();
         var fixedRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { fixedLabel, _fixedSeg } };
         ToolTip.SetTip(fixedRow, "Fixed record length in bars — the take stops by itself");
@@ -64,7 +65,7 @@ public sealed partial class SessionView
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 8,
-                Children = { Caps("QUANT"), _quantLabel, new Glyph(GlyphKind.ChevronDown, 7) { Foreground = NotaPalette.TextDisabled } },
+                Children = { Caps("Quant"), _quantLabel, new Glyph(GlyphKind.ChevronDown, 7) { Foreground = NotaPalette.TextDisabled } },
             },
         };
         ToolTip.SetTip(quant, "Launch quantize: when clips and scenes start");
@@ -91,7 +92,7 @@ public sealed partial class SessionView
         ToolTip.SetTip(follow, "Follow actions on or off for every clip and scene");
         follow.Click += (_, _) => { _engine.SessionFollow = !_engine.SessionFollow; SyncToolbar(); RebuildInspector(); };
 
-        var capture = new Button { Content = "Capture Scene", Height = NotaSize.Shell, Padding = new Thickness(10, 0), FontSize = 11 };
+        var capture = new Button { Content = "Capture scene", Height = NotaSize.Shell, Padding = new Thickness(10, 0), FontSize = 11 };
         ToolTip.SetTip(capture, "Copy the clips playing now into a new scene");
         capture.Click += (_, _) => CaptureScene();
 
@@ -125,17 +126,71 @@ public sealed partial class SessionView
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 7,
-                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = "Stop All", FontSize = 11, FontWeight = FontWeight.SemiBold } },
+                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = "Stop all", FontSize = 11, FontWeight = FontWeight.SemiBold } },
             },
         };
         ToolTip.SetTip(stopAll, "Stop every session clip");
         stopAll.Click += (_, _) => { _engine.StopAllSession(); UpdateStates(); };
 
+        // The inspector column can be folded away to give the grid its width back (critique F2).
+        _inspectorToggle = new ToggleButton
+        {
+            Content = new Glyph(GlyphKind.Sidebar, 16), Width = NotaSize.Shell + 6, Height = NotaSize.Shell, Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, IsChecked = InspectorOpen,
+        };
+        ToolTip.SetTip(_inspectorToggle, "Inspector — show or hide it");
+        Avalonia.Automation.AutomationProperties.SetName(_inspectorToggle, "Inspector");
+        _inspectorToggle.Click += (_, _) => SetInspectorOpen(_inspectorToggle.IsChecked == true);
+
+        // Overflow: when the bar is too narrow, the least-used controls fold into "⋯" one by one
+        // (readout first, then Back to arrangement, Capture scene, the section toggles, Follow).
+        // Every control stays reachable — the menu offers whatever is hidden.
+        const double MoreW = 32;
+        var more = new Button { Content = "⋯", Width = MoreW, Height = NotaSize.Shell, Padding = new Thickness(0), FontSize = 12, HorizontalContentAlignment = HorizontalAlignment.Center, IsVisible = false };
+        ToolTip.SetTip(more, "More session controls");
+        more.Click += (_, _) =>
+        {
+            var f = new MenuFlyout();
+            void Add(string header, Action act) { var mi = new MenuItem { Header = header }; mi.Click += (_, _) => act(); f.Items.Add(mi); }
+            if (!_backBtn!.IsVisible) Add("Back to Arrangement", () => { _engine.BackToArrangement(); UpdateStates(); });
+            if (!capture.IsVisible) Add("Capture scene", CaptureScene);
+            if (!sectionsWell.IsVisible)
+            {
+                Add((_showIO ? "Hide" : "Show") + " I/O", () => { _showIO = !_showIO; Refresh(); });
+                Add((_showSends ? "Hide" : "Show") + " sends", () => { _showSends = !_showSends; Refresh(); });
+                Add((_showMixer ? "Hide" : "Show") + " mixer", () => { _showMixer = !_showMixer; Refresh(); });
+            }
+            if (!follow.IsVisible) Add(_engine.SessionFollow ? "Turn follow off" : "Turn follow on", () => { _engine.SessionFollow = !_engine.SessionFollow; SyncToolbar(); RebuildInspector(); });
+            f.ShowAt(more);
+        };
+
         var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { _recBtn, fixedRow, quant, follow, capture } };
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { sectionsWell, readout, _backBtn, stopAll } };
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { sectionsWell, readout, _backBtn, stopAll, more, _inspectorToggle } };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(10, 0) };
         grid.Children.Add(left);
         Grid.SetColumn(right, 2); grid.Children.Add(right);
+
+        Control[] foldOrder = { readout, _backBtn, capture, sectionsWell, follow };
+        var width = new Dictionary<Control, double>();
+        grid.SizeChanged += (_, _) =>
+        {
+            // Widths are learnt while a control is shown (a hidden one measures 0).
+            foreach (var c in foldOrder) if (c.IsVisible && c.Bounds.Width > 0) width[c] = c.Bounds.Width;
+            double need(IEnumerable<Control> shown) { double w = 0; foreach (var c in shown) w += c.Bounds.Width > 0 ? c.Bounds.Width + 8 : 0; return w; }
+            double fixedW = need(new Control[] { _recBtn, fixedRow, quant, stopAll, _inspectorToggle }) + 20 + 24;
+            double avail = grid.Bounds.Width;
+            int hide = 0;
+            double total = fixedW;
+            foreach (var c in foldOrder) total += width.TryGetValue(c, out var w) ? w + 8 : 0;
+            // Folding a second control brings in "⋯", which needs its own room.
+            while (hide < foldOrder.Length && total + (hide > 1 ? MoreW + 8 : 0) > avail)
+            {
+                total -= width.TryGetValue(foldOrder[hide], out var w) ? w + 8 : 0;
+                hide++;
+            }
+            for (int i = 0; i < foldOrder.Length; i++) foldOrder[i].IsVisible = i >= hide;
+            more.IsVisible = hide > 1;   // the readout alone is information, not a control
+        };
         return new Border
         {
             Height = 44, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault,
@@ -145,7 +200,7 @@ public sealed partial class SessionView
 
     private static TextBlock Caps(string text) => new()
     {
-        Text = text, FontSize = 9, FontWeight = FontWeight.Bold, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
+        Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
     };
 
     private void SessionRec()

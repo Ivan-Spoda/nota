@@ -3,13 +3,13 @@
 //
 // Nota Rhythm's windows (the almanac's Rhythm card):
 //
-//   RhythmHitView     the selected synth voice's hit: the amp contour (brass) over the pitch
-//                     drop (deep brass) or the attack click, the trigger as a teal tick; the
+//   RhythmHitView     the selected synth voice's hit: the amp contour (neutral ink) over the
+//                     pitch drop (dim) or the attack click, the trigger as a teal tick; the
 //                     corner reads the pitch time · the decay. Drag it: across = Decay,
-//                     up / down = Tune. Lights when the voice fires.
+//                     up / down = Tune. Lights (accent) when the voice fires.
 //   RhythmSampleView  the selected sample voice: the file as bars in the voice's hue, the
-//                     played region between a brass Start line and a dashed brass End line
-//                     (drag either), the part outside dimmed, the play position in teal.
+//                     played region between a Start line and a dashed End line (drag
+//                     either; the dragged one turns accent), the part outside dimmed, the play position in teal.
 //   RhythmStepStrip   the sixteen steps of the selected voice and, under them, the velocity
 //                     lane. Click toggles, shift-click accents, alt-click makes a quiet step;
 //                     drag across paints, drag up / down (or the wheel) sets the velocity;
@@ -90,9 +90,16 @@ internal sealed class RhythmHitView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_dragging) return;
-        _dragging = false;
+        _dragging = false; InvalidateVisual();
         e.Pointer.Capture(null);
         DragEnd?.Invoke();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_dragging) { _dragging = false; InvalidateVisual(); DragEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
@@ -124,12 +131,12 @@ internal sealed class RhythmHitView : Control
                     g.LineTo(new Point(x, baseY - (baseY - top - 6) * (0.18 + 0.82 * e)));
                 }
             }
-            ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.AccentDim, 1.2), pg);
+            ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.2), pg);
         }
         else if (_punch > 0.02)
         {
             double ch = (baseY - top) * (0.25 + 0.6 * _punch);
-            ctx.DrawLine(NotaGraph.SecondaryPen(NotaPalette.AccentDim, 1.2), new Point(x0 + 4, baseY), new Point(x0 + 4, baseY - ch));
+            ctx.DrawLine(NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.2), new Point(x0 + 4, baseY), new Point(x0 + 4, baseY - ch));
         }
 
         // The amp contour: a fast rise, then the decay (−20 dB at the Decay time, so the tail reads).
@@ -147,11 +154,11 @@ internal sealed class RhythmHitView : Control
                 if (x > end) { g.LineTo(new Point(x1, baseY)); break; }
             }
         }
-        var ampInk = _flash > 0.3 ? NotaPalette.AccentBright : NotaPalette.Accent;
+        var ampInk = _flash > 0.3 ? NotaPalette.Accent : NotaPalette.VizInk;
         ctx.DrawGeometry(null, new Pen(ampInk, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), ag);
 
-        NotaGraph.Title(ctx, new Rect(0, 0, w, h), "HIT");
-        RhythmInk.TopRight(ctx, w, _name, NotaPalette.AccentBright);
+        NotaGraph.Title(ctx, new Rect(0, 0, w, h), "Hit");
+        RhythmInk.TopRight(ctx, w, _name, NotaPalette.TextPrimary);
         RhythmInk.BottomRight(ctx, w, h, _caption);
     }
 }
@@ -227,9 +234,15 @@ internal sealed class RhythmSampleView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (_drag < 0) return;
-        int d = _drag; _drag = -1;
+        int d = _drag; _drag = -1; InvalidateVisual();
         e.Pointer.Capture(null);
         DragEnd?.Invoke(d);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag >= 0) { int d = _drag; _drag = -1; InvalidateVisual(); DragEnd?.Invoke(d); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
@@ -239,7 +252,7 @@ internal sealed class RhythmSampleView : Control
         NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         double mid = (14 + h - 12) / 2, amp = (h - 26) / 2;
         ctx.DrawLine(NotaGraph.GridPen, new Point(1, mid), new Point(w - 1, mid));
-        NotaGraph.Title(ctx, new Rect(0, 0, w, h), "SAMPLE");
+        NotaGraph.Title(ctx, new Rect(0, 0, w, h), "Sample");
         if (!_has)
         {
             var t = RhythmInk.Mono("double-click or drop a file", NotaPalette.TextTertiary);
@@ -258,18 +271,19 @@ internal sealed class RhythmSampleView : Control
             ctx.DrawLine(inside ? inPen : outPen, new Point(x, mid - a), new Point(x, mid + a));
         }
 
-        var brass = new Pen(NotaPalette.Accent, 1);
-        var dashed = new Pen(NotaPalette.Accent, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+        IBrush Ink(int handle) => _drag == handle ? NotaPalette.Accent : NotaPalette.VizInk;
+        Pen Solid(int handle) => new(Ink(handle), 1);
+        Pen Dashed(int handle) => new(Ink(handle), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
         double xs = X(_start), xe = X(_end);
-        ctx.DrawLine(_reverse ? dashed : brass, new Point(xs, 1), new Point(xs, h - 1));
-        ctx.DrawLine(_reverse ? brass : dashed, new Point(xe, 1), new Point(xe, h - 1));
+        ctx.DrawLine(_reverse ? Dashed(0) : Solid(0), new Point(xs, 1), new Point(xs, h - 1));
+        ctx.DrawLine(_reverse ? Solid(1) : Dashed(1), new Point(xe, 1), new Point(xe, h - 1));
         if (_pos >= 0)
         {
             double xp = X(_pos);
             ctx.DrawLine(new Pen(NotaPalette.TealBright, 1), new Point(xp, 12), new Point(xp, h - 12));
         }
 
-        RhythmInk.TopRight(ctx, w, _name, NotaPalette.AccentBright);
+        RhythmInk.TopRight(ctx, w, _name, NotaPalette.TextPrimary);
         RhythmInk.BottomRight(ctx, w, h, _caption);
     }
 }
@@ -367,6 +381,12 @@ internal sealed class RhythmStepStrip : Control
         if (_pressStep < 0) return;
         _pressStep = -1;
         e.Pointer.Capture(null);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_pressStep >= 0) { _pressStep = -1; InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)

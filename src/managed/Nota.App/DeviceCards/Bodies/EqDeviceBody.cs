@@ -29,7 +29,7 @@ internal sealed class EqDeviceBody : IDeviceBody
 {
     public double Width => 700;   // the almanac device format: 700 × 260
     public bool FullBleed => true;
-    public string? Subtitle => "EQUALIZER";   // the processing type, shown as the header badge
+    public string? Subtitle => "Equalizer";   // the processing type, shown as the header badge
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -77,8 +77,8 @@ internal sealed class EqDeviceBody : IDeviceBody
         bool AutoOn() => P(Eq8.AutoGainP) >= 0.5f;
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -91,9 +91,9 @@ internal sealed class EqDeviceBody : IDeviceBody
         for (int b = 0; b < Eq8.Bands; b++)
         {
             int bb = b;
-            var num = Mono((b + 1).ToString(), 8, Brass); num.FontWeight = FontWeight.Bold;
+            var num = Mono((b + 1).ToString(), 8, TextSecondary); num.FontWeight = FontWeight.Bold;
             var type = new TextBlock { FontSize = 7, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
-            var chn = new TextBlock { FontSize = 7, FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
+            var chn = new TextBlock { FontSize = 7, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
             var hz = Mono("", 7, TextPrimary); hz.HorizontalAlignment = HorizontalAlignment.Right;
             var inner = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"), Margin = new Thickness(4, 0) };
             inner.Children.Add(num); inner.Children.Add(Col(type, 1)); inner.Children.Add(Col(chn, 2)); inner.Children.Add(Col(hz, 3));
@@ -114,7 +114,7 @@ internal sealed class EqDeviceBody : IDeviceBody
             {
                 bool on = BandOn(bb), sel = bb == Sel();
                 int c = ChanOf(bb);
-                num.Foreground = !on ? TextDisabled : sel ? AccentBright : Brass;
+                num.Foreground = !on ? TextDisabled : sel ? AccentBright : TextSecondary;
                 type.Text = Eq8.TypeShort[TypeOf(bb)];
                 type.Foreground = on ? TextSecondary : TextDisabled;
                 chn.Text = c == Eq8.St ? "" : Eq8.ChannelShort[c];
@@ -145,10 +145,9 @@ internal sealed class EqDeviceBody : IDeviceBody
         };
         anaBar.RenderTransform = new ScaleTransform(0.85, 0.85);
         anaBar.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);
-        var graphPanel = new Border
+        var graphPanel = new RuleSection
         {
-            Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-            ClipToBounds = true, Margin = new Thickness(0, 0, 5, 0),
+            Margin = new Thickness(0, 0, 5, 0),
             Child = new DockPanel { LastChildFill = true, Children = { chipStrip, new Border { Padding = new Thickness(5), Child = new Panel { Children = { curve, anaBar } } } } },
         };
 
@@ -185,8 +184,8 @@ internal sealed class EqDeviceBody : IDeviceBody
                 bool on = BandOn(b);
                 badge.Background = on ? AccentBright : NotaPalette.TextAxis;
                 badgeTxt.Foreground = on ? OnAccent : TextTertiary;
-                name.Text = Eq8.TypeNames[TypeOf(b)].ToUpperInvariant();
-                name.Foreground = on ? AccentBright : TextTertiary;
+                name.Text = Eq8.TypeNames[TypeOf(b)];
+                name.Foreground = on ? TextPrimary : TextTertiary;
             });
             var head = new DockPanel { Height = 20, Margin = new Thickness(8, 0), Children = { Docked(onSw, Dock.Right), badge, name } };
             var headBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = head };
@@ -227,7 +226,7 @@ internal sealed class EqDeviceBody : IDeviceBody
                 Col(K(pG, "GAIN", () => Capable(b) ? Eq8.Db(B(b, Eq8.GainF)) + " dB" : "—", "Gain — or drag the node up / down (Scale multiplies it)",
                     inactive: () => !Capable(b)), 1),
                 Col(K(pQ, "Q", () => NotaNum.F($"{B(b, Eq8.QF):0.00}"), "Q — the width (the resonance on the cuts); or the wheel over the node",
-                    liveLabel: () => Cut(b) ? "RESO" : "Q"), 2),
+                    liveLabel: () => Cut(b) ? "Reso" : "Q"), 2),
             } };
 
             // ---- slope + channel ----
@@ -279,7 +278,7 @@ internal sealed class EqDeviceBody : IDeviceBody
                 {
                     if (!trk.Dragging) trk.Norm = (P(p) - mn[p]) / (mx[p] - mn[p]);
                     val.Text = fmt();
-                    val.Foreground = Math.Abs(P(p) - def) > 0.05 ? AccentBright : TextPrimary;
+                    val.Foreground = Math.Abs(P(p) - def) > 0.05 ? TextPrimary : TextSecondary;
                 });
                 var g = new Grid { ColumnDefinitions = new ColumnDefinitions("40,*,40"), ColumnSpacing = 6, Height = 11 };
                 g.Children.Add(Caps(label));
@@ -311,11 +310,7 @@ internal sealed class EqDeviceBody : IDeviceBody
             return panel;
         }
 
-        var right = new Border
-        {
-            Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-            ClipToBounds = true, Child = bandHost,
-        };
+        var right = new RuleSection { Width = 186, Child = bandHost };
         DockPanel.SetDock(right, Dock.Right);
         bandHost.Content = BandPanel(Sel());
         curve.SelectionChanged += () => { bandHost.Content = BandPanel(Sel()); RefreshAll(); };
@@ -373,8 +368,8 @@ internal sealed class EqDeviceBody : IDeviceBody
         {
             float o = P(Eq8.OutputP);
             double total = o + (AutoOn() ? Sc(Eq8.S_AutoGain) : 0);
-            outTb.Text = "OUT " + Eq8.Db(total) + " dB" + (AutoOn() ? " auto" : "");
-            outTb.Foreground = Math.Abs(total) > 0.05 ? AccentBright : TextSecondary;
+            outTb.Text = "Out " + Eq8.Db(total) + " dB" + (AutoOn() ? " auto" : "");
+            outTb.Foreground = Math.Abs(total) > 0.05 ? TextPrimary : TextSecondary;
         });
         var engineRead = Mono("", 8, TextTertiary);
         readouts.Add(() =>
@@ -392,7 +387,7 @@ internal sealed class EqDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, graphPanel } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {

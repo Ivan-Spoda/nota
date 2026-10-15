@@ -19,7 +19,7 @@ namespace Nota.App;
     {
         private static readonly IBrush Sunken = NotaPalette.BgSunken;
         private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-        private static readonly IBrush AccentBright = NotaPalette.AccentBright;
+        private static readonly IBrush Ink = NotaPalette.VizInk;   // the curve at rest: neutral ink
         private static readonly IBrush GridB = NotaGraph.Grid;
         private static readonly Typeface Face = NotaFonts.Mono;
         private readonly IAudioEngine _e;
@@ -55,16 +55,20 @@ namespace Nota.App;
         { _drag = true; Gest(true); e.Pointer.Capture(this); Apply(e.GetPosition(this)); e.Handled = true; }
         protected override void OnPointerMoved(PointerEventArgs e) { if (_drag) Apply(e.GetPosition(this)); }
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
-        { if (_drag) { _drag = false; Gest(false); e.Pointer.Capture(null); } }
+        { if (_drag) { _drag = false; InvalidateVisual(); Gest(false); e.Pointer.Capture(null); } }
+
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+        { if (_drag) { _drag = false; InvalidateVisual(); Gest(false); } base.OnPointerCaptureLost(e); }
 
         private void Gest(bool begin)
         {
             void G1((int i, string id) p) { if (p.i < 0) return; if (begin) _e.BeginAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id); else _e.EndAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id); }
             G1(_freq); G1(_reso);
         }
-        private static readonly IBrush FillB = NotaPalette.Wash(NotaPalette.Accent, 0x18);
+        private static readonly IBrush FillB = NotaPalette.Wash(NotaPalette.VizInk, 0x18);
         private static readonly IBrush AxisB = NotaPalette.TextAxis;
-        private static readonly IBrush HandleB = NotaPalette.AccentBright;
+        private static readonly IBrush HandleB = NotaPalette.Accent;
 
         private (double x0, double x1, double top, double bot) Geo()
         { return (8, Bounds.Width - 8, 15, Bounds.Height - 14); }
@@ -127,13 +131,13 @@ namespace Nota.App;
                 gc.LineTo(new Point(pts[^1].X, bot));
                 gc.EndFigure(true);
             }
-            var pen = new Pen(AccentBright, 1.8, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+            var pen = new Pen(Ink, 1.8, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
             for (int i = 1; i < pts.Count; i++) ctx.DrawLine(pen, pts[i - 1], pts[i]);
 
             // Cutoff marker line + draggable handle at the curve's cutoff point.
-            ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x40), 1), new Point(cx, top), new Point(cx, bot));
+            ctx.DrawLine(new Pen(NotaPalette.Wash(_drag ? NotaPalette.Accent : NotaPalette.VizInk, 0x40), 1), new Point(cx, top), new Point(cx, bot));
             double hy = _type == 3 ? bot : Math.Max(top + 2, top + (bot - top) * 0.34 - res * ((bot - top) * 0.34) * 0.92);
-            NotaGraph.Node(ctx, new Point(cx, hy), active: true);
+            NotaGraph.Node(ctx, new Point(cx, hy), active: _drag);
 
             // Axis labels: dB left, frequency scale along the bottom.
             void Lbl(string t, double x, double y, IBrush b) => ctx.DrawText(new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
@@ -143,7 +147,7 @@ namespace Nota.App;
             for (int i = 0; i < 5; i++)
             { double lx = x0 + (x1 - x0) * i / 4.0; Lbl(NotaNum.Hz(HzAt(i / 4.0)), Math.Clamp(lx - 6, x0, x1 - 22), bot + 2, AxisB); }
             double hz = HzAt(cut);
-            Glyph.Draw(ctx, GlyphKind.Record, new Rect(x1 - 52, top + 2, 5, 5), AccentBright);
-            Lbl(NotaNum.Hz(hz), x1 - 45, top - 1, AccentBright);
+            Glyph.Draw(ctx, GlyphKind.Record, new Rect(x1 - 52, top + 2, 5, 5), _drag ? HandleB : NotaPalette.TextSecondary);
+            Lbl(NotaNum.Hz(hz), x1 - 45, top - 1, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         }
     }

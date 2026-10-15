@@ -19,7 +19,7 @@ namespace Nota.App;
     {
         private static readonly IBrush Sunken = NotaPalette.BgSunken;
         private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-        private static readonly IBrush AccentBright = NotaPalette.AccentBright;
+        private static readonly IBrush Ink = NotaPalette.VizInk;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
         private static readonly IBrush GridB = NotaGraph.Grid;
         private static readonly Typeface Face = NotaFonts.Mono;
@@ -29,8 +29,9 @@ namespace Nota.App;
         private string _title = "AMP ENV";
         private int _drag = -1;   // 0 attack · 1 decay/sustain · 2 release
 
-        // Curve accent (Nota Operator tints modulator envelopes teal); defaults to brass.
-        public IBrush Accent { get; set; } = AccentBright;
+        // Curve ink (Nota Operator tints modulator envelopes teal); defaults to neutral ink.
+        // The node being dragged turns accent.
+        public IBrush Accent { get; set; } = Ink;
 
         // Draw the title in the plot's corner. Off when the card already names the graph
         // in a header above it (Nota Bass).
@@ -78,7 +79,11 @@ namespace Nota.App;
         }
         protected override void OnPointerMoved(PointerEventArgs e) { if (_drag >= 0) Apply(e.GetPosition(this)); }
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
-        { if (_drag >= 0) { Gest(false); _drag = -1; e.Pointer.Capture(null); } }
+        { if (_drag >= 0) { Gest(false); _drag = -1; InvalidateVisual(); e.Pointer.Capture(null); } }
+
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+        { if (_drag >= 0) { Gest(false); _drag = -1; InvalidateVisual(); } base.OnPointerCaptureLost(e); }
 
         private void Gest(bool begin)
         {
@@ -111,9 +116,10 @@ namespace Nota.App;
             ctx.DrawLine(pen, new Point(xa, top), new Point(xd, sy));
             ctx.DrawLine(pen, new Point(xd, sy), new Point(xh, sy));
             ctx.DrawLine(pen, new Point(xh, sy), new Point(xr, bot));
-            foreach (var pt in new[] { new Point(xa, top), new Point(xd, sy), new Point(xr, bot) })
-                ctx.DrawEllipse(Accent, null, pt, 3.2, 3.2);
+            var nodes = new[] { new Point(xa, top), new Point(xd, sy), new Point(xr, bot) };
+            for (int k = 0; k < nodes.Length; k++)
+                ctx.DrawEllipse(_drag == k ? NotaPalette.Accent : Accent, null, nodes[k], 3.2, 3.2);
             if (ShowTitle)
-                ctx.DrawText(new FormattedText(_title, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, 5));
+                ctx.DrawText(new FormattedText(NotaText.Label(_title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, 5));
         }
     }

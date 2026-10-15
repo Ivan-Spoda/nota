@@ -2,10 +2,10 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — the kit macros of the Drum Rack and Nota Rhythm, from the almanac's
-// "1c Macro" cards. Eight knobs over the whole kit, as a 4 × 2 grid: the value in brass, the
+// "1c Macro" cards. Eight knobs over the whole kit, as a 4 × 2 grid: the value in primary text, the
 // name, and in teal where it goes ("→ Reverb · Snare, Clap"). An unassigned macro is a dashed,
 // empty cell. The selected macro's receivers — every mapping, with its range as a teal band and
-// the value it sits at now as a brass tick — are listed by MacroDetail (the Drum Rack's right
+// the value it sits at now as a neutral tick — are listed by MacroDetail (the Drum Rack's right
 // panel); the band's ends drag.
 //
 // Both instruments reach this through IMacroSurface: the rack's macros (RackCore) and the
@@ -147,7 +147,7 @@ internal static class MacroPanel
         string pid = RhythmModel.MacroId(m);
 
         var knob = new Knob(Value(e, s, m), 1.0) { Accent = true, Default = 0.5, Width = Knob.SizeSecondary, Height = Knob.SizeSecondary, IsDim = !assigned };
-        var value = new TextBlock { Text = Pct(Value(e, s, m)), FontSize = 7, FontFamily = NotaFonts.MonoFamily, Foreground = assigned ? AccentBright : TextDisabled, LineHeight = 9 };
+        var value = new TextBlock { Text = Pct(Value(e, s, m)), FontSize = 7, FontFamily = NotaFonts.MonoFamily, Foreground = assigned ? TextPrimary : TextDisabled, LineHeight = 9 };
         knob.ValueChanged += v =>
         {
             e.PluginParamSet(track, di, pi, (float)v);
@@ -167,8 +167,8 @@ internal static class MacroPanel
         bool custom = name != $"Macro {m + 1}";
         var title = new TextBlock
         {
-            Text = assigned || custom ? (stacked ? $"MACRO {m + 1} · {name.ToUpperInvariant()}" : $"{m + 1} · {name.ToUpperInvariant()}") : (stacked ? $"MACRO {m + 1}" : $"{m + 1}"),
-            FontSize = 7, FontWeight = FontWeight.Bold, LetterSpacing = 0.56, TextTrimming = TextTrimming.CharacterEllipsis,
+            Text = assigned || custom ? (stacked ? $"Macro {m + 1} · {name}" : $"{m + 1} · {name}") : (stacked ? $"Macro {m + 1}" : $"{m + 1}"),
+            FontSize = 7, FontWeight = FontWeight.Medium, TextTrimming = TextTrimming.CharacterEllipsis,
             Foreground = !assigned ? TextDisabled : sel ? AccentBright : NotaPalette.TextStrong,
         };
         var recv = new TextBlock
@@ -294,10 +294,10 @@ internal static class MacroPanel
     public static Control Detail(DeviceCardContext ctx, IMacroSurface s, int m, List<Action> tick)
     {
         var e = ctx.Engine;
-        var val = new TextBlock { FontSize = 7, FontFamily = NotaFonts.MonoFamily, Foreground = AccentBright, VerticalAlignment = VerticalAlignment.Center };
+        var val = new TextBlock { FontSize = 7, FontFamily = NotaFonts.MonoFamily, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         tick.Add(() => val.Text = Pct(Value(e, s, m)));
         var head = new Grid { Height = 20, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 5, Margin = new Thickness(8, 0) };
-        head.Children.Add(Cap($"MACRO {m + 1}"));
+        head.Children.Add(Cap($"Macro {m + 1}"));
         var nm = new TextBlock { Text = s.MacroName(m), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         Avalonia.Controls.Grid.SetColumn(nm, 1); head.Children.Add(nm);
         Avalonia.Controls.Grid.SetColumn(val, 2); head.Children.Add(val);
@@ -386,7 +386,7 @@ internal static class MacroPanel
         ToolTip.SetTip(name, dev.Length > 0 ? $"{s.SlotName(mm.Chain)} · {Short(dev)} · {pn}" : $"{s.SlotName(mm.Chain)} · {pn}");
 
         var band = new Border { Height = 3, CornerRadius = NotaRadius.Bar, Background = NotaPalette.Teal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        var now = new Border { Width = 2, Height = 7, Background = AccentBright, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        var now = new Border { Width = 2, Height = 7, Background = NotaPalette.VizInk, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         var track = new Panel
         {
             Height = 9, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeWestEast), VerticalAlignment = VerticalAlignment.Center,
@@ -425,7 +425,8 @@ internal static class MacroPanel
         };
         track.PointerMoved += (_, e) => { if (drag != 0) Apply(e.GetPosition(track).X); };
         track.PointerReleased += (_, e) => { if (drag != 0) { drag = 0; e.Pointer.Capture(null); ctx.NotifyChanged(); } };
-        ToolTip.SetTip(track, "The range the macro sweeps: drag either end · the brass tick is where it is now");
+        track.PointerCaptureLost += (_, _) => { if (drag != 0) { drag = 0; ctx.NotifyChanged(); } };
+        ToolTip.SetTip(track, "The range the macro sweeps: drag either end · the tick is where it is now");
 
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 5 };
         g.Children.Add(hue);
@@ -449,7 +450,7 @@ internal static class MacroPanel
 
     public static TextBlock Cap(string t) => new()
     {
-        Text = t, FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold, LetterSpacing = NotaType.KnobLabelTracking,
+        Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
         Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center,
     };
 

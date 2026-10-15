@@ -50,13 +50,13 @@ public sealed class ClipPropsView : UserControl
         var loop = SwitchRow("Loop", () => true, () => { }, out _, _loopText);
         loop.IsEnabled = false;
         ToolTip.SetTip(loop, "Clips always loop");
-        var clip = Section("CLIP",
+        var clip = Section("Clip",
             Pair(Labeled("Start", Field(_startText)), Labeled("Length", Field(_lengthText))),
             loop);
 
         // QUANTIZE — its own step (not the snap grid, which follows the zoom), one-tap
         // Quantize at the strength below.
-        var grid = Section("QUANTIZE",
+        var grid = Section("Quantize",
             Pair(Dropdown(_gridText, a => ShowMenu(a, Array.ConvertAll(QuantizeSteps, q => q.Label),
                     Array.IndexOf(QuantizeSteps, _roll.Grids.Quantize), i =>
                 {
@@ -64,7 +64,7 @@ public sealed class ClipPropsView : UserControl
                     _gridText.Text = QuantizeSteps[i].Label;
                 })),
                 ClipEditorKit.Button("Quantize", () => _roll.Quantize(_strength))),
-            SliderRow("STRENGTH", 64, () => _strength, v => _strength = v,
+            SliderRow("Strength", 64, () => _strength, v => _strength = v,
                 () => string.Format(NotaNum.Culture, "{0:0}\u2009%", _strength * 100), out _, reset: () => _strength = 0.8, valueW: 34));
 
         // TRANSPOSE — − value +; the value turns Brass Light while it is off zero.
@@ -75,7 +75,7 @@ public sealed class ClipPropsView : UserControl
         Grid.SetColumn(tField, 1); tRow.Children.Add(tField);
         var plus = GlyphButton(GlyphKind.Plus, () => Transpose(1));
         Grid.SetColumn(plus, 2); tRow.Children.Add(plus);
-        var transpose = Section("TRANSPOSE", tRow);
+        var transpose = Section("Transpose", tRow);
 
         // SELECTION — a card of read-outs, or one empty-state line in the same frame.
         _selCard = Card(_selRows);
@@ -89,7 +89,7 @@ public sealed class ClipPropsView : UserControl
                 HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
             },
         };
-        var selection = Section(SectionTitle("SELECTION", _selCount), 8, _selCard, _selEmpty);
+        var selection = Section(SectionTitle("Selection", _selCount), 8, _selCard, _selEmpty);
 
         Content = Inspector(Sections(clip, grid, transpose, selection),
             Hint("Double-click — add or delete · edge — length · Shift — add to selection"));
@@ -121,7 +121,7 @@ public sealed class ClipPropsView : UserControl
     private void PaintTranspose()
     {
         _transposeText.Text = Semis(_transpose);
-        _transposeText.Foreground = _transpose != 0 ? NotaPalette.AccentBright : NotaPalette.TextPrimary;
+        _transposeText.Foreground = _transpose != 0 ? NotaPalette.TextPrimary : NotaPalette.TextSecondary;
     }
 
     private void PaintSelection()

@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Orbit views (device kind 9) — the pictures on the Orbit card:
-//   OrbitGainView — both channels' gain over two LFO cycles (L brass, R teal, R offset by Phase),
+//   OrbitGainView — both channels' gain over two LFO cycles (L neutral ink, R teal, R offset by Phase),
 //                   the floor the depth reaches, and a running head with the gain dots on it.
 //                   Drag up / down for Amount, left / right for Phase; double-click resets both.
 //   OrbitPanBar   — the stereo position now on an L—R line, over the swing the LFO covers.
@@ -21,7 +21,7 @@ namespace Nota.App;
 internal static class OrbitMath
 {
     public static readonly string[] Waves = { "Sine", "Tri", "Saw", "Sqr", "S&H" };
-    public static readonly string[] WaveNames = { "SINE", "TRIANGLE", "SAW", "SQUARE", "S&H" };
+    public static readonly string[] WaveNames = { "Sine", "Triangle", "Saw", "Square", "S&H" };
     // Sync divisions, slowest → fastest (AutoPan::kDivBeats / kDivNames).
     public static readonly double[] DivBeats = { 16, 8, 4, 3, 2, 4.0 / 3, 1.5, 1, 2.0 / 3, 0.75, 0.5, 1.0 / 3, 0.375, 0.25, 1.0 / 6, 0.125 };
     public static readonly string[] DivNames = { "4/1", "2/1", "1/1", "1/2D", "1/2", "1/2T", "1/4D", "1/4", "1/4T", "1/8D", "1/8", "1/8T", "1/16D", "1/16", "1/16T", "1/32" };
@@ -124,6 +124,13 @@ internal sealed class OrbitGainView : Control
         _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); InvalidateVisual();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
@@ -146,7 +153,7 @@ internal sealed class OrbitGainView : Control
         ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1, new DashStyle(new double[] { 4, 3 }, 0)), new Point(x0, fy), new Point(x1, fy));
 
         // R first so L reads on top where they meet (tremolo).
-        IBrush inkL = _on ? NotaPalette.Accent : NotaPalette.TextAxis;
+        IBrush inkL = _on ? NotaPalette.VizInk : NotaPalette.TextAxis;
         IBrush inkR = _on ? NotaPalette.TealBright : NotaPalette.TextAxis;
         Curve(ctx, _phase, inkR);
         Curve(ctx, 0, inkL);
@@ -167,7 +174,7 @@ internal sealed class OrbitGainView : Control
             double hx = X(Math.Clamp(_head, 0, 2));
             ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1), new Point(hx, 0), new Point(hx, h));
             NotaGraph.Node(ctx, new Point(hx, Y(_gr)), true, NotaPalette.TealBright);
-            NotaGraph.Node(ctx, new Point(hx, Y(_gl)), true, NotaPalette.AccentBright);
+            NotaGraph.Node(ctx, new Point(hx, Y(_gl)), true, NotaPalette.VizInk);
         }
 
         void Curve(DrawingContext dc, double off, IBrush ink)
@@ -220,7 +227,7 @@ internal sealed class OrbitPanBar : Control
 internal sealed class OrbitMeter : Control
 {
     private double _norm;
-    public IBrush Ink { get; set; } = NotaPalette.Accent;
+    public IBrush Ink { get; set; } = NotaPalette.VizInk;
 
     public OrbitMeter() { Height = 4; }
 

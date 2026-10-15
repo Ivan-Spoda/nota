@@ -114,7 +114,7 @@ public partial class MainWindow
         double endBeats = ProjectEndBeats();
         if (endBeats <= 0.0) { _vm.StatusText = "Nothing to freeze — the arrangement is empty."; return; }
 
-        string? wav = await RenderSourceToWavAsync(sourceId, "Live Freeze");
+        string? wav = await RenderSourceToWavAsync(sourceId, "Live freeze");
         if (wav is null) { _vm.StatusText = "Couldn't freeze this track."; return; }
 
         try
@@ -143,7 +143,7 @@ public partial class MainWindow
             _links[sourceId] = new FreezeLink { SourceId = sourceId, FrozenId = frozenId };
             _vm.StatusText = "Track live-frozen — press Edit to change it, then Done.";
         }
-        catch (Exception ex) { _vm.StatusText = $"Live Freeze failed: {ex.Message}"; }
+        catch (Exception ex) { _vm.StatusText = $"Live freeze failed: {ex.Message}"; }
         finally { try { File.Delete(wav); } catch { } }
 
         Timeline.Refresh();

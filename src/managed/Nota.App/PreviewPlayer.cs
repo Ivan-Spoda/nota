@@ -38,17 +38,12 @@ namespace Nota.App;
 
 public sealed class PreviewPlayer : UserControl
 {
-    private const string IconLoop = "M17 3 l3 3 l-3 3 M20 6 H8 a4 4 0 0 0 -4 4 v1 M7 21 l-3 -3 l3 -3 M4 18 h12 a4 4 0 0 0 4 -4 v-1";
-    private const string IconSpeaker = "M4 9 h4 l5 -4 v14 l-5 -4 h-4 z";
-    private const string WavesMute = "M16 9 l5 6 M21 9 l-5 6";
-    private const string WavesLow = "M16 9.5 a3.5 3.5 0 0 1 0 5";
-    private const string WavesHigh = "M16 9.5 a3.5 3.5 0 0 1 0 5 M18.5 7 a7 7 0 0 1 0 10";
     private const double DefaultVolume = 0.7;
 
     private readonly TextBlock _name, _meta, _timeNow, _timeTotal;
     private readonly PreviewWaveform _wave;
     private readonly Border _playBtn, _loopBtn, _autoBtn, _sourceBtn;
-    private readonly Path _playGlyph, _stopGlyph, _loopIcon, _volWaves;
+    private readonly Glyph _playGlyph, _stopGlyph, _loopIcon, _volWaves;
     private readonly Ellipse _autoDot;
     private readonly TextBlock _autoText, _sourceText;
     private readonly PreviewVolume _volume, _volumePop;
@@ -128,20 +123,10 @@ public sealed class PreviewPlayer : UserControl
         _wave.ViewToggled += () => SetSpectrum(!_spectrum, persist: true);
 
         // Row 3: transport.
-        _playGlyph = new Path
-        {
-            Data = Geometry.Parse("M1.5 1 L10 6 L1.5 11 Z"), Width = 11, Height = 12,
-            StrokeThickness = 1, StrokeJoin = PenLineJoin.Round,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-        };
-        _stopGlyph = new Path
-        {
-            Data = new RectangleGeometry(new Rect(1, 1, 8, 8), 1, 1), Width = 10, Height = 10,
-            Fill = NotaPalette.TextOnAccent, IsVisible = false,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-        };
+        _playGlyph = new Glyph(GlyphKind.Play, 11);
+        _stopGlyph = new Glyph(GlyphKind.Stop, 8) { Foreground = NotaPalette.TextOnAccent, IsVisible = false };
         _playBtn = Chip(new Panel { Children = { _playGlyph, _stopGlyph } }, 28, 28, 5);
-        ToolTip.SetTip(_playBtn, "Play / Stop");
+        ToolTip.SetTip(_playBtn, "Play / stop");
         _playBtn.PointerPressed += (_, e) => { if (IsLeft(e)) { Toggle(); e.Handled = true; } };
 
         _timeNow = new TextBlock { FontSize = 10, FontFamily = NotaFonts.MonoFamily, VerticalAlignment = VerticalAlignment.Center };
@@ -158,11 +143,7 @@ public sealed class PreviewPlayer : UserControl
             FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextSecondary,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        var caret = new Path
-        {
-            Data = Geometry.Parse("M0 0 L6 0 L3 3.5 Z"), Width = 6, Height = 4, Fill = NotaPalette.TextTertiary,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+        var caret = new Glyph(GlyphKind.CaretDown, 9) { Foreground = NotaPalette.TextTertiary };
         _sourceBtn = Chip(new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
@@ -176,8 +157,8 @@ public sealed class PreviewPlayer : UserControl
         // The wheel steps through the tracks without opening the menu (quick A / B).
         _sourceBtn.PointerWheelChanged += (_, e) => { StepTrack(e.Delta.Y < 0 ? 1 : -1); e.Handled = true; };
 
-        _loopIcon = IconPath(IconLoop);
-        _loopBtn = Chip(Icon12(_loopIcon), 22, 22, 4);
+        _loopIcon = new Glyph(GlyphKind.Loop, 12);
+        _loopBtn = Chip(_loopIcon, 22, 22, 4);
         ToolTip.SetTip(_loopBtn, "Loop");
         _loopBtn.PointerPressed += (_, e) => { if (IsLeft(e)) { SetLoop(!_loop, persist: true); e.Handled = true; } };
 
@@ -192,10 +173,8 @@ public sealed class PreviewPlayer : UserControl
         ToolTip.SetTip(_autoBtn, "Auto-audition: play on select");
         _autoBtn.PointerPressed += (_, e) => { if (IsLeft(e)) { SetAuto(!_auto, persist: true); e.Handled = true; } };
 
-        var speaker = IconPath(IconSpeaker);
-        speaker.Stroke = NotaPalette.TextMuted;
-        _volWaves = IconPath(WavesHigh);
-        _volWaves.Stroke = NotaPalette.TextMuted;
+        var speaker = new Glyph(GlyphKind.Speaker, 12) { Foreground = NotaPalette.TextMuted };
+        _volWaves = new Glyph(GlyphKind.SpeakerHigh, 12) { Foreground = NotaPalette.TextMuted };
         _volume = new PreviewVolume { Width = 46, Height = 16, VerticalAlignment = VerticalAlignment.Center };
         _volume.ValueChanged += (v, done) => ApplyVolume(v, persist: done);
         // Folded (narrow browser) the speaker alone stays; a click pops the fader up.
@@ -205,7 +184,7 @@ public sealed class PreviewPlayer : UserControl
         _volIconBtn = new Border
         {
             Width = 12, Height = 22, Background = Brushes.Transparent,
-            Child = Icon12(new Panel { Children = { speaker, _volWaves } }),
+            Child = new Panel { Width = 12, Height = 12, Children = { speaker, _volWaves } },
         };
         _volIconBtn.PointerPressed += (_, e) =>
         {
@@ -453,19 +432,19 @@ public sealed class PreviewPlayer : UserControl
     {
         _loop = on;
         try { _engine?.SetPreviewLoop(on); } catch { }
-        _loopBtn.Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent;
-        _loopBtn.BorderBrush = on ? NotaPalette.AccentEdge : NotaPalette.BorderDefault;
-        _loopIcon.Stroke = on ? NotaPalette.Accent : NotaPalette.TextTertiary;
+        _loopBtn.Background = on ? NotaPalette.Accent : Brushes.Transparent;
+        _loopBtn.BorderBrush = on ? NotaPalette.Accent : NotaPalette.Seam;
+        _loopIcon.Foreground = on ? NotaPalette.TextOnAccent : NotaPalette.TextTertiary;
         if (persist && _settings is not null) { _settings.Current.BrowserPreviewLoop = on; _settings.Save(); }
     }
 
     private void SetAuto(bool on, bool persist)
     {
         if (_filesContext) _autoFiles = on; else _autoPresets = on;
-        _autoBtn.Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent;
-        _autoBtn.BorderBrush = on ? NotaPalette.AccentEdge : NotaPalette.BorderDefault;
-        _autoDot.Fill = on ? NotaPalette.Accent : NotaPalette.BorderStrong;
-        _autoText.Foreground = on ? NotaPalette.AccentHover : NotaPalette.TextMuted;
+        _autoBtn.Background = on ? NotaPalette.Accent : Brushes.Transparent;
+        _autoBtn.BorderBrush = on ? NotaPalette.Accent : NotaPalette.Seam;
+        _autoDot.Fill = on ? NotaPalette.TextOnAccent : NotaPalette.BorderStrong;
+        _autoText.Foreground = on ? NotaPalette.TextOnAccent : NotaPalette.TextMuted;
         ToolTip.SetTip(_autoBtn, _filesContext ? "Auto-audition: play a sample on select" : "Auto-audition: play a preset or device on select");
         if (persist && _settings is not null)
         {
@@ -498,7 +477,7 @@ public sealed class PreviewPlayer : UserControl
         _volume.Value = v;
         _volumePop.Value = v;
         try { _engine?.SetPreviewGain((float)(v * v)); } catch { }
-        _volWaves.Data = Geometry.Parse(v <= 0.001 ? WavesMute : v < 0.5 ? WavesLow : WavesHigh);
+        _volWaves.Kind = v <= 0.001 ? GlyphKind.SpeakerMute : v < 0.5 ? GlyphKind.SpeakerLow : GlyphKind.SpeakerHigh;
         var db = NotaNum.Db(v <= 0.001 ? double.NegativeInfinity : 40 * Math.Log10(v));
         ToolTip.SetTip(_volumeBox, $"Preview volume {db} · double-click for 0{NotaNum.Thin}dB");
         ToolTip.SetTip(_volumePop, $"Preview volume {db} · double-click for 0{NotaNum.Thin}dB");
@@ -539,7 +518,7 @@ public sealed class PreviewPlayer : UserControl
             if (t.Group != group)
             {
                 flyout.Items.Add(new Separator());
-                flyout.Items.Add(new MenuItem { Header = t.Group.ToUpperInvariant(), IsEnabled = false, FontSize = 9 });
+                flyout.Items.Add(new MenuItem { Header = NotaText.Label(t.Group), IsEnabled = false, FontSize = 11 });
                 group = t.Group;
             }
             Add(t.Name, t.Id, t.Blurb);
@@ -581,10 +560,9 @@ public sealed class PreviewPlayer : UserControl
         _playGlyph.IsVisible = !_playing;
         _stopGlyph.IsVisible = _playing;
         _playBtn.Background = _playing ? NotaPalette.Accent : NotaPalette.SurfaceRaised;
-        _playBtn.BorderBrush = _playing ? NotaPalette.Accent : NotaPalette.BorderStrong;
-        var glyph = has ? NotaPalette.Accent : NotaPalette.TextDisabled;
-        _playGlyph.Fill = glyph;
-        _playGlyph.Stroke = glyph;
+        _playBtn.BorderBrush = _playing ? NotaPalette.Accent : NotaPalette.BorderDefault;
+        var glyph = _playing ? NotaPalette.TextOnAccent : has ? NotaPalette.TextPrimary : NotaPalette.TextDisabled;
+        _playGlyph.Foreground = glyph;
         _playBtn.Cursor = has ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
         _timeNow.Text = Fmt(_pos);
         _timeNow.Foreground = _playing ? NotaPalette.TextPrimary : NotaPalette.TextMuted;
@@ -901,19 +879,6 @@ public sealed class PreviewPlayer : UserControl
         VerticalAlignment = VerticalAlignment.Center,
         Child = new Panel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = { child } },
     };
-
-    // A stroke glyph on the design's 24-unit grid (stroke 2 → 1px at 12px).
-    private static Path IconPath(string data) => new()
-    {
-        Data = Geometry.Parse(data), Width = 24, Height = 24, Stretch = Stretch.None,
-        StrokeThickness = 2, StrokeJoin = PenLineJoin.Round, StrokeLineCap = PenLineCap.Round,
-    };
-
-    private static Viewbox Icon12(Control grid24) => new()
-    {
-        Width = 12, Height = 12, Stretch = Stretch.Uniform,
-        Child = new Panel { Width = 24, Height = 24, Children = { grid24 } },
-    };
 }
 
 /// <summary>The player's well. WAVE: peak bars (played part in brass), a hover line with its
@@ -1080,10 +1045,12 @@ public sealed class PreviewWaveform : Control
                     for (int i = s0; i < s1 && i < peaks.Length; i++) m = Math.Max(m, peaks[i]);
                     double amp = Math.Max(0.04, Math.Pow(Math.Min(1, m), 0.55));
                     double x = (b + 0.5) / n;
+                    // Played: the accent (live). Ahead of the pointer: secondary ink. At rest:
+                    // neutral — a sample that is not playing carries no orange.
                     IBrush c = started && x <= p ? NotaPalette.Accent
-                             : _hover is { } hv && x <= hv && x > p ? NotaPalette.AccentMute
-                             : _playing ? NotaPalette.AccentEdge
-                             : NotaPalette.AccentMute;
+                             : _hover is { } hv && x <= hv && x > p ? NotaPalette.TextSecondary
+                             : _playing ? NotaPalette.TextMuted
+                             : NotaPalette.TextFaint;
                     double bh = innerH * amp;
                     ctx.FillRectangle(c, new Rect(InsetX + b * (bw + 1), mid - bh / 2, bw, bh), 1);
                 }
@@ -1115,8 +1082,8 @@ public sealed class PreviewWaveform : Control
         }
 
         // WAVE · SPEC, the active one in brass, top-right.
-        var wave = NotaGraph.AxisText("WAVE", _spectrum ? NotaPalette.TextTertiary : NotaPalette.Accent, 7);
-        var spec = NotaGraph.AxisText("SPEC", _spectrum ? NotaPalette.Accent : NotaPalette.TextTertiary, 7);
+        var wave = NotaGraph.AxisText("Wave", _spectrum ? NotaPalette.TextTertiary : NotaPalette.Accent, 7);
+        var spec = NotaGraph.AxisText("Spec", _spectrum ? NotaPalette.Accent : NotaPalette.TextTertiary, 7);
         double lw = wave.Width + 5 + spec.Width, lx = w - lw - 5, ly = 3;
         _toggleRect = new Rect(lx - 4, 0, lw + 9, ly + wave.Height + 3);
         ctx.FillRectangle(NotaPalette.BgSunken, new Rect(lx - 2, ly - 1, lw + 4, wave.Height + 2), 2);

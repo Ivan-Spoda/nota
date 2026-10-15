@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Keys: a keyboard (one octave upright, 1.5 sideways, two on a tablet), a scale grid where
      every cell is a note of the key (rows a fourth apart, tonic cells raised — no wrong notes),
-     and Chords (one triad per degree). The key is the project's KEY unless overridden here.
+     and Chords (one triad per degree). The key is the project's key unless overridden here.
      Fingers can slide across keys and cells: every pointer is tracked over the whole surface.
      Expressive (an instrument that takes MPE): a finger keeps the note it struck instead — sliding
      sideways bends it (a key's width ≈ its pitch step), the height on the key is its slide (CC74),
@@ -16,7 +16,7 @@
   const WP = [0, 2, 4, 5, 7, 9, 11];
 
   const key = $derived<Key>(app.prefs.key ?? (app.proj?.key ? { root: app.proj.key.root, minor: app.proj.key.minor } : { root: 0, minor: false }));
-  const keySrc = $derived(app.prefs.key ? 'PHONE' : app.proj?.key ? 'PROJECT' : 'DEFAULT');
+  const keySrc = $derived(app.prefs.key ? 'Phone' : app.proj?.key ? 'Project' : 'Default');
   const base = $derived(12 * (app.prefs.octave + 1));
   const lit = $derived(new Set(app.lit));
   const color = $derived(app.track?.color ?? 'var(--accent)');
@@ -169,9 +169,9 @@
       {/each}
     </div>
     <button class="btn keybtn" onclick={() => (app.sheet = 'key')} aria-label="Key: {keyName(key)}">
-      <span class="caps k">Key</span>
+      <span class="k">Key</span>
       <span class="kn">{keyName(key)}</span>
-      <span class="mono src">{keySrc}</span>
+      <span class="src">{keySrc}</span>
     </button>
     {#if canExpress}
       <button class="btn expr" class:on={expressive} aria-pressed={expressive}
@@ -181,7 +181,7 @@
       <button class="btn sq" aria-label="Octave down" onclick={() => (app.prefs.octave = Math.max(0, app.prefs.octave - 1))}>
         <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6 H10" /></svg>
       </button>
-      <span class="mono">Oct {app.prefs.octave}</span>
+      <span class="octn">Oct <span class="mono">{app.prefs.octave}</span></span>
       <button class="btn sq" aria-label="Octave up" onclick={() => (app.prefs.octave = Math.min(7, app.prefs.octave + 1))}>
         <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6 H10 M6 2 V10" /></svg>
       </button>
@@ -235,39 +235,40 @@
   .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .modes button { flex: none; }
   .keybtn { gap: 7px; padding: 0 10px; }
-  .expr { padding: 0 10px; font-size: 12px; font-weight: 600; }
-  .k { font-size: 9px; letter-spacing: .1em; }
-  .kn { font-size: 12px; font-weight: 600; color: var(--ink1); }
-  .src { font-size: 9px; color: var(--accent-dim); }
+  .expr { padding: 0 10px; }
+  .k { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+  .kn { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+  .src { font-size: 11px; color: var(--text-tertiary); }
   .oct { display: flex; align-items: center; gap: 2px; margin-left: auto; }
-  .oct .mono { width: 46px; text-align: center; font-size: 12px; color: var(--ink1); }
+  .octn { width: 52px; text-align: center; font-size: 12px; color: var(--text-secondary); }
+  .octn .mono { color: var(--text-primary); }
   .sq { width: 42px; padding: 0; }
-  .sq path { stroke: var(--ink2); stroke-width: 1.6; stroke-linecap: round; fill: none; }
+  .sq path { stroke: currentColor; stroke-width: 1.5; fill: none; }
   .surface { flex: 1; min-height: 0; display: flex; touch-action: none; }
-  .kb { flex: 1; min-width: 0; position: relative; display: flex; gap: 3px; }
-  .white { flex: 1; min-width: 0; border-radius: 0 0 6px 6px; background: var(--white-key); position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 12px; }
+  /* The keyboard: keys butted on seams; the key under a finger is the accent, a key the track plays carries its colour. */
+  .kb { flex: 1; min-width: 0; position: relative; display: flex; gap: 1px; background: var(--seam); border: 1px solid var(--seam); border-top: none; border-radius: 0 0 3px 3px; overflow: hidden; }
+  .white { flex: 1; min-width: 0; border-radius: 0 0 2px 2px; background: var(--mini-key-white); position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 12px; }
   .white.on { background: var(--accent); }
-  .lbl { font-size: 10px; color: var(--white-key-ink); }
-  .white.on .lbl { color: var(--on-accent); }
-  .black { position: absolute; top: 0; height: 58%; border-radius: 0 0 5px 5px; background: var(--raised); border: 1px solid var(--border-strong); border-top: none; overflow: hidden; z-index: 1; }
+  .lbl { font-size: 10px; color: var(--text-tertiary); }
+  .white.on .lbl { color: var(--ink-on-accent); }
+  .black { position: absolute; top: 0; height: 58%; border-radius: 0 0 2px 2px; background: var(--mini-key-black); border: 1px solid var(--seam); border-top: none; overflow: hidden; z-index: 1; }
   .black.on { background: var(--accent); border-color: var(--accent); }
   .band { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--tc); }
+  /* Scale cells and chords: tiles. Tonic cells sit a tone up. */
   .grid { flex: 1; min-width: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 6px; }
-  .cell { border-radius: 5px; background: var(--raised); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; min-height: 0; }
-  .cell .mono { font-size: 12px; color: var(--ink3); pointer-events: none; }
-  .cell.tonic { background: var(--track-off); border-color: var(--border-strong); }
-  .cell.tonic .mono { color: var(--ink0); font-weight: 600; }
-  .cell.lit { border-color: var(--tc); }
-  .cell.on { background: var(--accent); border-color: var(--accent); }
-  .cell.on .mono { color: var(--on-accent); }
-  .chords { gap: 8px; }
-  .chord { border-radius: 6px; background: var(--raised); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 0; }
+  .cell { border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; align-items: center; justify-content: center; min-height: 0; }
+  .cell .mono { font-size: 12px; color: var(--text-secondary); pointer-events: none; }
+  .cell.tonic { background: var(--surface-hover); }
+  .cell.tonic .mono { color: var(--text-primary); font-weight: 600; }
+  .cell.lit, .chord.lit { border-color: var(--tc); }
+  .cell.on { background: var(--accent); border-color: var(--accent); box-shadow: none; }
+  .cell.on .mono { color: var(--ink-on-accent); }
+  .chord { border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 0; }
   .chord * { pointer-events: none; }
-  .roman { font-size: 12px; color: var(--accent-dim); }
-  .cn { font-size: 20px; font-weight: 600; color: var(--ink1); }
-  .chord.lit { border-color: var(--tc); }
-  .chord.on { background: var(--accent); border-color: var(--accent); }
-  .chord.on .cn, .chord.on .roman { color: var(--on-accent); }
-  .hint { font-size: 11px; color: var(--ink5); }
+  .roman { font-size: 12px; color: var(--text-muted); }
+  .cn { font-size: 20px; font-weight: 600; color: var(--text-primary); }
+  .chord.on { background: var(--accent); border-color: var(--accent); box-shadow: none; }
+  .chord.on .cn, .chord.on .roman { color: var(--ink-on-accent); }
+  .hint { font-size: 11px; color: var(--text-tertiary); }
   .white *, .black * { pointer-events: none; }
 </style>

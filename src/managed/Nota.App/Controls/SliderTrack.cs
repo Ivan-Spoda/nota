@@ -27,9 +27,11 @@ namespace Nota.App;
 internal sealed class SliderTrack : Control
 {
     private static readonly IBrush Groove = NotaPalette.BgSunken;
-    private static readonly IBrush Fill = NotaPalette.Accent;
-    private static readonly IBrush FillDim = NotaPalette.BorderStrong;
-    private static readonly IBrush Handle = NotaPalette.AccentBright;
+    private static readonly IBrush Fill = NotaPalette.VizInk;          // at rest: neutral
+    private static readonly IBrush FillLive = NotaPalette.Accent;      // under the pointer or in the hand
+    private static readonly IBrush FillDim = NotaPalette.Rule;
+    private static readonly IBrush Handle = NotaPalette.TextPrimary;
+    private static readonly IBrush HandleLive = NotaPalette.AccentBright;
     private static readonly IBrush ModFill = NotaPalette.Teal;
     private static readonly IBrush ModHandle = NotaPalette.TealBright;
     private static readonly IBrush HandleDim = NotaPalette.TextTertiary;
@@ -80,7 +82,7 @@ internal sealed class SliderTrack : Control
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (e.ClickCount == 2 && Reset is not null)
         {
-            if (_drag) { _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); }
+            if (_drag) { _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); InvalidateVisual(); }
             Reset();
             e.Handled = true;
             return;
@@ -102,18 +104,25 @@ internal sealed class SliderTrack : Control
         Nudge(dy / (fine ? 1400.0 : 140.0));
     }
 
+    // Under the pointer (or in the hand) the control is live and takes the accent; at rest
+    // its value is neutral ink — the accent marks a knob or fader only while focused or dragged.
+    private bool _hover;
+    protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; InvalidateVisual(); }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hover = false; InvalidateVisual(); }
+
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_drag) return;
         _drag = false;
         e.Pointer.Capture(null);
         GestureEnd?.Invoke();
+        InvalidateVisual();   // a drag that ended off the control leaves no hover to repaint it
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         // Never leave an automation session dangling.
-        if (_drag) { _drag = false; GestureEnd?.Invoke(); }
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
         base.OnPointerCaptureLost(e);
     }
 
@@ -137,7 +146,7 @@ internal sealed class SliderTrack : Control
         double x = _norm * w;
         double a = Bipolar ? Math.Min(w / 2, x) : 0, b = Bipolar ? Math.Max(w / 2, x) : x;
         if (b - a > 0.5)
-            ctx.DrawRectangle(_dim ? FillDim : _ink ?? (Modulation ? ModFill : Fill), null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.ClipValue));
+            ctx.DrawRectangle(_dim ? FillDim : _ink ?? (Modulation ? ModFill : _drag || _hover ? FillLive : Fill), null, new RoundedRect(new Rect(a, ty, b - a, TrackH), NotaRadius.ClipValue));
         if (Bipolar)
             ctx.FillRectangle(Centre, new Rect(Math.Round(w / 2) - 0.5, cy - 3, 1, 6));
 
@@ -146,7 +155,7 @@ internal sealed class SliderTrack : Control
 
         double hx = Math.Clamp(x, HandleW / 2, w - HandleW / 2) - HandleW / 2;
         IBrush inkHandle = ReferenceEquals(_ink, NotaPalette.Rose) ? NotaPalette.RoseBright
-            : ReferenceEquals(_ink, NotaPalette.Teal) ? ModHandle : _ink ?? (Modulation ? ModHandle : Handle);
+            : ReferenceEquals(_ink, NotaPalette.Teal) ? ModHandle : _ink ?? (Modulation ? ModHandle : _drag || _hover ? HandleLive : Handle);
         ctx.DrawRectangle(_dim ? HandleDim : inkHandle, null,
             new RoundedRect(new Rect(hx, cy - HandleH / 2, HandleW, HandleH), NotaRadius.ClipValue));
     }

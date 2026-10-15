@@ -71,7 +71,7 @@ public sealed class MidiToolsView : UserControl
         var seedBox = Field(new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8,
-            Children = { CapsLabel("SEED"), _seedText },
+            Children = { CapsLabel("Seed"), _seedText },
         });
         var reroll = ClipEditorKit.Button("Reroll", () =>
         {
@@ -85,7 +85,7 @@ public sealed class MidiToolsView : UserControl
         Grid.SetColumn(reroll, 1); seedRow.Children.Add(reroll);
         var parameters = Section(title, 9, _paramList, seedRow);
 
-        var output = Section(SectionTitle("OUTPUT", _scopeText), 8,
+        var output = Section(SectionTitle("Output", _scopeText), 8,
             Segments(new[] { "Replace", "Add" }, 0, i =>
             {
                 _blend = i == 0 ? MidiToolBlend.Replace : MidiToolBlend.Add;
@@ -271,7 +271,7 @@ public sealed class MidiToolsView : UserControl
             var row = new Border
             {
                 Height = 26, CornerRadius = NotaRadius.Badge, Padding = new Thickness(10, 0),
-                Background = active ? NotaPalette.AccentSubtle : Brushes.Transparent,
+                Background = active ? NotaPalette.SurfaceHover : Brushes.Transparent,
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new Grid
                 {
@@ -308,7 +308,7 @@ public sealed class MidiToolsView : UserControl
     private void RebuildParams()
     {
         _paramList.Children.Clear();
-        _paramTitle.Text = _tool is null ? "PARAMETERS" : _tool.Name.ToUpperInvariant();
+        _paramTitle.Text = _tool is null ? "Parameters" : _tool.Name;
         if (_tool is null)
         {
             _paramList.Children.Add(new TextBlock { Text = "Pick a tool to see its parameters", FontSize = NotaType.Body, Foreground = NotaPalette.TextTertiary });
@@ -346,7 +346,7 @@ public sealed class MidiToolsView : UserControl
             default:
             {
                 double span = Math.Max(1e-9, p.Max - p.Min);
-                return SliderRow(p.Name.ToUpperInvariant(), 62,
+                return SliderRow(NotaText.Label(p.Name), 62,
                     () => (settings[p.Id] - p.Min) / span,
                     v =>
                     {
@@ -362,18 +362,18 @@ public sealed class MidiToolsView : UserControl
         }
     }
 
-    // A caps label in the slider-label column, then a control filling the rest.
+    // A label in the slider-label column, then a control filling the rest.
     private static Control Labelled(string label, Control control)
     {
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("62,*"), ColumnSpacing = 10 };
-        grid.Children.Add(CapsLabel(label.ToUpperInvariant()));
+        grid.Children.Add(CapsLabel(NotaText.Label(label)));
         Grid.SetColumn(control, 1); grid.Children.Add(control);
         return grid;
     }
 
     private static TextBlock CapsLabel(string text) => new()
     {
-        Text = text, FontSize = 9, FontWeight = FontWeight.Bold, LetterSpacing = 0.9, Foreground = NotaPalette.TextTertiary,
+        Text = text, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextTertiary,
         VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
     };
 }

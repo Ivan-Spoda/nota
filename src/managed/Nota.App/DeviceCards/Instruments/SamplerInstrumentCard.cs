@@ -18,7 +18,7 @@
 //   Rail 186    always there: the voice mode (Poly 16 / Mono / Choke), Volume, Pan,
 //               Glide, the Output level, Vel → Vol and the output meter.
 //
-// Brass is the parameter itself; teal is detune and modulation (keytrack, velocity, the
+// Neutral ink is the parameter itself; teal is detune and modulation (keytrack, velocity, the
 // envelope's reach) and what the engine is doing now (the voice on the envelope, the
 // cutoff it hears). Every control is a plugin param → automation / persist / clone, and
 // the card follows automation live. The editor (BuildEditor) also serves a rack chain's
@@ -39,7 +39,7 @@ namespace Nota.App;
 internal sealed class SamplerInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
-    public string Subtitle => "BUILT-IN";
+    public string Subtitle => "Built-in";
     public double CardWidth => 700;
 
     private const double RailW = 186, TabH = 20, RowH = 66, StatusH = 18;
@@ -87,8 +87,8 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
 
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold,
-            LetterSpacing = NotaType.KnobLabelTracking, Foreground = c ?? TextTertiary,
+            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
         static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
@@ -116,7 +116,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
                 value.Text = fmt(v);
             });
             acc.Learn(knob, pi);
-            var cell = KnobCell(label, knob, value, cellW, emphasised, emphasised ? AccentBright : null);
+            var cell = KnobCell(label, knob, value, cellW, emphasised, emphasised ? TextPrimary : null);
             cell.VerticalAlignment = VerticalAlignment.Center;
             if (tip is not null) ToolTip.SetTip(cell, tip);
             return cell;
@@ -147,7 +147,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             return row;
         }
 
-        // A raised text button; a latching one turns brass-washed while on.
+        // A raised text button; a latching one turns accent-washed while on.
         Border Button(string text, Action click, string tip, Func<bool>? on = null, Func<bool>? enabled = null, string? learnId = null)
         {
             var tb = new TextBlock { Text = text, FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -416,7 +416,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         var voiceSeg = ParamChips("voicemode", SamplerModel.VoiceNames, padX: 5);
         ToolTip.SetTip(voiceSeg, "Poly: 16 voices · Mono: one at a time (legato with Glide) · Choke: a new note cuts the ringing ones");
         var railHead = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(8, 0) };
-        var railCap = Cap("VOICES"); railCap.LetterSpacing = NotaType.SectionLabelTracking;
+        var railCap = Cap("VOICES");
         railHead.Children.Add(railCap);
         voiceSeg.HorizontalAlignment = HorizontalAlignment.Right; voiceSeg.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(voiceSeg, 1); railHead.Children.Add(voiceSeg);
@@ -529,7 +529,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         body.Children.Add(tabPanel);
         Grid.SetColumn(rail, 1); body.Children.Add(rail);
         DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.Gutter, Children = { statusHost, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
 
         showTab = () =>
         {
@@ -538,7 +538,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
                 bool on = i == tab;
                 tabCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
                 tabCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                tabTexts[i].Foreground = on ? AccentBright : TextTertiary;
+                tabTexts[i].Foreground = on ? TextPrimary : TextTertiary;
                 tabTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 pages[i].IsVisible = on;
             }
@@ -559,8 +559,8 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             int voices = snap.Live ? snap.Voices : 0;
             double esr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
             meta.Text = hasSample
-                ? $"{NotaNum.Unit(esr / 1000, "0.#", "kHz")} · {NotaNum.Unit(durSec, "0.00", "s")} sample · {voices}/{SamplerModel.Voices} voices · CPU {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}"
-                : $"{NotaNum.Unit(esr / 1000, "0.#", "kHz")} · CPU {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
+                ? $"{NotaNum.Unit(esr / 1000, "0.#", "kHz")} · {NotaNum.Unit(durSec, "0.00", "s")} sample · {voices}/{SamplerModel.Voices} voices · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}"
+                : $"{NotaNum.Unit(esr / 1000, "0.#", "kHz")} · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
             Refresh();
         }
         registerTick(Live);
@@ -571,11 +571,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
     }
 
     // A section: card ground, hairline, radius 6 — the almanac's section box.
-    private static Border SectionBox(Control child) => new()
-    {
-        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = child,
-    };
+    private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
 
     // A section's own header strip: a hairline under it, nothing else.
     private static Border HeaderStrip(Control child) => new()

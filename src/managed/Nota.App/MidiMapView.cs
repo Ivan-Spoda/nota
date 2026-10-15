@@ -24,7 +24,7 @@ public sealed class MidiMapView : UserControl
 
         var header = new TextBlock
         {
-            Text = "MIDI MAPPINGS", FontSize = 10, Margin = new Avalonia.Thickness(12, 12, 12, 2),
+            Text = "MIDI mappings", FontSize = 10, Margin = new Avalonia.Thickness(12, 12, 12, 2),
             Foreground = NotaPalette.TextTertiary,
         };
         var body = new StackPanel { Margin = new Avalonia.Thickness(8, 4), Children = { _rows } };
@@ -69,7 +69,7 @@ public sealed class MidiMapView : UserControl
         Grid.SetColumn(del, 1);
         top.Children.Add(del);
 
-        var src = new TextBlock { Text = _learn.SourceLabel(m), FontSize = 10, Foreground = NotaPalette.Accent, VerticalAlignment = VerticalAlignment.Center };
+        var src = new TextBlock { Text = _learn.SourceLabel(m), FontSize = 10, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         src.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
         // Source on the left; the invert toggle rides the right of the same line so the
         // range row below has room for just MIN / MAX.
@@ -80,7 +80,7 @@ public sealed class MidiMapView : UserControl
             var phone = new Border
             {
                 Width = 7, Height = 11, CornerRadius = NotaRadius.Bar, BorderThickness = new Avalonia.Thickness(1.3),
-                BorderBrush = NotaPalette.AccentBright, VerticalAlignment = VerticalAlignment.Center,
+                BorderBrush = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center,
             };
             srcRow.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { phone, src } });
         }
@@ -103,8 +103,8 @@ public sealed class MidiMapView : UserControl
                 Orientation = Orientation.Horizontal, Spacing = 16,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            range.Children.Add(RangeField("MIN", m.RangeMin, v => m.RangeMin = v));
-            range.Children.Add(RangeField("MAX", m.RangeMax, v => m.RangeMax = v));
+            range.Children.Add(RangeField("Min", m.RangeMin, v => m.RangeMin = v));
+            range.Children.Add(RangeField("Max", m.RangeMax, v => m.RangeMax = v));
             body.Children.Add(range);
         }
 

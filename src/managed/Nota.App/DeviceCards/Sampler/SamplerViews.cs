@@ -3,10 +3,11 @@
 //
 // Nota Sampler's windows — one per tab, each a control, not a picture:
 //
-//   SamplerWaveView    the sample: brass peaks (the lower half a deeper brass), the played
-//                      window washed, Start / End as bright brass lines, the loop and its
-//                      crossfade when looping, the live playhead. Drag a line to move it.
-//   SamplerKeysView    the keyboard C2 … C6 (it follows the root): the root key in brass,
+//   SamplerWaveView    the sample: neutral-ink peaks (the lower half a fainter ink), the played
+//                      window washed, Start / End as neutral lines (accent while dragged), the
+//                      loop and its crossfade in accent when looping, the live playhead. Drag a
+//                      line to move it.
+//   SamplerKeysView    the keyboard C2 … C6 (it follows the root): the chosen root key in accent,
 //                      the key that plays the sample at its own pitch outlined, the note
 //                      sounding now in teal. Click a key to make it the root.
 //   SamplerEnvView     the amp envelope: drag Attack / Decay (and Sustain vertically) /
@@ -110,9 +111,16 @@ internal sealed class SamplerWaveView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (_drag < 0) return;
-        int h = _drag; _drag = -1;
+        int h = _drag; _drag = -1; InvalidateVisual();
         e.Pointer.Capture(null);
         DragEnd?.Invoke(h);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag >= 0) { int h = _drag; _drag = -1; InvalidateVisual(); DragEnd?.Invoke(h); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
@@ -130,7 +138,7 @@ internal sealed class SamplerWaveView : Control
         double top = 2, bot = h - 2, cy = (top + bot) / 2, amp = (bot - top) / 2 - 1;
 
         // The played window, washed; outside it the peaks go quiet.
-        ctx.FillRectangle(NotaPalette.Wash(NotaPalette.Accent, 0x14), new Rect(_start * w, 0, (_end - _start) * w, h));
+        ctx.FillRectangle(NotaPalette.Wash(NotaPalette.VizInk, 0x14), new Rect(_start * w, 0, (_end - _start) * w, h));
         var grid = NotaGraph.GridPen;
         ctx.DrawLine(grid, new Point(0, cy), new Point(w, cy));
         for (int i = 1; i < 4; i++) ctx.DrawLine(grid, new Point(w * i / 4, 0), new Point(w * i / 4, h));
@@ -147,8 +155,8 @@ internal sealed class SamplerWaveView : Control
         }
 
         int n = _peaks.Length / 2;
-        var upIn = new Pen(NotaPalette.Accent, 1.2); var downIn = new Pen(NotaPalette.AccentDim, 1.2);
-        var outPen = new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x40), 1);
+        var upIn = new Pen(NotaPalette.VizInk, 1.2); var downIn = new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0xA0), 1.2);
+        var outPen = new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0x40), 1);
         int step = Math.Max(1, (int)Math.Floor(n / Math.Max(1.0, w / 1.5)));
         for (int i = 0; i < n; i += step)
         {
@@ -166,15 +174,15 @@ internal sealed class SamplerWaveView : Control
             ctx.DrawLine(lp, new Point(_ls * w, 0), new Point(_ls * w, h));
             ctx.DrawLine(lp, new Point(_le * w, 0), new Point(_le * w, h));
         }
-        var edge = new Pen(NotaPalette.AccentBright, 1.5);
-        ctx.DrawLine(edge, new Point(_start * w, 0), new Point(_start * w, h));
-        ctx.DrawLine(edge, new Point(_end * w, 0), new Point(_end * w, h));
+        var edge = new Pen(NotaPalette.TextSecondary, 1.5); var edgeHot = new Pen(NotaPalette.AccentBright, 1.5);
+        ctx.DrawLine(_drag == 0 ? edgeHot : edge, new Point(_start * w, 0), new Point(_start * w, h));
+        ctx.DrawLine(_drag == 1 ? edgeHot : edge, new Point(_end * w, 0), new Point(_end * w, h));
         if (_play >= 0 && _play <= 1) ctx.DrawLine(new Pen(NotaPalette.TextPrimary, 1), new Point(_play * w, 0), new Point(_play * w, h));
 
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopLeft, _info, NotaPalette.TextTertiary);
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopRight, _loopText, _loop > 0 ? NotaPalette.AccentBright : NotaPalette.TextTertiary);
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomLeft, "start " + NotaNum.Str(_start * _dur, "0.00"), NotaPalette.AccentBright);
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomRight, "end " + NotaNum.Str(_end * _dur, "0.00"), NotaPalette.AccentBright);
+        SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomLeft, "start " + NotaNum.Str(_start * _dur, "0.00"), _drag == 0 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+        SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomRight, "end " + NotaNum.Str(_end * _dur, "0.00"), _drag == 1 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
     }
 }
 
@@ -243,7 +251,7 @@ internal sealed class SamplerKeysView : Control
                 : black ? NotaPalette.SurfaceAbyss : NotaPalette.SurfaceRaised;
             ctx.DrawRectangle(fill, note == _root ? null : hair, new RoundedRect(rect, 0, 0, 2, 2));
             if (note == _natural && note != _root)
-                ctx.DrawRectangle(null, new Pen(NotaPalette.AccentBright, 1), new RoundedRect(rect.Deflate(0.5), 0, 0, 2, 2));
+                ctx.DrawRectangle(null, new Pen(NotaPalette.TextSecondary, 1), new RoundedRect(rect.Deflate(0.5), 0, 0, 2, 2));
             if (pc == 0 && note != _root)
             {
                 var c = SamplerInk.Mono(SamplerModel.NoteName(note), NotaPalette.TextAxis);
@@ -354,8 +362,19 @@ internal sealed class SamplerEnvView : Control
         if (_drag < 0) return;
         DragEnd?.Invoke(Ids[_drag]);
         if (_drag == 1) DragEnd?.Invoke("sustain");
-        _drag = -1;
+        _drag = -1; InvalidateVisual();
         e.Pointer.Capture(null);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag >= 0)
+        {
+            DragEnd?.Invoke(Ids[_drag]);
+            if (_drag == 1) DragEnd?.Invoke("sustain");
+            _drag = -1; InvalidateVisual();
+        }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
@@ -377,7 +396,7 @@ internal sealed class SamplerEnvView : Control
             g.LineTo(n.A); g.LineTo(n.D); g.LineTo(n.S); g.LineTo(n.R);
             g.EndFigure(true);
         }
-        ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.Accent, 0x14), null, geo);
+        ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.VizInk, 0x14), null, geo);
         var line = new StreamGeometry();
         using (var g = line.Open())
         {
@@ -386,10 +405,10 @@ internal sealed class SamplerEnvView : Control
             g.EndFigure(false);
         }
         ctx.DrawGeometry(null, NotaGraph.PrimaryPen, line);
-        NotaGraph.Node(ctx, n.A, _drag == 0, NotaPalette.AccentBright);
-        NotaGraph.Node(ctx, n.D, _drag == 1, NotaPalette.AccentBright);
-        NotaGraph.Node(ctx, n.S, false, NotaPalette.AccentBright);
-        NotaGraph.Node(ctx, n.R, _drag == 2, NotaPalette.AccentBright);
+        NotaGraph.Node(ctx, n.A, _drag == 0);
+        NotaGraph.Node(ctx, n.D, _drag == 1);
+        NotaGraph.Node(ctx, n.S, false);
+        NotaGraph.Node(ctx, n.R, _drag == 2);
 
         // The loudest voice on the curve, in teal.
         if (_live is { Live: true, Stage: >= 0 } lv)
@@ -473,9 +492,15 @@ internal sealed class SamplerFilterView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_drag) return;
-        _drag = false;
+        _drag = false; InvalidateVisual();
         e.Pointer.Capture(null);
         DragEnd?.Invoke();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag) { _drag = false; InvalidateVisual(); DragEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
@@ -514,14 +539,14 @@ internal sealed class SamplerFilterView : Control
             for (int i = 1; i < pts.Count; i++) g.LineTo(pts[i]);
             g.EndFigure(false);
         }
-        if (_type > 0) ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.Accent, 0x14), null, fill);
+        if (_type > 0) ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.VizInk, 0x14), null, fill);
         ctx.DrawGeometry(null, _type > 0 ? NotaGraph.PrimaryPen : new Pen(NotaPalette.TextTertiary, 1.2), line);
 
         if (_type > 0)
         {
             double cx = XOf(fc, w);
-            ctx.DrawLine(new Pen(NotaPalette.AccentDim, 1, new DashStyle(new double[] { 3, 3 }, 0)), new Point(cx, 0), new Point(cx, h));
-            NotaGraph.Node(ctx, new Point(cx, Y(MagDb(_type, fc, fc, _reso))), _drag, NotaPalette.AccentBright);
+            ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1, new DashStyle(new double[] { 3, 3 }, 0)), new Point(cx, 0), new Point(cx, h));
+            NotaGraph.Node(ctx, new Point(cx, Y(MagDb(_type, fc, fc, _reso))), _drag);
             if (_liveHz > 0 && Math.Abs(Math.Log2(_liveHz / fc)) > 0.05)
             {
                 double lx = XOf(_liveHz, w);

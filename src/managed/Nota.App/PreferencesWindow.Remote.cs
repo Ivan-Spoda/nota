@@ -89,7 +89,7 @@ public sealed partial class PreferencesWindow
         {
             var connected = remote.Hub.Devices.Select(d => d.DeviceId).ToHashSet();
             var list = remote.Pairing.Trusted.OrderByDescending(d => d.LastSeen).ToList();
-            if (list.Count == 0) { trustedHost.Content = EmptyBox("No phone has paired yet. Turn Remote on and scan the code in Connect Phone."); return; }
+            if (list.Count == 0) { trustedHost.Content = EmptyBox("No phone has paired yet. Turn Remote on and scan the code in Connect phone."); return; }
             var rows = new List<Control>();
             foreach (var d in list)
             {
@@ -166,8 +166,8 @@ public sealed partial class PreferencesWindow
         };
 
         return Sections(
-            Section("NOTA REMOTE", 10, enable, details),
-            Section("TRUSTED DEVICES", 8, trustedHost,
+            Section("Nota Remote", 10, enable, details),
+            Section("Trusted devices", 8, trustedHost,
                 Caption("A trusted phone reconnects from its Home Screen icon without a code. Forget it and it has to scan again. Turning Remote off disconnects everyone.", muted: true)),
             warn);
     }

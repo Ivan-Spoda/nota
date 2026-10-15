@@ -55,7 +55,7 @@ internal static class ChorusMath
     /// <summary>The cents axis' half-range: a bit beyond the sweep, never under 4 ct.</summary>
     public static double CentsRange(double maxCents) => Math.Max(maxCents * 1.3, 4);
 
-    public static IBrush VoiceInk(int i) => i switch { 0 => NotaPalette.Accent, 1 => NotaPalette.TealBright, _ => NotaPalette.RoseBright };
+    public static IBrush VoiceInk(int i) => i switch { 0 => NotaPalette.VizInk, 1 => NotaPalette.TealBright, _ => NotaPalette.RoseBright };
 
     public static string Ms(double t) => t >= 10 ? NotaNum.F($"{t:0.0}") : NotaNum.F($"{t:0.00}");
     public static string HzF(double f) => f >= 1000 ? NotaNum.F($"{f / 1000:0.00}k") : NotaNum.F($"{f:0}");
@@ -105,6 +105,13 @@ internal sealed class ChorusVoicesView : Control
         base.OnPointerReleased(e);
         if (!_drag) return;
         _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
@@ -204,7 +211,7 @@ internal sealed class ChorusFieldView : Control
         ctx.DrawText(l, new Point(5, h / 2 - l.Height / 2 + 5));
         var r = NotaGraph.AxisText("R", size: 7);
         ctx.DrawText(r, new Point(w - 5 - r.Width, h / 2 - r.Height / 2 + 5));
-        ctx.DrawText(NotaGraph.AxisText("STEREO · DETUNE", size: 6), new Point(14, 2));
+        ctx.DrawText(NotaGraph.AxisText("Stereo · detune", size: 6), new Point(14, 2));
         string wt = NotaNum.F($"width {_width:0} %") + (_width > 100.5 ? NotaNum.F($" · side +{20 * Math.Log10(_width / 100):0.0} dB") : "");
         var wtt = NotaGraph.AxisText(wt, size: 6);
         ctx.DrawText(wtt, new Point(w - 14 - wtt.Width, 2));

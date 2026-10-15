@@ -17,10 +17,10 @@ public sealed class WaveformView : Control
     private float[]? _peaks;
     private int _buckets;
 
-    // Design tokens (see .claude/skills/nota-design — Data colors).
+    // Design tokens (see DESIGN.md): a waveform at rest is neutral viz ink on the well.
     private static readonly IBrush Background = NotaPalette.BgSunken;
-    private static readonly IPen WavePen = new Pen(NotaPalette.Accent, 1);
-    private static readonly IPen MidPen = new Pen(NotaPalette.BorderDefault, 1);
+    private static readonly IPen WavePen = new Pen(NotaPalette.VizInk, 1);
+    private static readonly IPen MidPen = new Pen(NotaPalette.Rule, 1);
 
     public void SetPeaks(float[] minMax, int buckets)
     {

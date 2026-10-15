@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Nota Velocity LAST 12 NOTES (almanac mockup 1a): one column per note, oldest left. The
+// Nota Velocity last-12-notes view (almanac mockup 1a): one column per note, oldest left. The
 // outline is the velocity that came in, the fill the velocity that went out — the newest in
-// Brass Light, the rest in Brass Dim. Columns ease to their new heights as notes shift left,
+// full neutral ink, the rest dimmer. Columns ease to their new heights as notes shift left,
 // so a stream of notes scrolls rather than flickers. A bypassed device greys the fills.
 
 using System;
@@ -17,8 +17,8 @@ namespace Nota.App;
 internal sealed class VelocityHistoryViz : Control
 {
     private static readonly IBrush Outline = NotaPalette.BorderStrong;
-    private static readonly IBrush Fill = NotaPalette.AccentDim;
-    private static readonly IBrush FillNew = NotaPalette.AccentBright;
+    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.VizInk, 0x80);
+    private static readonly IBrush FillNew = NotaPalette.VizInk;
     private static readonly IBrush FillOff = NotaPalette.BorderStrong;
 
     public const int Slots = 12;

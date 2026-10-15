@@ -15,7 +15,7 @@ namespace Nota.App;
     {
         private static readonly IBrush Sunken = NotaPalette.BgSunken;
         private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-        private static readonly IBrush AccentBright = NotaPalette.AccentBright;
+        private static readonly IBrush Ink = NotaPalette.VizInk;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
         private static readonly IBrush Grid = NotaGraph.Grid;
         private static readonly Typeface Face = NotaFonts.Mono;
@@ -45,7 +45,7 @@ namespace Nota.App;
             ctx.DrawLine(new Pen(Grid, 1) { DashStyle = DashStyle.Dash }, new Point(X(lo), Y(lo)), new Point(X(hi), Y(hi))); // unity
 
             double OutDb(double x) => (x <= _thr ? x : _thr + (x - _thr) / _ratio) + _makeup;
-            var pen = new Pen(AccentBright, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+            var pen = new Pen(Ink, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
             var g = new StreamGeometry();
             using (var gc = g.Open())
             {
@@ -59,6 +59,6 @@ namespace Nota.App;
             }
             ctx.DrawGeometry(null, pen, g);
             ctx.DrawLine(new Pen(TextTertiary, 1) { DashStyle = DashStyle.Dash }, new Point(X(_thr), top), new Point(X(_thr), bot)); // threshold
-            ctx.DrawText(new FormattedText("COMP", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, pad - 2));
+            ctx.DrawText(new FormattedText("Comp", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, pad - 2));
         }
     }

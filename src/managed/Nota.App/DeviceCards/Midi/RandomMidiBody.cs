@@ -36,12 +36,9 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
     internal static readonly string[] Dists = { "Gauss", "Even", "Walk" };
     internal static readonly string[] Rates = { "Per note", "Per bar" };
 
-    private static readonly IBrush Ground = NotaPalette.SurfaceInset;
-    private static readonly IBrush Island = NotaPalette.SurfaceCard;
+    private static readonly IBrush Ground = NotaPalette.SurfaceCard;   // the card surface: sections sit on it, divided by rules (spec 012)
     private static readonly IBrush Bd = NotaPalette.BorderDefault;
     private static readonly IBrush Well = NotaPalette.BgSunken;
-    private static readonly IBrush Brass = NotaPalette.Accent;
-    private static readonly IBrush BrassLit = NotaPalette.AccentBright;
     private static readonly IBrush Txt = NotaPalette.TextPrimary;
     private static readonly IBrush Sub = NotaPalette.TextSecondary;
     private static readonly IBrush Muted = NotaPalette.TextMuted;
@@ -65,11 +62,11 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         if (!IsMini(e, t, index))
         {
-            var tag = Mono("", Cap, 8); tag.LetterSpacing = 0.6;
+            var tag = Mono("", Cap, 8);
             var bpm = Mono("", Cap, 8);
             void Sync()
             {
-                tag.Text = Dists[Math.Clamp((int)Math.Round(e.MidiEffectGetParam(t, index, PDist)), 0, 2)].ToUpperInvariant();
+                tag.Text = Dists[Math.Clamp((int)Math.Round(e.MidiEffectGetParam(t, index, PDist)), 0, 2)];
                 bpm.Text = $"{e.Bpm:0.0} BPM";
             }
             Sync();
@@ -90,8 +87,8 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
     internal static string ChanceText(double v) => $"{Math.Round(v * 100, MidpointRounding.AwayFromZero):0} %";
 
     // ---- small builders -------------------------------------------------------------------------
-    private static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-    { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, LetterSpacing = 0.8, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
+    private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+    { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
     private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
     { Text = t, FontSize = fs, FontFamily = NotaFonts.MonoFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
     private static T WithDock<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -182,7 +179,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Height = 10, Margin = new Thickness(22, 3, 0, 0), Children =
             {
                 LegendItem(new Rectangle { Width = 9, Height = 5, Stroke = Muted, StrokeThickness = 1, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 2, 1 }, RadiusX = 1, RadiusY = 1 }, "input"),
-                LegendItem(new Border { Width = 9, Height = 5, Background = Brass, CornerRadius = NotaRadius.Bar }, "output · brightness = velocity"),
+                LegendItem(new Border { Width = 9, Height = 5, Background = NotaPalette.VizInk, CornerRadius = NotaRadius.Bar }, "output · brightness = velocity"),
                 LegendItem(Mono("×", Muted, 8), "skip"),
             } };
             var outBody = new DockPanel { Margin = new Thickness(8, 5, 8, 4), Children = { WithDock(legend, Dock.Bottom), viz } };
@@ -195,8 +192,8 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             readouts.Add(() =>
             {
                 bool mod = Math.Abs(G(PChance) - Def(PChance)) > 0.004;
-                chanceLbl.Foreground = mod ? BrassLit : Cap;
-                chanceVal.Foreground = mod ? BrassLit : Txt;
+                chanceLbl.Foreground = mod ? Txt : Cap;
+                chanceVal.Foreground = Txt;
                 chanceVal.Text = ChanceText(G(PChance));
             });
             ToolTip.SetTip(chanceTrk, "Chance — how many notes get varied at all");
@@ -290,8 +287,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             {
                 WithDock(head, Dock.Top), WithDock(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 4), Child = viz },
             } };
-            var island = new Border { Background = Island, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-                Padding = new Thickness(6, 5, 6, 0), Child = inner };
+            var island = new RuleSection { Padding = new Thickness(6, 5, 6, 0), Child = inner };
             readouts.Add(() =>
             {
                 distTb.Text = Dists[Dist(G)];
@@ -336,10 +332,9 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             return new Border { Height = 20, BorderBrush = Bd, BorderThickness = new Thickness(0, 0, 0, 1), Child = d };
         }
 
-        Border IslandBox(Control head, Control content, double width)
+        Decorator IslandBox(Control head, Control content, double width)
         {
-            var b = new Border { Background = Island, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true,
-                Child = new DockPanel { Children = { WithDock(head, Dock.Top), content } } };
+            var b = DeviceCardKit.Section(new DockPanel { Children = { WithDock(head, Dock.Top), content } });
             if (!double.IsNaN(width)) b.Width = width;
             return b;
         }
@@ -364,7 +359,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             return trk;
         }
 
-        // One WHAT VARIES row: the label (lit once it does something), the value (brass once moved
+        // One WHAT VARIES row: the label (lit once it does something), the value (primary text once moved
         // off the default) and the amount slider under them.
         Control VaryRow(string label, int p, double max, Func<double, string> fmt, string tip)
         {
@@ -378,7 +373,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             {
                 double x = G(p);
                 l.Foreground = x > 0.0005 ? Txt : Cap;
-                v.Foreground = Math.Abs(x - Def(p)) > 0.0005 ? BrassLit : Sub;
+                v.Foreground = Math.Abs(x - Def(p)) > 0.0005 ? Txt : Sub;
                 v.Text = fmt(x);
             });
             return new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children =
@@ -397,7 +392,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             return seg;
         }
 
-        // A small action button (Reroll / Lock); the sync paints the engaged (brass-wash) state.
+        // A small action button (Reroll / Lock); the sync paints the engaged (accent-wash) state.
         Border Button(string text, string tip, Action click, out Action<bool> sync)
         {
             var tb = new TextBlock { Text = text, FontSize = 8, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center };
@@ -469,7 +464,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             var v = Mono("", Sub, 7); v.HorizontalAlignment = HorizontalAlignment.Center;
             readouts.Add(() => { double n = G(p) / max; if (!knob.Dragging && Math.Abs(knob.Value - n) > 1e-6) knob.Value = n; v.Text = text(G(p)); });
             return new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.SizeNorthSouth),
-                Children = { knob, new TextBlock { Text = label, FontSize = 7, FontWeight = FontWeight.Bold, LetterSpacing = 0.6, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, v } };
+                Children = { knob, new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, v } };
         }
     }
 }

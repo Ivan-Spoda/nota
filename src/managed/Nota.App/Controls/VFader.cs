@@ -35,6 +35,9 @@ internal sealed class VFader : Control
     protected override void OnPointerMoved(PointerEventArgs e) { if (_drag) SetY(e.GetPosition(this).Y); }
     protected override void OnPointerReleased(PointerReleasedEventArgs e) { if (_drag) GestureEnd?.Invoke(); _drag = false; e.Pointer.Capture(null); }
 
+    // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) { if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); } base.OnPointerCaptureLost(e); }
+
     private void SetY(double y)
     {
         double h = Bounds.Height; if (h <= CapH) return;

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+#
+# Radius ratchet for DesignTokenCheck.RunGeometry (spec 012 T009).
+#
+# Rectangle RadiusX / RadiusY literals off the 0/1/2/3/4 scale, as of the day the check
+# landed. A line may only be removed: a new offender fails, and so does a line that no
+# longer matches anything.
+#
+# Format: path (from src/managed) <TAB> RadiusX|RadiusY = value <TAB> # reason

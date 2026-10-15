@@ -110,7 +110,7 @@ public partial class MainWindow
                 int src = Engine.GetTrackRecordInput(trackId);
                 parts.Add("In " + (src == 0 ? "Ext" : src == -1 ? "Master" : ChipTrackName(src)));
                 // A Master source stays silent while monitored (it would feed back).
-                if (src != -1 && Engine.GetTrackMonitor(trackId)) parts.Add("Monitor In");
+                if (src != -1 && Engine.GetTrackMonitor(trackId)) parts.Add("Monitor in");
             }
         }
         double ms = Engine.SampleRate > 0 ? Engine.TrackLatencySamples(trackId) / Engine.SampleRate * 1000.0 : 0;
@@ -345,7 +345,9 @@ public partial class MainWindow
         DetailDevicesBtn.IsChecked = true;
         DetailPatternBtn.IsChecked = false;
         DetailClipBtn.IsChecked = false;
-        ShowDetail(338, honorPersist: false);   // Devices: natural card-fitting height (island: +12 gutter under it, +6 header top inset)
+        // Devices: exactly the cards' height — the 1px seam, the 32px toolbar, the chain inset
+        // above and below a card. Nothing floats under the chain.
+        ShowDetail(1 + 32 + 2 * DeviceChainView.ChainInset + DeviceCardKit.CardH, honorPersist: false);
     }
 
     private void OpenClipEditor(int trackId, int clipIndex)
