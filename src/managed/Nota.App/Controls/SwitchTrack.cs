@@ -5,8 +5,10 @@
 // every side. On — a brass track, the knob in the panel colour, sitting right. Off — the
 // Track off colour, an Ink 5 knob, sitting left. State reads from colour *and* position,
 // never colour alone. It is always paired with a word to its right (DeviceCardKit.Switch);
-// never with an icon. Brass only: role chromas do not go on controls.
+// never with an icon. On is the accent (chosen); role chromas do not go on controls.
+// Square-cornered like every key: a 2px track and a 1.5px knob.
 
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -16,7 +18,7 @@ namespace Nota.App;
 internal sealed class SwitchTrack : Control
 {
     private static readonly IBrush TrackOn = NotaPalette.Accent;
-    private static readonly IBrush TrackDim = NotaPalette.BorderStrong;   // on, but its section is inactive
+    private static readonly IBrush TrackDim = NotaPalette.Rule;   // on, but its section is inactive
     private static readonly IBrush TrackOff = NotaPalette.TrackOff;
     private static readonly IBrush KnobOn = NotaPalette.Panel;
     private static readonly IBrush KnobOff = NotaPalette.TextTertiary;
@@ -44,8 +46,9 @@ internal sealed class SwitchTrack : Control
     public override void Render(DrawingContext ctx)
     {
         var track = _on ? (_dim || !IsEffectivelyEnabled ? TrackDim : TrackOn) : TrackOff;
-        ctx.DrawRectangle(track, null, new RoundedRect(new Rect(0, 0, _w, _h), _h / 2));
+        ctx.DrawRectangle(track, null, new RoundedRect(new Rect(0, 0, _w, _h), NotaRadius.ClipValue));
         double x = _on ? _w - _inset - _knob : _inset;
-        ctx.DrawEllipse(_on ? KnobOn : KnobOff, null, new Point(x + _knob / 2, _h / 2), _knob / 2, _knob / 2);
+        ctx.DrawRectangle(_on ? KnobOn : KnobOff, null,
+            new RoundedRect(new Rect(x, (_h - _knob) / 2, _knob, _knob), Math.Min(1.5, _knob / 4)));
     }
 }

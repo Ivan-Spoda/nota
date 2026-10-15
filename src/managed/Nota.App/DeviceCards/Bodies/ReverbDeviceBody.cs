@@ -43,7 +43,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "REVERB";
+    public string? Subtitle => "Reverb";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -82,8 +82,8 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         string Algo() => Algos[Sel(Algorithm, 4)];
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -192,7 +192,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         });
 
         // ======================================================================
-        // LEFT — TAIL column (Decay · HF Damp)
+        // LEFT — Tail column (Decay · HF Damp)
         // ======================================================================
         Control TailFader(int p, string label, IBrush ink, IBrush handle, string tip)
         {
@@ -213,11 +213,11 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         }
         var tailTitle = Caps("TAIL"); tailTitle.HorizontalAlignment = HorizontalAlignment.Center;
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 1, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
-        faders.Children.Add(TailFader(Decay, "DECAY", NotaPalette.Accent, NotaPalette.AccentBright,
+        faders.Children.Add(TailFader(Decay, "DECAY", NotaPalette.VizInk, NotaPalette.VizInk,
             "Decay — RT60, the time the tail takes to fall 60 dB (0.2 … 12 s); Freeze holds it forever. Double-click resets."));
         faders.Children.Add(Col(TailFader(HFDamp, "DAMP", NotaPalette.Teal, NotaPalette.TealBright,
             "HF Damp — how much faster the highs die than the lows. Double-click resets."), 1));
-        var decVal = Mono("", 7, AccentBright); decVal.HorizontalAlignment = HorizontalAlignment.Center;
+        var decVal = Mono("", 7, TextPrimary); decVal.HorizontalAlignment = HorizontalAlignment.Center;
         var dmpVal = Mono("", 7, TextPrimary); dmpVal.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() =>
         {
@@ -225,12 +225,12 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             dmpVal.Text = Pct(P(HFDamp));
             tailTitle.Foreground = On(Freeze) ? AccentBright : TextTertiary;
         });
-        var tailCol = new Border
+        // Freeze shows on the column's title (accent), not on a frame: sections have none.
+        var tailCol = new RuleSection
         {
-            Width = 64, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
+            Width = 64, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(tailTitle, Dock.Top), Docked(dmpVal, Dock.Bottom), Docked(decVal, Dock.Bottom), faders } },
         };
-        readouts.Add(() => tailCol.BorderBrush = On(Freeze) ? NotaPalette.BorderBrass : BorderDef);
         DockPanel.SetDock(tailCol, Dock.Left);
 
         // ======================================================================
@@ -331,7 +331,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
                 SliderRow("OUT", Output, v => ShortDb(OutDb(v))),
                 new Border { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 2) },
                 SliderRow("DECAY", Decay, DecayF, null, () => On(Freeze)),
-                SliderRow("HF DAMP", HFDamp, Pct),
+                SliderRow("HF damp", HFDamp, Pct),
                 new Border { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 2) },
                 btns, wet,
             };
@@ -357,7 +357,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             var mid = new StackPanel { Spacing = 6, Children = {
                 SliderRow("MIX", DryWet, Pct, () => On(WetOnly)),
                 SliderRow("WIDTH", WidthP, Pct),
-                SliderRow("MONO f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")) } };
+                SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")) } };
             ToolTip.SetTip(mid.Children[2], "Bass mono — below this frequency the tail is mono, so a wide reverb does not smear the low end (off at the far left)");
 
             var wetOnly = Toggle(WetOnly, "Wet only (send)");
@@ -399,9 +399,9 @@ internal sealed class ReverbDeviceBody : IDeviceBody
 
         var centre = TabFrame(new[] { "Space", "Tone · Mod" }, centreHost, CentreBody, false, t => { centreTab = t; foreach (var a in readouts) a(); }, extras);
         var rightFrame = TabFrame(new[] { "Levels", "Output" }, rightHost, RightBody, true, _ => { foreach (var a in readouts) a(); }, null);
-        var right = new Border { Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip
@@ -438,7 +438,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { tailCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -462,7 +462,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
                     btns[i].Background = on ? Card2 : Brushes.Transparent;
                     btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
                     var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? AccentBright : TextTertiary;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
                     tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }

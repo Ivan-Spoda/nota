@@ -67,7 +67,7 @@ internal sealed class ConnectPhoneView : Border
         _qr = null; _code = _left = null; _ring = null;
         bool on = _settings.Current.RemoteEnabled;
 
-        var title = new TextBlock { Text = "Connect Phone", FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+        var title = new TextBlock { Text = "Connect phone", FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         var sw = new ToggleSwitch(on) { VerticalAlignment = VerticalAlignment.Center };
         sw.Changed += v => { _settings.Current.RemoteEnabled = v; _settings.Save(); _ = _remote.ApplyAsync(); };
         var allow = new TextBlock { Text = "Allow", FontSize = 11, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
@@ -100,13 +100,13 @@ internal sealed class ConnectPhoneView : Border
 
         _qr = new QrView { Width = 150, Height = 150, Text = _remote.QrText };
         var info = new StackPanel { Spacing = 10 };
-        info.Children.Add(Field("ADDRESS", AddressRows()));
+        info.Children.Add(Field("Address", AddressRows()));
         _code = new TextBlock { FontSize = 24, FontWeight = FontWeight.Medium, LetterSpacing = 4.8, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center };
-        _ring = new Arc { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.AccentDim, StartAngle = -90, VerticalAlignment = VerticalAlignment.Center };
+        _ring = new Arc { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.VizInk, StartAngle = -90, VerticalAlignment = VerticalAlignment.Center };
         var ringBack = new Ellipse { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.TrackOff };
         _left = new TextBlock { FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var codeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { _code, new Panel { Children = { ringBack, _ring } }, _left } };
-        info.Children.Add(Field("CODE", codeRow));
+        info.Children.Add(Field("Code", codeRow));
         bool usb = _remote.Links is { Count: > 0 } links && links[0].Usb;
         info.Children.Add(Note(usb
             ? "Point the phone camera at the code. Over the cable the link is instant and needs no Wi-Fi; the code changes every 2 minutes and after each connection."
@@ -192,8 +192,8 @@ internal sealed class ConnectPhoneView : Border
             first.Children.Add(new Border
             {
                 Height = 16, Padding = new Thickness(5, 0), CornerRadius = NotaRadius.Bar, VerticalAlignment = VerticalAlignment.Center,
-                Background = NotaPalette.TrackOff, BorderBrush = NotaPalette.BorderBrass, BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = "USB", FontSize = 8, FontWeight = FontWeight.Bold, LetterSpacing = 1, Foreground = NotaPalette.AccentBright, VerticalAlignment = VerticalAlignment.Center },
+                Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
+                Child = new TextBlock { Text = "USB", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center },
             });
         var rows = new StackPanel { Spacing = links.Count > 1 ? 3 : 0, Children = { first } };
         for (int i = 1; i < links.Count; i++)
@@ -208,7 +208,7 @@ internal sealed class ConnectPhoneView : Border
     private static Control Field(string label, Control value)
     {
         var s = new StackPanel { Spacing = 3 };
-        s.Children.Add(new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.Bold, LetterSpacing = 1.1, Foreground = NotaPalette.TextTertiary });
+        s.Children.Add(new TextBlock { Text = NotaText.Label(label), FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextMuted });
         s.Children.Add(value);
         return s;
     }

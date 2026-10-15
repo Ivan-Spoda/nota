@@ -181,7 +181,7 @@ public sealed partial class PreferencesWindow
                     Orientation = Orientation.Horizontal, Spacing = 8,
                     Children =
                     {
-                        new TextBlock { Text = h.Title, FontSize = 9, FontWeight = FontWeight.Bold, LetterSpacing = 1.1, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = h.Title, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
                         new TextBlock { Text = h.Count.ToString(), FontSize = 9, FontFamily = NotaFonts.MonoFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
@@ -254,7 +254,7 @@ public sealed partial class PreferencesWindow
         if (unavailable.Count > 0)
         {
             // The heading sits at the very top when nothing else matched — no rule above it then.
-            if (available.Count > 0) items.Add(new StoreSection("NOT AVAILABLE FOR THIS COMPUTER", unavailable.Count));
+            if (available.Count > 0) items.Add(new StoreSection("Not available for this computer", unavailable.Count));
             items.AddRange(unavailable.Select(p => new StoreEntry(p, installed.GetValueOrDefault(p.Id), First: false)));
         }
         if (available.Count == 0 && items[0] is StoreEntry first) items[0] = first with { First = true };
@@ -283,7 +283,7 @@ public sealed partial class PreferencesWindow
         {
             _storeCounts[i].Text = _storePlugins is null || installed is null ? "" : _storePlugins.Count(p => MatchesFilter(p, i, installed)).ToString();
             // On the brass segment the count drops to the brass edge; off it, Ink 6.
-            _storeCounts[i].Foreground = i == _storeFilter ? NotaPalette.AccentEdge : TextDisabled;
+            _storeCounts[i].Foreground = i == _storeFilter ? NotaPalette.TextPrimary : TextDisabled;
         }
     }
 
@@ -379,7 +379,7 @@ public sealed partial class PreferencesWindow
                     Children =
                     {
                         new TextBlock { Text = p.Name, FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = here ? TextPrimary : TextSecondary, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = KindLabel(p.Kind), FontSize = 9, LetterSpacing = 0.7, FontFamily = NotaFonts.MonoFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = KindLabel(p.Kind), FontSize = 9, FontFamily = NotaFonts.MonoFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
                         PlatformIcons(p.Platforms),
                     },
                 },
@@ -463,10 +463,6 @@ public sealed partial class PreferencesWindow
         return row;
     }
 
-    // 24×24 filled marks for the three systems registry assets target.
-    private const string AppleIcon = "M12 7.2 C9.6 5.6 4.5 5.8 4.5 11.8 C4.5 16.6 7.4 21 9.3 21 C10.6 21 11 20.3 12 20.3 C13 20.3 13.4 21 14.7 21 C16.2 21 18.4 18.2 19.3 15.4 C17.6 14.7 16.6 13.2 16.6 11.5 C16.6 9.9 17.5 8.6 18.8 7.9 C17.2 6 14 5.9 12 7.2 Z M12.2 6.3 C12.2 4.3 13.6 2.8 15.6 2.7 C15.6 4.7 14.2 6.2 12.2 6.3 Z";
-    private const string WindowsIcon = "M3.5 3.5 H11 V11 H3.5 Z M13 3.5 H20.5 V11 H13 Z M3.5 13 H11 V20.5 H3.5 Z M13 13 H20.5 V20.5 H13 Z";
-    private const string LinuxIcon = "M12 2 C14 2 15.2 3.6 15.2 5.8 C15.2 7.4 14.5 8.2 15 9.4 C16.6 11.6 19 14.4 18.4 17.8 L19.8 21 H4.2 L5.6 17.8 C5 14.4 7.4 11.6 9 9.4 C9.5 8.2 8.8 7.4 8.8 5.8 C8.8 3.6 10 2 12 2 Z M12 10.2 C10.1 10.2 8.8 13 8.8 15.8 C8.8 18.3 10.2 19.8 12 19.8 C13.8 19.8 15.2 18.3 15.2 15.8 C15.2 13 13.9 10.2 12 10.2 Z";
 
     // The systems a plugin ships for, as small marks with the architectures in the tooltip.
     // This computer's system reads a step brighter than the others.
@@ -475,15 +471,14 @@ public sealed partial class PreferencesWindow
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         foreach (var (prefix, name, icon, current) in new[]
         {
-            ("macos-", "macOS", AppleIcon, OperatingSystem.IsMacOS()),
-            ("windows-", "Windows", WindowsIcon, OperatingSystem.IsWindows()),
-            ("linux-", "Linux", LinuxIcon, OperatingSystem.IsLinux()),
+            ("macos-", "macOS", GlyphKind.Apple, OperatingSystem.IsMacOS()),
+            ("windows-", "Windows", GlyphKind.Windows, OperatingSystem.IsWindows()),
+            ("linux-", "Linux", GlyphKind.Linux, OperatingSystem.IsLinux()),
         })
         {
             var archs = keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).Select(k => ArchLabel(k[prefix.Length..])).Distinct().ToList();
             if (archs.Count == 0) continue;
-            // "F1": even-odd fill, so the penguin's belly is a hole.
-            var mark = IconBox(new Path { Data = Geometry.Parse("F1 " + icon), Fill = current ? TextSecondary : TextTertiary }, 12);
+            var mark = new Glyph(icon, 12) { Foreground = current ? TextSecondary : TextTertiary };
             var box = new Border { Background = Brushes.Transparent, Child = mark };   // hit-testable for the tooltip
             ToolTip.SetTip(box, $"{name} · {string.Join(", ", archs)}");
             row.Children.Add(box);
@@ -511,11 +506,11 @@ public sealed partial class PreferencesWindow
 
     private static string KindLabel(string kind) => kind switch
     {
-        "instrument" => "INSTRUMENT",
-        "effect" => "EFFECT",
+        "instrument" => "Instrument",
+        "effect" => "Effect",
         "midi" => "MIDI",
-        "bundle" => "COLLECTION",
-        _ => kind.ToUpperInvariant(),
+        "bundle" => "Collection",
+        _ => NotaText.Label(kind.ToUpperInvariant()),
     };
 
     private void InstallFromStore(StorePlugin p)

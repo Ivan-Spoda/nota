@@ -21,7 +21,7 @@
 //             receivers with their ranges, and Map · Rename · Clear.
 //   Status    the selection and the kit, in words.
 //
-// A pad's colour is its track-palette slot; brass means selection only, and a pad that is
+// A pad's colour is its track-palette slot; accent means selection only, and a pad that is
 // sounding lights in its own hue.
 
 using System;
@@ -104,7 +104,7 @@ internal sealed partial class RackCardView
 
         var statusHost = DrumStatus(a, pads, macros);
         DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.Gutter, Children = { statusHost, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
 
         if (_irTick.Count > 0) _ctx.AddDeviceRefresher(() => { for (int i = 0; i < _irTick.Count; i++) _irTick[i](); });
         return root;
@@ -121,7 +121,7 @@ internal sealed partial class RackCardView
             var tb = new TextBlock
             {
                 Text = DrumViews[i], FontSize = NotaType.DeviceSection, VerticalAlignment = VerticalAlignment.Center,
-                Foreground = on ? AccentBright : TextTertiary, FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal,
+                Foreground = on ? TextPrimary : TextTertiary, FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal,
             };
             var cell = new Border
             {
@@ -230,7 +230,7 @@ internal sealed partial class RackCardView
         Grid.SetColumn(nameTb, 1); top.Children.Add(nameTb);
 
         var noteTb = DrumMono(NoteName(note), selected ? AccentBright : filled ? TextTertiary : TextDisabled, 7);
-        var chokeTb = DrumMono(choke > 0 ? $"CH {choke}" : "", NotaPalette.TealBright, 7);
+        var chokeTb = DrumMono(choke > 0 ? $"Ch {choke}" : "", NotaPalette.TealBright, 7);
         var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), VerticalAlignment = VerticalAlignment.Bottom };
         bottom.Children.Add(noteTb);
         Grid.SetColumn(chokeTb, 1); bottom.Children.Add(chokeTb);
@@ -252,7 +252,7 @@ internal sealed partial class RackCardView
 
         if (filled)
         {
-            // A sounding pad lights in its own hue; brass stays the selection.
+            // A sounding pad lights in its own hue; accent stays the selection.
             var hot = PadFill(PadHue(chain), 0.22);
             _irTick.Add(() => pad.Background = E.RackChainMeter(T, chain) > 0.02f ? hot : restBg);
             pad.PointerPressed += (_, e) =>
@@ -368,7 +368,7 @@ internal sealed partial class RackCardView
             var x = DrumCap(t); if (right) x.HorizontalAlignment = HorizontalAlignment.Right;
             Grid.SetColumn(x, col); head.Children.Add(x);
         }
-        H("PAD", 0); H("NOTE", 1); H("VOLUME", 2); H("PAN", 3); H("M S CH", 4, right: true);
+        H("PAD", 0); H("NOTE", 1); H("VOLUME", 2); H("PAN", 3); H("M S ch", 4, right: true);
         var headBar = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 0, 0, 1), Child = head };
 
         var rows = new StackPanel { Spacing = 1, Margin = new Thickness(0, 2, 0, 0) };
@@ -437,8 +437,8 @@ internal sealed partial class RackCardView
         Grid.SetColumn(pan, 3); g.Children.Add(pan);
 
         int choke = E.RackChainChoke(T, c);
-        var mute = MixBtn("M", () => a.ChainMute(c), NotaPalette.AccentHover, () => a.SetChainMute(c, !a.ChainMute(c)));
-        var solo = MixBtn("S", () => a.ChainSolo(c), Brass, () => a.SetChainSolo(c, !a.ChainSolo(c)));
+        var mute = MixBtn("M", () => a.ChainMute(c), NotaPalette.Mute, () => a.SetChainMute(c, !a.ChainMute(c)));
+        var solo = MixBtn("S", () => a.ChainSolo(c), NotaPalette.Solo, () => a.SetChainSolo(c, !a.ChainSolo(c)));
         var chk = MixBtn(choke > 0 ? choke.ToString() : "·", () => E.RackChainChoke(T, c) > 0, NotaPalette.Teal,
             () => { E.RackSetChainChoke(T, c, (E.RackChainChoke(T, c) + 1) % ChokeNames.Length); DeferRebuild(); }, choke: true);
         ToolTip.SetTip(mute, "Mute the pad"); ToolTip.SetTip(solo, "Solo the pad"); ToolTip.SetTip(chk, "Choke group: click for the next");
@@ -480,9 +480,9 @@ internal sealed partial class RackCardView
 
     // A mixer switch, 13 × 11: raised when off; when on, filled with its colour (mute, solo)
     // or washed in teal (the choke group, which is a number, not a state).
-    private Border MixBtn(string text, Func<bool> on, IBrush accent, Action toggle, bool choke = false)
+    private Border MixBtn(string text, Func<bool> on, SolidColorBrush accent, Action toggle, bool choke = false)
     {
-        var tb = new TextBlock { Text = text, FontSize = 7, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var tb = new TextBlock { Text = text, FontSize = 7, FontWeight = FontWeight.Medium, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         if (choke) tb.FontFamily = NotaFonts.MonoFamily;
         var b = new Border { Width = 13, Height = 11, CornerRadius = NotaRadius.Clip, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
         void Paint()
@@ -498,7 +498,7 @@ internal sealed partial class RackCardView
             {
                 b.Background = v ? accent : NotaPalette.SurfaceRaised;
                 b.BorderBrush = v ? accent : BorderDef;
-                tb.Foreground = v ? OnAccent : TextSecondary;
+                tb.Foreground = v ? NotaPalette.InkOn(accent) : TextSecondary;
             }
         }
         b.PointerPressed += (_, e) =>
@@ -624,7 +624,7 @@ internal sealed partial class RackCardView
         _irTick.Add(chokeSync);
         ToolTip.SetTip(chokeSeg, "Pads in the same group cut each other off");
         var chokeRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
-        chokeRow.Children.Add(DrumCap("CHOKE"));
+        chokeRow.Children.Add(DrumCap("Choke"));
         Grid.SetColumn(chokeSeg, 1); chokeRow.Children.Add(chokeSeg);
 
         Border inst = null!;
@@ -657,7 +657,7 @@ internal sealed partial class RackCardView
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var meta = DrumMono("", TextSecondary, 8);
         int groups = pads.Select(c => E.RackChainChoke(T, c)).Where(g => g > 0).Distinct().Count();
-        meta.Text = $"{pads.Count} PAD{(pads.Count == 1 ? "" : "S")} · {groups} CHOKE GROUP{(groups == 1 ? "" : "S")}"
+        meta.Text = $"{pads.Count} pad{(pads.Count == 1 ? "" : "s")} · {groups} choke group{(groups == 1 ? "" : "s")}"
             + (E.SampleRate > 0 ? " · " + NotaNum.Unit(E.SampleRate / 1000.0, "0.#", "kHz") : "");
 
         string Timing() => $"swing {NotaNum.Pct(E.RackSwing(T))} · humanize {NotaNum.Pct(E.RackHumanize(T))}";
@@ -855,15 +855,11 @@ internal sealed partial class RackCardView
     private static readonly IBrush TextStrongInk = NotaPalette.TextStrong;
 
     // A device section: card ground, hairline, radius 6.
-    private static Border DrumBox(Control child) => new()
-    {
-        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = child,
-    };
+    private static Decorator DrumBox(Control child) => DeviceCardKit.Section(child);
 
     private static TextBlock DrumCap(string t) => new()
     {
-        Text = t, FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold, LetterSpacing = NotaType.KnobLabelTracking,
+        Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
         Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -879,7 +875,7 @@ internal sealed partial class RackCardView
         HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0),
     };
 
-    // A small raised toggle (Fold): brass edge and Brass Light text when on.
+    // A small raised toggle (Fold): accent edge and bright accent text when on.
     private static Border DrumButton(string text, bool on, Action click)
     {
         var tb = new TextBlock { Text = text, FontSize = 7, FontWeight = FontWeight.SemiBold, Foreground = on ? AccentBright : TextStrongInk, VerticalAlignment = VerticalAlignment.Center };

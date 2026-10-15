@@ -16,12 +16,14 @@ namespace Nota.App;
 public sealed class MiniFader : Control
 {
     private static readonly IBrush Track = NotaPalette.BgSunken;  // Brush.BgSunken
-    private static readonly IBrush Fill = NotaPalette.BorderStrong;   // Brush.BorderStrong
-    private static readonly IBrush Cap = NotaPalette.TextSecondary;    // Brush.TextSecondary
-    private static readonly IBrush FillAccent = NotaPalette.Accent; // Brush.Accent (brass)
-    private static readonly IBrush CapAccent = NotaPalette.AccentBright;  // Brush.AccentBright
+    private static readonly IBrush Fill = NotaPalette.Rule;           // off the audio path
+    private static readonly IBrush Cap = NotaPalette.TextSecondary;
+    private static readonly IBrush FillAccent = NotaPalette.VizInk;   // on the audio path, at rest
+    private static readonly IBrush CapAccent = NotaPalette.TextPrimary;
+    private static readonly IBrush FillLive = NotaPalette.Accent;     // under the pointer or in the hand
+    private static readonly IBrush CapLive = NotaPalette.AccentBright;
 
-    /// <summary>Brass fill + cap instead of the neutral grey (used by the synth editor).</summary>
+    /// <summary>On the audio path: neutral ink fill + cap instead of the quieter rule grey.</summary>
     public bool Accent { get; init; }
     /// <summary>Double-click target value, or negative to disable reset.</summary>
     public double Default { get; init; } = -1;
@@ -83,6 +85,12 @@ public sealed class MiniFader : Control
         SetValue(_value + dy / (fine ? 1400.0 : 140.0) * _max);
     }
 
+    // Under the pointer (or in the hand) the control is live and takes the accent; at rest
+    // its value is neutral ink — the accent marks a knob or fader only while focused or dragged.
+    private bool _hover;
+    protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; InvalidateVisual(); }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hover = false; InvalidateVisual(); }
+
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (_drag) GestureEnd?.Invoke();
@@ -109,8 +117,9 @@ public sealed class MiniFader : Control
 
         // Almanac slider: 3px well track, fill, 6×7 handle (SliderTrack draws the same).
         ctx.DrawRectangle(Track, null, new Rect(0, cy - SliderTrack.TrackH / 2, w, SliderTrack.TrackH), NotaRadius.ClipValue, NotaRadius.ClipValue);
-        if (fx > 0) ctx.DrawRectangle(Accent ? FillAccent : Fill, null, new Rect(0, cy - SliderTrack.TrackH / 2, fx, SliderTrack.TrackH), NotaRadius.ClipValue, NotaRadius.ClipValue);
+        bool live = _drag || _hover;
+        if (fx > 0) ctx.DrawRectangle(live ? FillLive : Accent ? FillAccent : Fill, null, new Rect(0, cy - SliderTrack.TrackH / 2, fx, SliderTrack.TrackH), NotaRadius.ClipValue, NotaRadius.ClipValue);
         double hw = SliderTrack.HandleW, hh = SliderTrack.HandleH;
-        ctx.DrawRectangle(Accent ? CapAccent : Cap, null, new Rect(Math.Clamp(fx - hw / 2, 0, w - hw), cy - hh / 2, hw, hh), NotaRadius.ClipValue, NotaRadius.ClipValue);
+        ctx.DrawRectangle(live ? CapLive : Accent ? CapAccent : Cap, null, new Rect(Math.Clamp(fx - hw / 2, 0, w - hw), cy - hh / 2, hw, hh), NotaRadius.ClipValue, NotaRadius.ClipValue);
     }
 }

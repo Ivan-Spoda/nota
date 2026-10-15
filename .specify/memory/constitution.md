@@ -44,7 +44,7 @@ what each line does. Match the style of the code around you.
 User-visible changes get a `CHANGELOG.md` `[Unreleased]` entry. When working in this
 repository with an agent that has the Nota skills, run `nota-features` (FEATURES.md),
 `nota-docs` (user manual), and `nota-shortcuts` (keyboard bindings) as applicable. UI
-work follows [`DESIGN.md`](../../DESIGN.md) (the Ember design language).
+work follows [`DESIGN.md`](../../DESIGN.md) (the Studio design language).
 
 ### VII. Spec-First for Non-Trivial Work
 
@@ -74,4 +74,4 @@ This constitution governs AI agents working in this repository;
 above. Amendments require a pull request that updates the source-of-truth doc first,
 then this file, and must not weaken principles I–III.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-11 | **Last Amended**: 2026-10-11
+**Version**: 1.0.1 | **Ratified**: 2026-10-11 | **Last Amended**: 2026-10-13

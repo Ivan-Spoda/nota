@@ -97,8 +97,8 @@ internal static class PaletteTests
         ("granular texture", "Nota Grain"), ("автотюн", "Nota Auto Shift"), ("тёплый пэд", "Preset:*pad"), ("warm pad", "Preset:*pad"),
         ("dark reverb", "Nota Chamber"), ("acid bass", "Preset:*acid"), ("pluck", "Preset:*pluck"),
         // actions & tracks (CP-6a)
-        ("quant", "Quantize Notes"), (">quant", "Quantize Notes"), ("export", "Export Audio…"), ("render", "Export Audio…"),
-        ("settings audio", "Settings: Audio"), ("hotkeys", "Settings: Shortcuts"), ("metronome", "Metronome"), ("tap tempo", "Tap Tempo"),
+        ("quant", "Quantize notes"), (">quant", "Quantize notes"), ("export", "Export audio…"), ("render", "Export audio…"),
+        ("settings audio", "Settings: Audio"), ("hotkeys", "Settings: Shortcuts"), ("metronome", "Metronome"), ("tap tempo", "Tap tempo"),
         ("@vox", "Lead Vox"), ("bass", "Bass"), ("phaser", "Nota Phaser"),
     };
 
@@ -192,8 +192,8 @@ internal static class PaletteTests
         var usage = new PaletteUsage(settings);
         usage.Record("d:be:3", fromPalette: true);
         var empty = search.Run("", Devices, suggested: PaletteTargets.Suggested(Devices));
-        yield return (empty.Rows.Count > 0 && empty.Rows[0].Header == "RECENT" && empty.Items[0].Item.Name == "Nota Delay"
-                      && empty.Rows.Any(r => r.Header?.StartsWith("SUGGESTED", StringComparison.Ordinal) == true),
+        yield return (empty.Rows.Count > 0 && empty.Rows[0].Header == "Recent" && empty.Items[0].Item.Name == "Nota Delay"
+                      && empty.Rows.Any(r => r.Header?.StartsWith("Suggested", StringComparison.Ordinal) == true),
             "an empty query shows Recent, then Suggested for the context (CP-19)");
 
         // ---- insertion through the shared service on a real engine (CP-3, CP-25, undo) ----------

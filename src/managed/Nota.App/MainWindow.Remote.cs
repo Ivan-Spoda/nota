@@ -77,7 +77,7 @@ public partial class MainWindow : IRemoteHost
         if (a != _remoteSeenActivity) { _remoteSeenActivity = a; _remoteLastActivity = DateTime.UtcNow; }
         bool connected = _remote.Running && _remote.Hub.Devices.Count > 0;
         bool lit = connected && (DateTime.UtcNow - _remoteLastActivity).TotalMilliseconds < 150;
-        var want = lit ? NotaPalette.AccentBright : connected ? NotaPalette.AccentEdge : NotaPalette.BorderStrong;
+        var want = lit ? NotaPalette.AccentBright : connected ? NotaPalette.Success : NotaPalette.BorderStrong;
         if (!ReferenceEquals(RemoteDot.Fill, want)) RemoteDot.Fill = want;
     }
 

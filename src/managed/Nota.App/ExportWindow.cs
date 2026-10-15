@@ -63,12 +63,14 @@ public sealed class ExportWindow : NotaWindow
     {
         _bpm = bpm;
         _rangeBeats = loopBeats > 0 ? loopBeats : fullBeats;
-        Title = "Export Audio";
+        Title = "Export audio";
         Width = 560;
         SizeToContent = SizeToContent.Height;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = Panel;
+        // Escape is Cancel (an open drop-down handles its own Escape first).
+        KeyDown += (_, e) => { if (e.Key == Key.Escape && !e.Handled) { e.Handled = true; Close(null); } };
 
         var body = new StackPanel { Margin = new Thickness(18, 16), Spacing = 14 };
 
@@ -84,7 +86,7 @@ public sealed class ExportWindow : NotaWindow
         var customNa = new NaBadge { Kind = NaBadgeKind.Future, VerticalAlignment = VerticalAlignment.Center };
         rangeRow.Children.Add(customNa);
         rangeRow.Children.Add(_rangeReadout);
-        body.Children.Add(Section("RANGE", rangeRow));
+        body.Children.Add(Section("Range", rangeRow));
 
         // Format / SR / bit-depth-or-quality. The third column swaps its control
         // (and title) with the format: depth for WAV/FLAC, bitrate for MP3.
@@ -109,9 +111,9 @@ public sealed class ExportWindow : NotaWindow
         depthOrQuality.Children.Add(_depth);
         depthOrQuality.Children.Add(_quality);
         var fmtGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 12 };
-        var f0 = Section("FORMAT", _format); fmtGrid.Children.Add(f0);
-        var f1 = Section("SAMPLE RATE", _rate); Grid.SetColumn(f1, 1); fmtGrid.Children.Add(f1);
-        var f2 = Section("BIT DEPTH", depthOrQuality); Grid.SetColumn(f2, 2); fmtGrid.Children.Add(f2);
+        var f0 = Section("Format", _format); fmtGrid.Children.Add(f0);
+        var f1 = Section("Sample rate", _rate); Grid.SetColumn(f1, 1); fmtGrid.Children.Add(f1);
+        var f2 = Section("Bit depth", depthOrQuality); Grid.SetColumn(f2, 2); fmtGrid.Children.Add(f2);
         _depthTitle = (TextBlock)((StackPanel)f2).Children[0];
         body.Children.Add(fmtGrid);
         _depth.SelectionChanged += (_, _) => { RefreshEstimate(); _refreshDitherEnabled?.Invoke(); };
@@ -130,12 +132,16 @@ public sealed class ExportWindow : NotaWindow
 
         // Footer.
         _estimate = new TextBlock { FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        // The dialog's primary action: set apart by weight and one tone step, not by colour
+        // (orange is for what is live or chosen).
         var export = new Border
         {
-            Background = Brass, CornerRadius = NotaRadius.Tile, Padding = new Thickness(18, 0), Height = 30,
+            Background = NotaPalette.SurfaceHover, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
+            CornerRadius = NotaRadius.Control, Padding = new Thickness(18, 0), Height = 28,
             Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = (_exportLabel = new TextBlock { Text = "Export WAV", FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = OnAccent, VerticalAlignment = VerticalAlignment.Center }),
+            Child = (_exportLabel = new TextBlock { Text = "Export WAV", FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center }),
         };
+        export.BindResource(Border.BoxShadowProperty, "Shadow.Raised");
         export.PointerPressed += (_, _) =>
         {
             var fmt = SelectedFormat;
@@ -186,7 +192,7 @@ public sealed class ExportWindow : NotaWindow
         bool mp3 = fmt == ExportFormat.Mp3;
         _depth.IsVisible = !mp3;
         _quality.IsVisible = mp3;
-        _depthTitle.Text = mp3 ? "QUALITY" : "BIT DEPTH";
+        _depthTitle.Text = mp3 ? "Quality" : "Bit depth";
 
         // MP3 tops out at 48 kHz (MPEG-1): grey 96 kHz out, and move an existing
         // 96 kHz selection down to 48 kHz so no invalid pair is reachable.
@@ -237,7 +243,7 @@ public sealed class ExportWindow : NotaWindow
     private Control Section(string title, Control content) => new StackPanel
     {
         Spacing = 6,
-        Children = { new TextBlock { Text = title, FontSize = 10, FontWeight = FontWeight.Bold, Foreground = TextTertiary }, content },
+        Children = { new TextBlock { Text = title, FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary }, content },
     };
 
     private ComboBox Combo(string[] items, int selected)

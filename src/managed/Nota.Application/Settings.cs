@@ -11,16 +11,29 @@ namespace Nota.Application;
 
 public enum ToolbarSide { Left, Right }
 
-/// <summary>Which palette the UI wears. <see cref="System"/> follows the OS appearance
-/// and flips live when the user changes it.</summary>
+/// <summary>The appearance before colour themes (spec 011). Still written, in step with
+/// the chosen theme's kind, so an older Nota opening this settings file gets a sensible
+/// variant; read only to migrate (see <see cref="Appearance"/>).</summary>
 public enum AppTheme { Dark, Light, System }
 
 public sealed class Settings
 {
     public ToolbarSide ToolbarSide { get; set; } = ToolbarSide.Left;
-    /// <summary>Palette variant: Ember Graphite (dark), Ember Paper (light), or the OS
-    /// appearance. Dark by default — a DAW is used in dark rooms for long sessions.</summary>
+    /// <summary>Legacy appearance (Dark / Light / System). Kept in step with
+    /// <see cref="ColourTheme"/> for older versions; read only when ColourTheme is empty.</summary>
     public AppTheme Theme { get; set; } = AppTheme.Dark;
+    /// <summary>The colour theme the UI wears — a theme id such as "studio-dark", or
+    /// "system" to follow the OS with <see cref="SystemDarkTheme"/> / <see cref="SystemLightTheme"/>.
+    /// Empty until first resolved from the legacy <see cref="Theme"/>. Studio Dark by default —
+    /// a DAW is used in dark rooms for long sessions.</summary>
+    public string ColourTheme { get; set; } = "";
+    /// <summary>Theme worn while following the OS and it is in dark mode (a dark theme).</summary>
+    public string SystemDarkTheme { get; set; } = Appearance.StudioDark;
+    /// <summary>Theme worn while following the OS and it is in light mode (a light theme).</summary>
+    public string SystemLightTheme { get; set; } = Appearance.StudioLight;
+    /// <summary>Whether Session view shows its inspector column (toolbar toggle). On by default;
+    /// folding it gives the clip grid its width back on small windows.</summary>
+    public bool SessionInspectorOpen { get; set; } = true;
     /// <summary>Browser sample library folder ("" = default ~/Music/Nota Samples). M7-4.</summary>
     public string SamplesFolder { get; set; } = "";
     /// <summary>Browser projects folder ("" = default ~/Documents/Nota Projects). M7-4.</summary>
@@ -87,6 +100,8 @@ public sealed class Settings
     public bool BrowserShowTypeTags { get; set; } = true;
     /// <summary>Group the device tabs into BUILT-IN and PLUG-INS sections with counts.</summary>
     public bool BrowserGroupBySource { get; set; } = true;
+    /// <summary>Show the category chips above the device lists (Synths, Dynamics…).</summary>
+    public bool BrowserCategoryChips { get; set; } = true;
     /// <summary>Float favorited devices to the top of their section.</summary>
     public bool BrowserFavoritesFirst { get; set; } = true;
     /// <summary>The browser is folded down to its icon rail.</summary>

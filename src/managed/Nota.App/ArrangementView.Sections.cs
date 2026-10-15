@@ -55,7 +55,7 @@ public sealed partial class ArrangementView
     {
         var label = new TextBlock
         {
-            Text = "SECTIONS", Classes = { "SectionLabel" },
+            Text = "Sections", Classes = { "SectionLabel" },
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
@@ -161,13 +161,14 @@ public sealed partial class ArrangementView
     private sealed class SectionsControl : Control
     {
         private static readonly IBrush LaneBg = NotaPalette.Wash(NotaPalette.BgSunken, 0xFF);
-        // Spans alternate between a brass-marked and a neutral treatment, so a long song
-        // reads as a rhythm of blocks rather than one continuous ribbon of labels.
-        private static readonly IBrush WarmFill = NotaPalette.Wash(NotaPalette.Accent, 0x33);
+        // Spans alternate between two neutral tone steps, so a long song reads as a rhythm of
+        // blocks rather than one continuous ribbon of labels. Neither is the accent: a section
+        // at rest is neither live nor chosen. (A span being drawn — Draft — is.)
+        private static readonly IBrush WarmFill = NotaPalette.Wash(NotaPalette.SurfaceHover, 0xFF);
         private static readonly IBrush ColdFill = NotaPalette.Wash(NotaPalette.SurfaceRaised, 0xFF);
-        private static readonly IBrush WarmEdge = NotaPalette.AccentBright;
+        private static readonly IBrush WarmEdge = NotaPalette.TextFaint;
         private static readonly IBrush ColdEdge = NotaPalette.BorderStrong;
-        private static readonly IBrush WarmInk = NotaPalette.AccentBright;
+        private static readonly IBrush WarmInk = NotaPalette.TextPrimary;
         private static readonly IBrush ColdInk = NotaPalette.TextSecondary;
         private static readonly IBrush HintInk = NotaPalette.TextDisabled;
         private static readonly IBrush DraftFill = NotaPalette.Wash(NotaPalette.AccentBright, 0x28);

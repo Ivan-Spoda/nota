@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Flanger views (device kind 23) — the pictures on the Flanger card:
-//   FlangerCombView  — the live comb response of both channels (L brass, R teal) over 20 Hz …
+//   FlangerCombView  — the live comb response of both channels (L neutral ink, R teal) over 20 Hz …
 //                      20 kHz, −36 … +12 dB, with the first notch marked. Where the teeth get
 //                      denser than a pixel the curve draws each column's max…min, so the comb
 //                      stays honest at high frequencies. Drag left / right moves the notch (Delay),
@@ -23,7 +23,7 @@ namespace Nota.App;
 internal static class FlangerMath
 {
     public static readonly string[] Waves = { "Sine", "Tri", "Saw" };
-    public static readonly string[] WaveNames = { "SINE", "TRIANGLE", "SAW" };
+    public static readonly string[] WaveNames = { "Sine", "Triangle", "Saw" };
     // Sync divisions, slowest → fastest (Flanger::kDivBeats / kDivNames).
     public static readonly double[] DivBeats = { 8, 4, 2, 1.5, 1, 2.0 / 3, 0.5, 1.0 / 3, 0.25 };
     public static readonly string[] DivNames = { "2/1", "1/1", "1/2", "1/4D", "1/4", "1/4T", "1/8", "1/8T", "1/16" };
@@ -158,7 +158,7 @@ internal sealed class FlangerCombView : Control
 
         // R first so L reads on top where they meet.
         Curve(_tauR, _on ? NotaPalette.TealBright : NotaPalette.TextAxis, 1.2, 0.75);
-        Curve(_tauL, _on ? NotaPalette.Accent : NotaPalette.TextAxis, 1.6, 1);
+        Curve(_tauL, _on ? NotaPalette.VizInk : NotaPalette.TextAxis, 1.6, 1);
 
         void Label(string s, double x, double y)
         {
@@ -236,7 +236,7 @@ internal sealed class FlangerSweepView : Control
         ctx.DrawLine(new Pen(NotaPalette.GraphBorder, 1, new DashStyle(new double[] { 2, 3 }, 0)), new Point(X(1), 0), new Point(X(1), h));
 
         Curve(_off, _on ? NotaPalette.TealBright : NotaPalette.TextAxis, 1.2, 0.75);
-        Curve(0, _on ? NotaPalette.Accent : NotaPalette.TextAxis, 1.4, 1);
+        Curve(0, _on ? NotaPalette.VizInk : NotaPalette.TextAxis, 1.4, 1);
 
         var tl = NotaGraph.AxisText("τ " + FlangerMath.Ms(top) + " ms", size: 6);
         ctx.DrawText(tl, new Point(5, 1));
@@ -251,7 +251,7 @@ internal sealed class FlangerSweepView : Control
             double hx = X(Math.Clamp(_head, 0, 2));
             ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1), new Point(hx, 0), new Point(hx, h));
             DrawDot(new Point(hx, Y(_tauR)), NotaPalette.TealBright);
-            DrawDot(new Point(hx, Y(_tauL)), NotaPalette.AccentBright);
+            DrawDot(new Point(hx, Y(_tauL)), NotaPalette.VizInk);
         }
 
         void DrawDot(Point p, IBrush ink) => ctx.DrawEllipse(ink, new Pen(NotaGraph.Ground, 2), p, 3, 3);

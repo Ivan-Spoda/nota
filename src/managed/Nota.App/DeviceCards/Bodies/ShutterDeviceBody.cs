@@ -69,7 +69,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "GATE";
+    public string? Subtitle => "Gate";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -134,8 +134,10 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         string KeyName() => ExtOn() ? SrcName(Src()) : "Internal";
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        // An acronym NotaText.Label does not know (OS, GR) keeps its case: the label as written.
+        static TextBlock Acr(string t, IBrush? c = null) { var tb = Caps(t, c); tb.Text = t; return tb; }
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -186,7 +188,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         }
         Control ModeSeg() => Seg(Flip, new[] { "Gate", "Duck" }, "Mode — Gate lets the signal through above the threshold; Duck turns it down while the key is above it");
 
-        // Outlined chips: lit = brass edge + wash.
+        // Outlined chips: the chosen one = accent edge + wash.
         Control Chips(string[] names, Func<int, bool> lit, Action<int> pick, int learnParam, string tip)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
@@ -271,10 +273,10 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             {
                 bool ext = ExtOn();
                 name.Text = KeyName();
-                name.Foreground = ext ? AccentBright : TextPrimary;
+                name.Foreground = TextPrimary;   // an external key: a stronger frame and weight, not the accent
                 name.FontWeight = ext ? FontWeight.SemiBold : FontWeight.Normal;
-                box.BorderBrush = ext ? Brass : BorderDef;
-                chev.Foreground = ext ? NotaPalette.AccentDim : TextTertiary;
+                box.BorderBrush = ext ? NotaPalette.BorderStrong : BorderDef;
+                chev.Foreground = ext ? TextSecondary : TextTertiary;
             });
             ToolTip.SetTip(box, "Key source — Internal keys off this track; pick another track to gate or duck against it");
             Learn(box, ExternalKey);
@@ -361,20 +363,20 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         // LEFT — STATE column (input or key level · reduction)
         // ======================================================================
         var stateTitle = Caps("STATE"); stateTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inPill = new ShPill { Ink = Brass, VerticalAlignment = VerticalAlignment.Stretch };
+        var inPill = new ShPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch };
         var grPill = new ShPill { Ink = Teal, FromTop = true, VerticalAlignment = VerticalAlignment.Stretch };
         var inLbl = Caps("IN"); inLbl.HorizontalAlignment = HorizontalAlignment.Center;
-        var grLbl = Caps("GR"); grLbl.HorizontalAlignment = HorizontalAlignment.Center;
+        var grLbl = Acr("GR"); grLbl.HorizontalAlignment = HorizontalAlignment.Center;
         ToolTip.SetTip(inPill, "The level the detector compares — this track's input, or the key when an external sidechain drives it; the dashed tick is the threshold");
         ToolTip.SetTip(grPill, "Gain reduction — how far the gate has turned the signal down now");
-        var stateIn = Mono("", 7, AccentBright); stateIn.HorizontalAlignment = HorizontalAlignment.Center;
+        var stateIn = Mono("", 7, TextPrimary); stateIn.HorizontalAlignment = HorizontalAlignment.Center;
         var stateGr = Mono("", 7, TextPrimary); stateGr.HorizontalAlignment = HorizontalAlignment.Center;
         static double Norm60(double db) => Math.Clamp((db + 60) / 60, 0, 1);
         readouts.Add(() =>
         {
             bool ext = Sc(S_ExtKey) > 0.5;
             double lvl = ext ? Sc(S_KeyDb) : Sc(S_InDb);
-            inLbl.Text = ext ? "SC" : "IN";
+            inLbl.Text = NotaText.Label(ext ? "SC" : "IN");
             inPill.Set(Norm60(lvl), Norm60(ThrDb()));
             grPill.Set(Math.Clamp(Sc(S_GrDb) / 60, 0, 1), double.NaN);
             stateIn.Text = lvl <= -119 ? "−∞" : NotaNum.F($"{lvl:0.0}");
@@ -385,9 +387,9 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
         pills.Children.Add(PillCol(inPill, inLbl));
         pills.Children.Add(Col(PillCol(grPill, grLbl), 1));
-        var stateCol = new Border
+        var stateCol = new RuleSection
         {
-            Width = 56, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
+            Width = 56, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(stateTitle, Dock.Top), Docked(stateGr, Dock.Bottom), Docked(stateIn, Dock.Bottom), pills } },
         };
         DockPanel.SetDock(stateCol, Dock.Left);
@@ -400,12 +402,12 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         {
             signal = new ShSignalView();
             WireDrag(signal, h => h == ShSignalView.HThreshold ? Threshold : Return);
-            ToolTip.SetTip(signal, "The input (teal) and what passes (brass) over the window, with the threshold (dashed brass) and where the gate closes again (dashed). Drag a line up or down; double-click resets it.");
+            ToolTip.SetTip(signal, "The input (teal) and what passes (neutral ink) over the window, with the threshold (dashed) and where the gate closes again (dashed). Drag a line up or down; double-click resets it.");
             Learn(signal, Threshold);
 
             var liveBtn = Latch(-1, () => live, () => { live = !live; if (!live) Array.Copy(scope, frozen, kScope); }, () => live ? "Live" : "Frozen",
                 "Live — the graph follows the audio; click to freeze the picture");
-            var ret = Mono("", 7, AccentBright);
+            var ret = Mono("", 7, TextSecondary);
             readouts.Add(() => ret.Text = NotaNum.F($"return {RetDb():0.0}\u2009dB"));
             var head = HeadRow(Row(6, Caps("MODE"), ModeSeg(), new Border { Width = 2 }, Caps("LOOK"),
                 Seg(Lookahead, new[] { "0", "1", "5\u2009ms" }, "Lookahead — the gate opens this much before the transient arrives (the track is delayed by it)"), liveBtn), ret);
@@ -435,7 +437,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             var shapes = Chips(Shapes, i => Sel(Shape, 3) == i, i => SetP(Shape, i / 2f), Shape,
                 "Shape — Linear: straight ramps over the times; Log: the classic one-pole curve; Snap: stays open, then shuts hard");
             var retrig = ToggleLatch(Retrigger, "Retrig", "Retrigger — trigger mode: each hit fires one attack → hold → release, however long the signal stays above the threshold");
-            var times = Mono("", 7, AccentBright);
+            var times = Mono("", 7, TextSecondary);
             readouts.Add(() => times.Text = Times());
             var head = HeadRow(Row(6, Caps("SHAPE"), shapes, new Border { Width = 2 }, ModeSeg(), retrig), times);
             var knobs = KnobRow(new[]
@@ -458,12 +460,12 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         {
             keyView = new ShKeyView();
             WireDrag(keyView, h => h == ShKeyView.HHp ? DetHP : DetLP);
-            ToolTip.SetTip(keyView, "The detector's band-pass (teal) — only this part of the key opens the gate — over the reduction in the window (brass). Drag the nodes sideways; double-click resets.");
+            ToolTip.SetTip(keyView, "The detector's band-pass (teal) — only this part of the key opens the gate — over the reduction in the window (neutral ink). Drag the nodes sideways; double-click resets.");
             Learn(keyView, DetHP);
 
             var eq = Latch(DetFilter, () => On(DetFilter), () => SetP(DetFilter, On(DetFilter) ? 0f : 1f), () => On(DetFilter) ? "SC EQ on" : "SC EQ off",
                 "SC EQ — the detector hears the key through its band-pass; off = the full band");
-            var look = Mono("", 7, AccentBright);
+            var look = Mono("", 7, TextSecondary);
             readouts.Add(() => look.Text = NotaNum.F($"look {LookMs()}\u2009ms"));
             var head = HeadRow(Row(6, Caps("KEY"), KeyDrop(false), ModeSeg(), ListenLatch(), eq), look);
             var knobs = KnobRow(new[]
@@ -518,7 +520,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         // A slider drawn as a filled bar with its value inside (Complexity / Smooth / Swing).
         Control FillBar(int p, Func<string> text, string tip)
         {
-            var fill = new Border { HorizontalAlignment = HorizontalAlignment.Left, Background = NotaPalette.Wash(NotaPalette.Accent, 0x40) };
+            var fill = new Border { HorizontalAlignment = HorizontalAlignment.Left, Background = NotaPalette.Wash(NotaPalette.VizInk, 0x30) };
             var tb = new TextBlock { FontSize = 9, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var grid = new Grid { Children = { fill, tb } };
             var host = new Border
@@ -532,8 +534,8 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 double v = P(p);
                 fill.Width = Math.Max(0, grid.Bounds.Width * v);
                 tb.Text = text();
-                host.BorderBrush = v > 0.004 ? NotaPalette.BorderBrass : BorderDef;
-                tb.Foreground = v > 0.004 ? AccentBright : TextSecondary;
+                host.BorderBrush = drag ? Brass : v > 0.004 ? NotaPalette.BorderStrong : BorderDef;
+                tb.Foreground = v > 0.004 ? TextPrimary : TextSecondary;
             }
             void SetX(double x) { Raw(p, x / Math.Max(1, grid.Bounds.Width)); Paint(); RefreshAll(); }
             host.PointerPressed += (_, e) =>
@@ -631,7 +633,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
 
             var smooth = FillBar(PatSmooth, () => "Smooth " + Pct(P(PatSmooth)), "Smooth — ramps into each step instead of jumping (up to half a step)");
             var swing = FillBar(PatSwing, () => NotaNum.F($"Swing {P(PatSwing) * 75:0} %"), "Swing — every second step comes late");
-            var nSt = Mono("", 9, AccentBright); var nLv = Mono("", 9, AccentBright);
+            var nSt = Mono("", 9, TextPrimary); var nLv = Mono("", 9, TextPrimary);
             readouts.Add(() => { nSt.Text = NSteps().ToString(); nLv.Text = NLevels().ToString(); });
             Border Cycle(TextBlock t, Action a, string tip)
             {
@@ -701,7 +703,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         static Control LabelRow(string label, Control c, double labW = 40)
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{labW},*")) };
-            g.Children.Add(new TextBlock { Text = label, FontSize = 7, FontWeight = FontWeight.Bold, Foreground = TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center });
+            g.Children.Add(new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center });
             g.Children.Add(Col(c, 1));
             return g;
         }
@@ -776,7 +778,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                     Caps("MEASUREMENTS"),
                     Line(() => Sc(S_ExtKey) > 0.5 ? "sc in" : "in", () => DbF(Sc(S_ExtKey) > 0.5 ? Sc(S_KeyDb) : Sc(S_InDb))),
                     Line(() => "out", () => DbF(Sc(S_OutDb))),
-                    Line(() => "GR · peak", () => NotaNum.F($"{(Sc(S_GrDb) < 0.05 ? "0.0" : Sc(S_GrDb) > 99 ? "−∞" : NotaNum.F($"−{Sc(S_GrDb):0.0}"))} · {(Sc(S_PeakGrDb) < 0.05 ? "0.0" : Sc(S_PeakGrDb) > 99 ? "−∞" : NotaNum.F($"−{Sc(S_PeakGrDb):0.0}"))}\u2009dB"), AccentBright) } },
+                    Line(() => "GR · peak", () => NotaNum.F($"{(Sc(S_GrDb) < 0.05 ? "0.0" : Sc(S_GrDb) > 99 ? "−∞" : NotaNum.F($"−{Sc(S_GrDb):0.0}"))} · {(Sc(S_PeakGrDb) < 0.05 ? "0.0" : Sc(S_PeakGrDb) > 99 ? "−∞" : NotaNum.F($"−{Sc(S_PeakGrDb):0.0}"))}\u2009dB"), TextPrimary) } },
             };
             var sliders = new StackPanel { Spacing = 6, Children = {
                 SliderRow("SC HP", DetHP, HpF, modulation: true),
@@ -833,7 +835,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         // The right panel follows the centre: Rhythm / Detector beside the pattern, else Detector / Meters.
         var rightFrame = TabFrame(new[] { "Detector", "Meters" }, rightHost, RightBody, true, _ => RefreshAll(), null);
         Control? rhythmFrame = null;
-        var right = new Border { Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         var centre = TabFrame(new[] { "Signal", "Envelope", "Sidechain", "Pattern" }, centreHost, CentreBody, false, t =>
         {
             centreTab = t;
@@ -841,7 +843,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             Refresh();
         }, extrasHost);
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip
@@ -906,7 +908,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { stateCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -950,7 +952,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                     btns[i].Background = on ? Card2 : Brushes.Transparent;
                     btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
                     var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? AccentBright : TextTertiary;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
                     tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }

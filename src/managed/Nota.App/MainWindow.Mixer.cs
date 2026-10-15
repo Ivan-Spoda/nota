@@ -27,18 +27,23 @@ public partial class MainWindow
         var view = settings.Current.MixerView == "map" ? MixerViewMode.StereoMap : MixerViewMode.Strips;
         _mixer.View = view;
         var win = new MixerWindow(this, view);
+        var mixer = _mixer;
+        // The window is as wide as its strips; the Stereo Map keeps whatever width it has.
+        void Fit() { if (mixer.View == MixerViewMode.Strips) win.FitWidth(mixer.StripsWidth); }
         win.ViewPicked += v =>
         {
             if (_mixer is not null) _mixer.View = v;
             settings.Current.MixerView = v == MixerViewMode.StereoMap ? "map" : "strips";
             settings.Save();
+            Fit();
         };
         win.EnableMidiLearn(_learn);   // faders/knobs stay MIDI-mappable in the window
-        win.WindowClosed += () => { if (_mixer is not null) _mixer.IsVisible = false; _mixerWindow = null; };
+        win.WindowClosed += () => { mixer.StripsChanged -= Fit; mixer.IsVisible = false; _mixerWindow = null; };
         _mixerWindow = win;
 
         _mixer.IsVisible = true;       // so the tick loop updates its meters
         SetHost(win.Host, _mixer);
+        _mixer.StripsChanged += Fit;
         _mixer.Refresh();
         win.Show(this);
     }

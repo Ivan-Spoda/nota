@@ -38,7 +38,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     /// <summary>The count-in is clicking (the transport hasn't rolled yet).</summary>
     [ObservableProperty] private bool _isCountingIn;
     [ObservableProperty] private bool _loopOn;
-    [ObservableProperty] private string _loopRangeText = "1.1 – 5.1";
+    [ObservableProperty] private string _loopRangeText = "1.1–5.1";
     [ObservableProperty] private bool _recordOn;
     /// <summary>Which clock the position readout is showing, printed under it so the
     /// number is never ambiguous (transport console, mockup 1b).</summary>
@@ -100,7 +100,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         LoopRangeText = FormatRange(_engine.LoopStart, _engine.LoopEnd);
     }
 
-    private static string FormatRange(double startBeat, double endBeat) => $"{BarBeat(startBeat)} – {BarBeat(endBeat)}";
+    private static string FormatRange(double startBeat, double endBeat) => $"{BarBeat(startBeat)}–{BarBeat(endBeat)}";   // closed: plain numbers
     private static string BarBeat(double beat)
     {
         int bar = (int)(beat / BeatsPerBar) + 1;

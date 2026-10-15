@@ -32,7 +32,7 @@ public partial class MainWindow
         // Only clip tracks render content (groups/returns have no chain of their own to bounce).
         var sources = src.TrackIds.Where(id => TrackTypeOf(id) is 0 or 1).ToArray();
         if (sources.Length == 0) { _vm.StatusText = "The selected range has no audio or instrument track to bounce."; return; }
-        if (sources.Length > 1) { _vm.StatusText = "Paste Bounced Audio takes a range on a single track."; return; }
+        if (sources.Length > 1) { _vm.StatusText = "Paste bounced audio takes a range on a single track."; return; }
         int sourceId = sources[0];
 
         if (targetId <= 0) targetId = Timeline.FocusTrackId;
@@ -46,14 +46,14 @@ public partial class MainWindow
         float[]? pcm = null;
         try
         {
-            await RunBlockingAsync("Paste Bounced Audio", "Rendering…", async prog =>
+            await RunBlockingAsync("Paste bounced audio", "Rendering…", async prog =>
             {
                 var frac = new Progress<double>(f => prog.Report(ProgressReport.At(f, $"Rendering… {f * 100:0} %")));
                 pcm = await Task.Run(() => _freezer.BounceRange(Engine, sourceId, src.Start, src.End,
                     _vm.Transport.LoopOn, _vm.Transport.MetronomeOn, frac));
             });
         }
-        catch (Exception ex) { _vm.StatusText = $"Paste Bounced Audio failed: {ex.Message}"; return; }
+        catch (Exception ex) { _vm.StatusText = $"Paste bounced audio failed: {ex.Message}"; return; }
         finally { _vm.SuspendEnginePolling = false; _bounceBusy = false; }
 
         if (pcm is null) { _vm.StatusText = "Couldn't render this track."; return; }

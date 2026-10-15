@@ -17,9 +17,10 @@ namespace Nota.App;
 public sealed class ValueBar : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
-    private static readonly IBrush Border = NotaPalette.BorderDefault;
-    private static readonly IBrush FillAccent = NotaPalette.Teal;
-    private static readonly IBrush FillBrass = NotaPalette.Accent;
+    private static readonly IBrush Border = NotaPalette.Rule;
+    private static readonly IBrush FillAccent = NotaPalette.Teal;                          // modulation
+    private static readonly IBrush FillBrass = NotaPalette.Wash(NotaPalette.VizInk, 0x40); // at rest: neutral
+    private static readonly IBrush FillLive = NotaPalette.Wash(NotaPalette.Accent, 0x8C);  // live
     private static readonly IBrush TextBrush = NotaPalette.TextPrimary;
     private static readonly Typeface Mono = NotaFonts.Mono;
 
@@ -76,6 +77,12 @@ public sealed class ValueBar : Control
         if (dv != 0) Apply(_value + dv);
     }
 
+    // Under the pointer (or in the hand) the control is live and takes the accent; at rest
+    // its value is neutral ink — the accent marks a knob or fader only while focused or dragged.
+    private bool _hover;
+    protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; InvalidateVisual(); }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hover = false; InvalidateVisual(); }
+
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (_drag) GestureEnd?.Invoke();
@@ -96,13 +103,13 @@ public sealed class ValueBar : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        var rrect = new RoundedRect(new Rect(0, 0, w, h), 4);
+        var rrect = new RoundedRect(new Rect(0, 0, w, h), NotaRadius.ControlValue);
         ctx.DrawRectangle(Bg, new Pen(Border, 1), rrect);
         double fw = _value * w;
         if (fw > 1)
         {
-            using (ctx.PushClip(new RoundedRect(new Rect(0, 0, fw, h), 4)))
-                ctx.DrawRectangle(Accent ? FillAccent : FillBrass, null, new Rect(0, 0, w, h), 4, 4);
+            using (ctx.PushClip(new RoundedRect(new Rect(0, 0, fw, h), NotaRadius.ControlValue)))
+                ctx.DrawRectangle(Accent ? FillAccent : _drag || _hover ? FillLive : FillBrass, null, new Rect(0, 0, w, h), NotaRadius.ControlValue, NotaRadius.ControlValue);
         }
         var text = new FormattedText(_fmt(_value), System.Globalization.CultureInfo.InvariantCulture,
             FlowDirection.LeftToRight, Mono, 9.5, TextBrush);

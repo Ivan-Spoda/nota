@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Level views (device kind 18) — the pictures on the Level card:
-//   LvHistoryView — the last 8 s of loudness: the input (ink), the output (brass) and the target
+//   LvHistoryView — the last 8 s of loudness: the input (dim ink), the output (neutral ink) and the target
 //                   (dashed teal, with a ±1 LU band) that moves with a reference track. A dot
 //                   marks the output now. Drag up / down for Target (not while a reference
 //                   drives it); double-click resets it.
 //   LvGainFader   — the correction as a vertical fader around 0 dB (±Max Gain): teal while Auto
-//                   rides it, a brass fill with a draggable cap in Manual.
+//                   rides it, a neutral fill with a draggable cap in Manual (accent while dragged).
 //   LvMeter       — a 4px bar with an optional teal marker (the target, the ceiling, 0 dB).
 //   LvLegend      — the graph legend drawn with NotaGraph's samples, for the panel bar.
 // LevelMath holds the telemetry layout (AutoGain.h) and the unit mappings.
@@ -136,8 +136,8 @@ internal sealed class LvHistoryView : Control
         // Target, dashed teal (steps with a reference).
         var tp = new Pen(NotaPalette.TealBright, 1, new DashStyle(new double[] { 4, 3 }, 0));
         Trace(ctx, _tar, Math.Max(0, first), tp, allowSilent: true);
-        // Output, brass.
-        Trace(ctx, _out, first, NotaGraph.SecondaryPen(_on ? NotaPalette.Accent : NotaPalette.TextTertiary, NotaGraph.PrimaryWidth));
+        // Output, neutral ink.
+        Trace(ctx, _out, first, NotaGraph.SecondaryPen(_on ? NotaPalette.VizInk : NotaPalette.TextTertiary, NotaGraph.PrimaryWidth));
 
         NotaGraph.Title(ctx, frame, "Loudness");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _lock, _locked ? NotaPalette.TealBright : NotaPalette.TextTertiary);
@@ -158,7 +158,7 @@ internal sealed class LvHistoryView : Control
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "now");
 
         float oNow = _out[(_w + N - 1) % N];
-        if (_on && _count > 0 && oNow > -119) NotaGraph.Node(ctx, new Point(w - 4, Y(oNow)), true, NotaPalette.AccentBright);
+        if (_on && _count > 0 && oNow > -119) NotaGraph.Node(ctx, new Point(w - 4, Y(oNow)), false, NotaPalette.VizInk);
 
         void Trace(DrawingContext dc, float[] src, int from, IPen pen, bool allowSilent = false)
         {
@@ -236,7 +236,7 @@ internal sealed class LvGainFader : Control
         double Y(double db) => top + (0.5 - Math.Clamp(db / _max, -1, 1) / 2) * (bot - top);
         ctx.FillRectangle(NotaPalette.BgSunken, new Rect(cx - 2, 0, 4, h), 2);
         ctx.FillRectangle(NotaPalette.BorderStrong, new Rect(0, Math.Round(Y(0)), w, 1));
-        IBrush fill = !_on ? NotaPalette.BorderStrong : _manual ? NotaPalette.Accent : NotaPalette.Teal;
+        IBrush fill = !_on ? NotaPalette.BorderStrong : !_manual ? NotaPalette.Teal : _drag ? NotaPalette.Accent : NotaPalette.VizInk;
         double y0 = Y(0), y1 = Y(_db);
         ctx.FillRectangle(fill, new Rect(cx - 2, Math.Min(y0, y1), 4, Math.Abs(y1 - y0)), 1);
         IBrush cap = !_on ? NotaPalette.TextDisabled : _manual ? NotaPalette.TextPrimary : NotaPalette.TealBright;
@@ -247,7 +247,7 @@ internal sealed class LvGainFader : Control
 internal sealed class LvMeter : Control
 {
     private double _l, _r, _mark = double.NaN;
-    private IBrush _ink = NotaPalette.Accent;
+    private IBrush _ink = NotaPalette.VizInk;
 
     public LvMeter() { Height = 4; }
 
@@ -278,5 +278,5 @@ internal sealed class LvLegend : Control
 
     public override void Render(DrawingContext ctx)
         => NotaGraph.Legend(ctx, Bounds.Width, 0, ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Line),
-            ("output", NotaPalette.AccentBright, NotaGraph.Mark.Line), ("target", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
+            ("output", NotaPalette.VizInk, NotaGraph.Mark.Line), ("target", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
 }

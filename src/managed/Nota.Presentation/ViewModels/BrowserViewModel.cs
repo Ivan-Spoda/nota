@@ -55,6 +55,7 @@ public sealed class BrowserItem : INotifyPropertyChanged
     public string Format { get; init; } = "";     // plug-ins: "VST3" / "AU" (Sub carries the vendor)
     public string Vendor { get; init; } = "";     // plug-ins: the manufacturer
     public string Category { get; init; } = "";   // plug-ins: VST3 sub-categories ("Fx|Reverb") or the AU type
+    public string DeviceCategory { get; init; } = ""; // device rows: the browser shelf ("Reverb & delay"), see DeviceCategories
     public string Path { get; init; } = "";       // file/bundle path for samples/projects/presets
     /// <summary>Long-form description for the row's tooltip, where <see cref="Sub"/> (the
     /// narrow tag column) has no room for it. Falls back to Sub when empty.</summary>
@@ -150,6 +151,40 @@ public sealed partial class BrowserViewModel : ObservableObject
         get => _favoritesFirst;
         set { if (_favoritesFirst == value) return; _favoritesFirst = value; RebuildDeviceTabs(); }
     }
+
+    // The category chip picked on each device tab (0 Instruments, 1 Audio effects, 2 MIDI
+    // effects), "" for none. Held while the app runs; a restart starts unfiltered.
+    private readonly string[] _categoryFilter = { "", "", "" };
+
+    /// <summary>The category a device tab is narrowed to, or "" for the whole list.</summary>
+    public string CategoryFilter(int tab) => tab is >= 0 and < 3 ? _categoryFilter[tab] : "";
+
+    /// <summary>Narrows a device tab to one category ("" clears it) and refreshes it.</summary>
+    public void SetCategoryFilter(int tab, string category)
+    {
+        if (tab is < 0 or >= 3 || _categoryFilter[tab] == (category ?? "")) return;
+        _categoryFilter[tab] = category ?? "";
+        RebuildVisible(tab);
+    }
+
+    /// <summary>A device tab's category chips, in order: the fixed categories, then Other
+    /// when a device on the tab lands there (an unrecognised plug-in).</summary>
+    public IReadOnlyList<string> CategoriesOn(int tab)
+    {
+        var list = DeviceCategories.Order(TypeOf(tab)).ToList();
+        var tree = tab == 2 ? _midiTree : tab == 1 ? _fxTree : _instrTree;
+        if (tree.Any(n => ShelfOf(tab, n) == DeviceCategories.Other)) list.Add(DeviceCategories.Other);
+        return list;
+    }
+
+    private string ShelfOf(int tab, BrowserItem node)
+        => DeviceCategories.Position(TypeOf(tab), node.DeviceCategory) == int.MaxValue ? DeviceCategories.Other : node.DeviceCategory;
+
+    private bool PassesCategoryFilter(int tab, BrowserItem node)
+        => _categoryFilter[tab].Length == 0 || ShelfOf(tab, node) == _categoryFilter[tab];
+
+    private static BuiltinDeviceType TypeOf(int tab)
+        => tab == 2 ? BuiltinDeviceType.MidiEffect : tab == 1 ? BuiltinDeviceType.AudioEffect : BuiltinDeviceType.Instrument;
 
     private void RebuildDeviceTabs() { RebuildVisible(0); RebuildVisible(1); RebuildVisible(2); }
 
@@ -256,6 +291,7 @@ public sealed partial class BrowserViewModel : ObservableObject
             },
             BuiltinKind = d.Kind,
             Sub = d.Sub,
+            DeviceCategory = DeviceCategories.For(d),
         }).OrderBy(x => x.Name).ToList();
         _instrTree.AddRange(builtins.Where(b => b.Kind == BrowserItemKind.BuiltinInstrument));
         _fxTree.AddRange(builtins.Where(b => b.Kind == BrowserItemKind.BuiltinEffect));
@@ -363,6 +399,7 @@ public sealed partial class BrowserViewModel : ObservableObject
                 Format = fmt,
                 Vendor = vendor,
                 Category = category,
+                DeviceCategory = DeviceCategories.ForPlugin(isInstrument, category),
                 Kind = isInstrument ? BrowserItemKind.PluginInstrument : BrowserItemKind.PluginEffect,
                 CatalogIndex = i,
             };
@@ -469,6 +506,7 @@ public sealed partial class BrowserViewModel : ObservableObject
         foreach (var node in ordered)
         {
             if (!PassesLibraryFilter(node)) continue;   // header favorite/tag chip
+            if (!PassesCategoryFilter(tab, node)) continue;   // category chip
             if (q.Length == 0 || Matches(node, q) || AnyMatch(node.Children, q))
                 devices.Add(node);
         }

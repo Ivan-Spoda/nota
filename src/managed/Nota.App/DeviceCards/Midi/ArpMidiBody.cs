@@ -11,7 +11,7 @@
 //     its name) over four knobs (Rate · Gate · Oct · Swing). The header keeps the full preset
 //     picker (same list, same current preset as L); what S can't edit, presets still set.
 // The window (ArpGrid) animates from the engine's telemetry: the head band walks the
-// steps, played cells turn Brass Deep and the sounding one Brass Light.
+// steps, played cells dim to a neutral wash and the sounding one turns accent.
 
 using System;
 using System.Collections.Generic;
@@ -40,14 +40,12 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
     private static readonly string[] RetrigNames = { "Off", "Note", "Beat" };
     private const double FreeMsMin = 20, FreeMsMax = 1000, LabelW = 50;
 
-    private static readonly IBrush Ground = NotaPalette.SurfaceInset;
-    private static readonly IBrush Island = NotaPalette.SurfaceCard;
+    private static readonly IBrush Ground = NotaPalette.SurfaceCard;   // the card surface: sections sit on it, divided by rules (spec 012)
     private static readonly IBrush Bd = NotaPalette.BorderDefault;
     private static readonly IBrush Rule = NotaPalette.GraphBorder;
     private static readonly IBrush Well = NotaPalette.BgSunken;
     private static readonly IBrush Chip = NotaPalette.GridBeat;
     private static readonly IBrush Brass = NotaPalette.Accent;
-    private static readonly IBrush BrassLit = NotaPalette.AccentBright;
     private static readonly IBrush Txt = NotaPalette.TextPrimary;
     private static readonly IBrush Sub = NotaPalette.TextSecondary;
     private static readonly IBrush Cap = NotaPalette.TextTertiary;
@@ -65,8 +63,8 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
     public double WidthFor(IAudioEngine engine, int trackId, int index) => IsMini(engine, trackId, index) ? 260 : 700;
 
     // ---- small builders -------------------------------------------------------------------
-    private static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-    { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, LetterSpacing = 0.6, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
+    private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+    { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
     private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
     { Text = t, FontSize = fs, FontFamily = NotaFonts.MonoFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
 
@@ -254,7 +252,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                     bool on = (i == 1) == grid.Groove;
                     tabs[i].b.Background = on ? Chip : Brushes.Transparent;
                     tabs[i].b.BorderBrush = on ? Brass : Brushes.Transparent;
-                    tabs[i].tb.Foreground = on ? BrassLit : Cap;
+                    tabs[i].tb.Foreground = on ? NotaPalette.TextPrimary : Cap;
                     tabs[i].tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }
@@ -263,7 +261,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             readouts.Add(() =>
             {
                 info.Text = InfoText(false);
-                info.Foreground = grid.Groove ? BrassLit : Cap;
+                info.Foreground = grid.Groove ? Txt : Cap;
                 for (int i = 0; i < Lanes.Length; i++)
                 {
                     bool on = i == grid.LaneIndex;
@@ -350,15 +348,14 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             for (int i = 0; i < cells.Length; i++) { Grid.SetColumn(cells[i], i); knobs.Children.Add(cells[i]); }
 
             var inner = new DockPanel { Children = { WithDock(head, Dock.Top), WithDock(knobs, Dock.Bottom), grid } };
-            var island = new Border { Background = Island, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-                Padding = new Thickness(6, 5, 6, 0), Child = inner };
+            var island = new RuleSection { Padding = new Thickness(6, 5, 6, 0), Child = inner };
 
             readouts.Add(() =>
             {
                 laneBtn.IsVisible = grid.Groove;
                 laneName.Text = Lanes[grid.LaneIndex].Label;
                 info.Text = InfoText(true);
-                info.Foreground = grid.Groove ? BrassLit : Cap;
+                info.Foreground = grid.Groove ? Txt : Cap;
             });
 
             var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -388,10 +385,9 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             return new Border { Height = 20, BorderBrush = Bd, BorderThickness = new Thickness(0, 0, 0, 1), Child = d };
         }
 
-        Border IslandBox(Control head, Control content, double width)
+        Decorator IslandBox(Control head, Control content, double width)
         {
-            var b = new Border { Background = Island, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true,
-                Child = new DockPanel { Children = { WithDock(head, Dock.Top), content } } };
+            var b = DeviceCardKit.Section(new DockPanel { Children = { WithDock(head, Dock.Top), content } });
             if (!double.IsNaN(width)) b.Width = width;
             return b;
         }
@@ -403,7 +399,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
         }
         Control Ruled(Control c) => new Border { BorderBrush = Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 4, 0, 0), Child = c };
 
-        // A PLAY slider: label brightens to brass once moved off its default.
+        // A PLAY slider: label brightens to primary text once moved off its default.
         Control SliderLine(string label, int p, Func<double, double> toNorm, Func<double, double> fromNorm, Func<double, string> fmt)
         {
             var l = Caps(label); l.Width = LabelW;
@@ -418,8 +414,8 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                 double v = G(p);
                 if (!track.Dragging) track.Norm = toNorm(v);
                 bool mod = Math.Abs(v - Def(p)) > 0.005;
-                l.Foreground = mod ? BrassLit : Cap;
-                val.Foreground = mod ? BrassLit : Txt;
+                l.Foreground = mod ? Txt : Cap;
+                val.Foreground = Txt;
                 val.Text = fmt(v);
             });
             track.Margin = new Thickness(0, 0, 4, 0);
@@ -450,8 +446,8 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             {
                 int v = GI(p);
                 bool mod = Math.Abs(v - Def(p)) > 0.5;
-                l.Foreground = mod ? BrassLit : Cap;
-                val.Foreground = mod ? BrassLit : Txt;
+                l.Foreground = mod ? Txt : Cap;
+                val.Foreground = Txt;
                 val.Text = fmt(v);
             });
             return new DockPanel { Children = { WithDock(l, Dock.Left), box } };
@@ -486,7 +482,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             return g;
         }
 
-        // A mini-view knob: 34px gauge, caps label, mono value. `learnParam` names the param the
+        // A mini-view knob: 34px gauge, sentence-case label, mono value. `learnParam` names the param the
         // knob drives right now (Rate is the division when synced, the free rate otherwise).
         Control KnobCell(string label, int p, Func<double> norm, Action<double> set, Func<string> text, Func<int>? learnParam = null)
         {
@@ -498,7 +494,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             var val = Mono("", Sub, 7); val.HorizontalAlignment = HorizontalAlignment.Center;
             readouts.Add(() => { double n = norm(); if (!knob.Dragging && Math.Abs(knob.Value - n) > 1e-6) knob.Value = n; val.Text = text(); });
             return new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Cursor = new Cursor(StandardCursorType.SizeNorthSouth),
-                Children = { knob, new TextBlock { Text = label, FontSize = 7, FontWeight = FontWeight.Bold, LetterSpacing = 0.6, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, val } };
+                Children = { knob, new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, val } };
         }
     }
 }

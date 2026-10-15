@@ -22,8 +22,9 @@
 //   PERFORM 186   Swing · Human · Accent (teal — they shape the playing, not the sound),
 //                 Master and Glue (the bus compressor), the output meter.
 //   STEP          a full-width strip: the selected voice's sixteen steps in bank A–D, a
-//                 velocity lane under them. Brass is the step, bright brass the accent, a
-//                 brass outline a quiet step; teal is the playhead and the velocity.
+//                 velocity lane under them. An on step is accent (a toggle that is on), a
+//                 brighter one the accent step, an outline a quiet step; teal is the playhead
+//                 and the velocity.
 //   status        what the voice is and where its steps are · voices · rate · tempo · CPU.
 //
 // Every knob is a plugin param → automation / persist / clone, followed live. The steps are
@@ -49,7 +50,7 @@ namespace Nota.App;
 internal sealed class RhythmInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
-    public string Subtitle => "DRUM MACHINE";
+    public string Subtitle => "Drum machine";
     public double CardWidth => 700;
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active) => $"{Math.Max(0, active)}/{RM.Voices}";
@@ -113,8 +114,8 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
 
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold,
-            LetterSpacing = NotaType.SectionLabelTracking, Foreground = c ?? TextTertiary,
+            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
         static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
@@ -163,7 +164,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             return row;
         }
 
-        // A small raised button; a latching one turns brass-washed while on.
+        // A small raised button; a latching one turns accent-washed while on.
         Border SmallButton(Control content, TextBlock label, Action click, Func<bool>? on = null)
         {
             var b = new Border
@@ -249,7 +250,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 Foreground = on ? AccentBright : TextPrimary, VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(5, 0, 4, 0),
             };
-            var tag = Mono(isSample[v] ? "SMP" : "SYN", on ? AccentBright : TextTertiary);
+            var tag = Mono(isSample[v] ? "smp" : "syn", on ? AccentBright : TextTertiary);
             var fxTag = Mono(engine.RhythmVoiceDeviceCount(track, v) > 0 ? "fx" : "", on ? AccentBright : TextTertiary);
             fxTag.Margin = new Thickness(0, 0, 3, 0);
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), Margin = new Thickness(5, 0) };
@@ -320,11 +321,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         }, out _, padX: 6, fontSize: 7);
         ToolTip.SetTip(srcSeg, "Synth: the voice's own engine · Sample: a loaded one-shot (loads one if the voice has none)");
 
-        var folder = new Avalonia.Controls.Shapes.Path
-        {
-            Data = Geometry.Parse("M1 3.5 L4.5 3.5 L5.6 2 L11 2 L11 10 L1 10 Z"), Stroke = NotaPalette.TextStrong, StrokeThickness = 1.2,
-            Width = 7, Height = 7, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center,
-        };
+        var folder = new Glyph(GlyphKind.Folder, 8) { Foreground = NotaPalette.TextStrong };
         var fileText = new TextBlock
         {
             Text = sampleMode ? sampleName : "Load file…", FontSize = 7, FontWeight = FontWeight.SemiBold, MaxWidth = 90,
@@ -333,7 +330,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         if (sampleMode) fileText.FontFamily = NotaFonts.MonoFamily;
         var fileBtn = SmallButton(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { folder, fileText } }, fileText,
             () => LoadSample(kit, sel), () => sampleMode);
-        readouts.Add(() => folder.Stroke = sampleMode ? AccentBright : NotaPalette.TextStrong);
+        readouts.Add(() => folder.Foreground = sampleMode ? NotaPalette.TextPrimary : NotaPalette.TextStrong);
         ToolTip.SetTip(fileBtn, sampleMode ? $"{sampleName} — click to load another file" : "Load a one-shot into this voice (or drop a file on the voice)");
 
         var voiceHead = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(7, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -414,7 +411,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 string secs = sampleSecs > 0 ? " · " + NotaNum.Unit((en - st) * sampleSecs, "0.00", "s") : "";
                 sv.Set(sampleName, Hue(sel), st, en, G(P("reverse")) >= 0.5f, posSel, $"{RM.Pct(st)} → {RM.Pct(en)}{secs}");
             });
-            ToolTip.SetTip(sv, "Drag the brass lines to set Start and End · double-click to load another file");
+            ToolTip.SetTip(sv, "Drag the Start and End lines to set them · double-click to load another file");
             AcceptDrops(sv, sel, _ => { });
             graph = sv;
         }
@@ -709,7 +706,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         Grid.SetRow(steps, 1); body.Children.Add(steps);
 
         DockPanel.SetDock(statusHost, Dock.Bottom);
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.Gutter, Children = { statusHost, body } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
 
         LoadStrip(); PaintBanks();
         ctx.AddDeviceRefresher(Live);
@@ -848,8 +845,8 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         }
     }
 
-    // A section: card ground, hairline, radius 6, with an 18px header strip.
-    private static Border Section(Control head, Control body)
+    // A section: a rule-divided area of the card, with an 18px header strip.
+    private static Decorator Section(Control head, Control body)
     {
         var headHost = new Border { Height = HeadH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = head };
         var g = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
@@ -858,11 +855,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         return SectionBox(g);
     }
 
-    private static Border SectionBox(Control child) => new()
-    {
-        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = child,
-    };
+    private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
 
     /// <summary>Row definitions that put a caption for each dB mark at its place on the meter.</summary>
     private static IEnumerable<string> ScaleRows(params double[] dbs)

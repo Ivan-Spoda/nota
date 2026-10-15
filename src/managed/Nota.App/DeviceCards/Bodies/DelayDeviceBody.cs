@@ -42,7 +42,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "DELAY";
+    public string? Subtitle => "Delay";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -94,8 +94,8 @@ internal sealed class DelayDeviceBody : IDeviceBody
         double SpreadMs() => P(Spread) * 50;
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -244,7 +244,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
         readouts.Add(SyncTaps);
 
         // ======================================================================
-        // LEFT — LOOP column (Feedback · Spread)
+        // LEFT — Loop column (Feedback · Spread)
         // ======================================================================
         Control LoopFader(int p, string label, IBrush ink, IBrush handle, Func<string> value, string tip)
         {
@@ -261,22 +261,22 @@ internal sealed class DelayDeviceBody : IDeviceBody
                 f.Set(P(p));
                 val.Text = value();
                 bool hot = On(Freeze) && p == Feedback;
-                val.Foreground = hot || P(p) > 0.9f ? AccentBright : TextPrimary;
+                val.Foreground = hot ? AccentBright : P(p) > 0.9f ? NotaPalette.Warning : TextPrimary;   // Freeze is live; > 90 % runs away
                 lb.Foreground = hot ? AccentBright : TextTertiary;
             });
             return new DockPanel { Width = 44, Children = { Docked(val, Dock.Bottom), Docked(lb, Dock.Bottom), f } };
         }
         var loopTitle = Caps("LOOP"); loopTitle.HorizontalAlignment = HorizontalAlignment.Center;
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 2) };
-        faders.Children.Add(LoopFader(Feedback, "FEEDBACK", NotaPalette.Accent, NotaPalette.AccentBright,
-            () => On(Freeze) ? "HOLD" : Pct(P(Feedback)),
+        faders.Children.Add(LoopFader(Feedback, "FEEDBACK", NotaPalette.VizInk, NotaPalette.VizInk,
+            () => On(Freeze) ? "Hold" : Pct(P(Feedback)),
             "Feedback — how much of each repeat goes round again; Freeze pins it at 100 %. Double-click resets."));
         faders.Children.Add(Col(LoopFader(Spread, "SPREAD", NotaPalette.Rose, NotaPalette.RoseBright,
             () => NotaNum.F($"{P(Spread) * 50:0} ms"),
             "Spread — pushes the right channel later, up to 50 ms. Double-click resets."), 1));
-        var loopCol = new Border
+        var loopCol = new RuleSection
         {
-            Width = 96, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
+            Width = 96, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(loopTitle, Dock.Top), faders } },
         };
         DockPanel.SetDock(loopCol, Dock.Left);
@@ -295,7 +295,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
                     var g = new Grid { ColumnDefinitions = new ColumnDefinitions("12,*"), ColumnSpacing = 5, Height = 20 };
                     var lbl = Caps(ch); g.Children.Add(lbl);
                     // Eight divisions: past the almanac's four-choice limit for segments — an
-                    // accepted exception, see DESIGN.md § Accepted departures.
+                    // accepted exception, see DESIGN.md § Accepted exceptions.
                     g.Children.Add(Col(Seg(p, DivNames, fill: true, onPick: SyncTaps), 1));
                     if (dim is not null) readouts.Add(() => lbl.Foreground = dim() ? TextDisabled : TextTertiary);
                     return g;
@@ -455,7 +455,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
             var mid = new StackPanel { Spacing = 6, Children = {
                 SliderRow("MIX", DryWet, Pct, 52, () => On(WetOnly)),
                 SliderRow("WIDTH", WidthP, v => NotaNum.F($"{v * 200:0}"), 52),
-                SliderRow("MONO f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}"), 52) } };
+                SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}"), 52) } };
 
             var wetOnly = Toggle(WetOnly, "Wet only (send)");
             ToolTip.SetTip(wetOnly, "Wet only — repeats with no dry, for a return / send track");
@@ -500,9 +500,9 @@ internal sealed class DelayDeviceBody : IDeviceBody
 
         var centre = TabFrame(new[] { "Time", "Loop · Wow" }, centreHost, CentreBody, false, t => { centreTab = t; foreach (var a in readouts) a(); }, extras);
         var rightFrame = TabFrame(new[] { "Levels", "Output" }, rightHost, RightBody, true, _ => { foreach (var a in readouts) a(); }, null);
-        var right = new Border { Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip
@@ -541,7 +541,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { loopCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -565,7 +565,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
                     btns[i].Background = on ? Card2 : Brushes.Transparent;
                     btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
                     var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? AccentBright : TextTertiary;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
                     tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }

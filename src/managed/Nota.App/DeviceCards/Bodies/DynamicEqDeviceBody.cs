@@ -29,7 +29,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
 {
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "DYNAMIC EQ";
+    public string? Subtitle => "Dynamic EQ";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -77,8 +77,8 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         IBrush DirInk(int b, bool bright = false) => B(b, DynEq.RangeF) >= 0 ? (bright ? NotaPalette.RoseBright : NotaPalette.Rose) : (bright ? NotaPalette.TealBright : Teal);
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -112,7 +112,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         for (int b = 0; b < DynEq.Bands; b++)
         {
             int bb = b;
-            var num = new TextBlock { FontSize = 8, FontWeight = FontWeight.Bold, Text = (b + 1).ToString(), VerticalAlignment = VerticalAlignment.Center };
+            var num = new TextBlock { FontSize = 8, FontWeight = FontWeight.SemiBold, Text = (b + 1).ToString(), VerticalAlignment = VerticalAlignment.Center };
             num.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
             var type = new TextBlock { FontSize = 7, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
             var hz = Mono("", 7, TextPrimary); hz.HorizontalAlignment = HorizontalAlignment.Right;
@@ -134,7 +134,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             readouts.Add(() =>
             {
                 bool on = BandOn(bb), sel = bb == Sel(), dimmed = Solo() >= 0 && !sel;
-                num.Foreground = !on || dimmed ? TextDisabled : sel ? AccentBright : Brass;
+                num.Foreground = !on || dimmed ? TextDisabled : sel ? AccentBright : TextSecondary;
                 type.Text = DynEq.TypeShort[TypeOf(bb)];
                 type.Foreground = on && !dimmed ? TextSecondary : TextDisabled;
                 hz.Text = DynEq.HzShort(B(bb, DynEq.FreqF));
@@ -152,10 +152,9 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         DockPanel.SetDock(chipStrip, Dock.Top);
         ToolTip.SetTip(curve, "Drag a node — frequency and gain · wheel over a node — Q · double-click a node — band on / off · "
             + "double-click empty space — a new bell there · right-click a node — type, mode, solo");
-        var graphPanel = new Border
+        var graphPanel = new RuleSection
         {
-            Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-            ClipToBounds = true, Margin = new Thickness(0, 0, 5, 0),
+            Margin = new Thickness(0, 0, 5, 0),
             Child = new DockPanel { LastChildFill = true, Children = { chipStrip, new Border { Padding = new Thickness(5), Child = curve } } },
         };
 
@@ -193,8 +192,8 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 bool on = BandOn(b);
                 badge.Background = on ? AccentBright : NotaPalette.TextAxis;
                 badgeTxt.Foreground = on ? OnAccent : TextTertiary;
-                name.Text = DynEq.TypeNames[TypeOf(b)].ToUpperInvariant();
-                name.Foreground = on ? AccentBright : TextTertiary;
+                name.Text = DynEq.TypeNames[TypeOf(b)];
+                name.Foreground = on ? TextPrimary : TextTertiary;
             });
             var head = new DockPanel { Height = 20, Margin = new Thickness(8, 0), Children = { Docked(onSw, Dock.Right), badge, name } };
             var headBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = head };
@@ -240,7 +239,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 Col(K(pG, "GAIN", () => Capable(b) ? DynEq.Db(B(b, DynEq.GainF)) + " dB" : "—", "Gain — the static gain; or drag the node up / down",
                     inactive: () => !Capable(b)), 1),
                 Col(K(pQ, "Q", () => NotaNum.F($"{B(b, DynEq.QF):0.00}"), "Q — the width (the resonance on the cuts); or the wheel over the node",
-                    liveLabel: () => TypeOf(b) is DynEq.LowCut or DynEq.HighCut ? "RESO" : "Q"), 2),
+                    liveLabel: () => TypeOf(b) is DynEq.LowCut or DynEq.HighCut ? "Reso" : "Q"), 2),
             } };
 
             // ---- dynamics mode ----
@@ -255,7 +254,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 + "Lift — acts as it falls below it (a boost by default)");
             bandReadouts.Add(modeSync);
             var dynLabel = Caps("DYNAMICS");
-            bandReadouts.Add(() => dynLabel.Foreground = IsDyn(b) ? AccentBright : TextTertiary);
+            bandReadouts.Add(() => dynLabel.Foreground = IsDyn(b) ? TextSecondary : TextTertiary);
             var modeRow = new Border
             {
                 BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0),
@@ -398,11 +397,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             return panel;
         }
 
-        var right = new Border
-        {
-            Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-            ClipToBounds = true, Child = bandHost,
-        };
+        var right = new RuleSection { Width = 186, Child = bandHost };
         DockPanel.SetDock(right, Dock.Right);
         bandHost.Content = BandPanel(Sel());
         curve.SelectionChanged += () => { bandHost.Content = BandPanel(Sel()); RefreshAll(); };
@@ -439,7 +434,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             }
             else
             {
-                nowRead.Text = Solo() >= 0 ? NotaNum.F($"SOLO B{Solo() + 1}") : NotaNum.F($"B{s + 1} static");
+                nowRead.Text = Solo() >= 0 ? NotaNum.F($"Solo B{Solo() + 1}") : NotaNum.F($"B{s + 1} static");
                 nowRead.Foreground = Solo() >= 0 ? AccentBright : TextTertiary;
             }
         });
@@ -474,8 +469,8 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         readouts.Add(() =>
         {
             float o = P(DynEq.OutputP);
-            outTb.Text = "OUT " + DynEq.Db(o) + " dB";
-            outTb.Foreground = Math.Abs(o) > 0.05f ? AccentBright : TextSecondary;
+            outTb.Text = "Out " + DynEq.Db(o) + " dB";
+            outTb.Foreground = Math.Abs(o) > 0.05f ? TextPrimary : TextSecondary;
         });
         var engineRead = Mono("", 8, TextTertiary);
         readouts.Add(() =>
@@ -493,7 +488,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, graphPanel } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {

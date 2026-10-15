@@ -4,8 +4,8 @@
 // M4.1-C / M7-4 + Phase 3 + the "compact index" refresh (mockup 1a): the left
 // browser, an island panel with a 40px icon rail (Instr / FX / MIDI / Files /
 // Preset / Proj / Map) down its left edge. Each tab shows one list of single-line
-// 24px rows, sectioned into BUILT-IN and PLUG-INS with counts; the "Nota" prefix
-// drops to tertiary ink so names scan on their distinctive word, and the device
+// 24px rows, sectioned into Built-in and Plug-ins with counts; a built-in row shows
+// its distinctive word without the "Nota" family name, and the device
 // type sits at the right edge as a quiet tag. A search box filters the active list
 // live, a ⋮ button holds the view options, chips filter by favorite/tag, a status
 // line counts what is on screen, and a pinned preview footer auditions the selection — a
@@ -117,60 +117,14 @@ public sealed class BrowserView : UserControl
     private Point _pressPoint;
     private PointerPressedEventArgs? _pressArgs;
 
-    // Rail icons — stroke glyphs on the design's 24-unit grid, 1.5 stroke, round caps and
-    // joins. Each sits in its OWN optical box inside that grid (roughly 18 wide by 14–18
-    // tall), which is how they end up looking the same weight next to each other — so they
-    // must all be scaled by one factor, not each stretched to fill the icon box. GridIcon
-    // does that; see the note there.
-    // Instruments — a piano keyboard: case with key dividers and three short black keys.
-    private const string IconKeyboard = "M3.5 6 h17 v12 h-17 z M9.2 6 v12 M14.8 6 v12 M6.3 6 v5 M12 6 v5 M17.7 6 v5";
-    // Audio effects — vertical faders with offset handles (a mixer/EQ strip).
-    private const string IconSliders = "M7 4.5 v15 M12 4.5 v15 M17 4.5 v15 M5 9 h4 M10 14.5 h4 M15 7.5 h4";
-    // Files — a folder with a raised tab on the left.
-    private const string IconFolder = "M3.5 7.5 h5.6 l2.1 2.6 h9.3 v9.4 h-17 z";
-    private const string IconDownloads = "M12 4 V15 M7 10 L12 15 L17 10 M5 19 H19";   // as Settings → Downloads
-    private const string IconStar = "M12 3 L14.5 9 L21 9.3 L16 13.5 L17.7 20 L12 16.2 L6.3 20 L8 13.5 L3 9.3 L9.5 9 Z";
-    // Presets — a bookmark (a saved snapshot). Distinct from the fader glyphs above.
-    private const string IconBookmark = "M6.5 4 h11 v16 l-5.5 -4.4 l-5.5 4.4 z";
-    // Projects — a document with a dog-ear and two content lines.
-    private const string IconDoc = "M6 3.5 h7.6 l4.8 4.8 v12.2 h-12.4 z M13.6 3.5 v4.8 h4.8 M9.2 13.4 h6 M9.2 16.8 h6";
-    private const string IconPlay = "M7 4 L19 12 L7 20 Z";
-    // MIDI effects — an eighth note: head bottom-left, tall stem, flag curling to the right.
-    private const string IconMidi = "M6 17.2 a2.6 2.4 0 1 0 5.2 0 a2.6 2.4 0 1 0 -5.2 0 M11.2 17.2 V5 c3 .9 5.6 2.4 5.6 5.6";
-    // MIDI-learn map — two nodes joined by a link (a control mapped to a parameter).
-    private const string IconMap = "M3.4 17.6 a2.6 2.6 0 1 0 5.2 0 a2.6 2.6 0 1 0 -5.2 0 M15.4 6.4 a2.6 2.6 0 1 0 5.2 0 a2.6 2.6 0 1 0 -5.2 0 M7.9 15.7 L16.1 8.3";
-    // Collapse / expand — a window with its left sidebar ruled off.
-    // A clock face with a counter-clockwise arrow tail: project version history.
-    private const string IconHistory = "M4.6 9.2 A8 8 0 1 1 4 12 M4.6 9.2 L3.6 5.8 M4.6 9.2 L8 8.6 M12 7.6 V12 L15 14";
-    private const string IconSidebar = "M3.5 5.5 h17 v13 h-17 z M9.5 5.5 v13";
-    // View options — three centred rules, shortening downward (a sort/·filter glyph).
-    private const string IconOptions = "M4 7 H20 M7 12 H17 M10 17 H14";
-
-    /// <summary>One glyph off the design's 24-unit grid, rendered at <paramref name="size"/>.
-    /// The Path keeps the full 24×24 box and draws at its native coordinates; a Viewbox then
-    /// scales that square as a whole. Stretch.Uniform on the Path would instead normalise
-    /// every glyph to its own bounding box — a wide one and a tall one would come out the
-    /// same size, which is exactly the optical balance the grid exists to set. Pass
-    /// <paramref name="strokeToken"/> only where no style already paints the stroke: a local
-    /// value outranks a style setter, and the rail's active/inactive colours are styles.</summary>
-    private static Viewbox GridIcon(string data, double size, string? strokeToken = null, double strokeWidth = 1.5)
+    // Rail icons come from the shared Glyph set (one 16-unit grid, one stroke), so they keep
+    // the same weight next to each other. A local Foreground would outrank the rail's
+    // active/inactive styles, so RailIcon only sets one where no style paints it.
+    private static Glyph RailIcon(GlyphKind kind, double size, string? inkToken = null)
     {
-        var path = new Path
-        {
-            Data = Geometry.Parse(data),
-            Width = 24, Height = 24,
-            Stretch = Stretch.None,
-            StrokeThickness = strokeWidth,
-            StrokeJoin = PenLineJoin.Round,
-            StrokeLineCap = PenLineCap.Round,
-        };
-        if (strokeToken is not null) path.BindResource(Shape.StrokeProperty, strokeToken);
-        return new Viewbox
-        {
-            Width = size, Height = size,
-            Stretch = Stretch.Uniform,
-            Child = path,
-        };
+        var g = new Glyph(kind, size);
+        if (inkToken is not null) g.BindResource(Glyph.ForegroundProperty, inkToken);
+        return g;
     }
 
     private const int TabCount = 8;   // Instr / FX / MIDI / Files / Preset / Proj / Map / History
@@ -202,10 +156,6 @@ public sealed class BrowserView : UserControl
     /// <summary>Raised when the browser folds to its rail or unfolds (the host resizes its column).</summary>
     public event Action<bool>? CollapsedChanged;
     public bool IsCollapsed => _collapsed;
-
-    // Disclosure triangles for tree parent rows.
-    private const string IconCollapsed = "M1 0 L6 4.5 L1 9 Z";  // ▸
-    private const string IconExpanded = "M0 1 L9 1 L4.5 7 Z";   // ▾
 
     private readonly TextBox _search;
     private readonly TextBlock _matchCount;
@@ -246,6 +196,8 @@ public sealed class BrowserView : UserControl
     // showing similar sounds). Unlike the tag strip it wraps rather than folding into "+N":
     // it holds at most five fixed chips, and BPM and Key are the point of it.
     private readonly Border _sampleChipsHost;
+    private readonly Border _categoryChipsHost;   // device tabs: one chip per category (spec 013)
+    private readonly WrapPanel _categoryChips;
     private readonly WrapPanel _sampleChips;
 
     /// <summary>The project tempo / key, for the filter's "project" shortcuts.</summary>
@@ -271,14 +223,14 @@ public sealed class BrowserView : UserControl
 
         _tabs = new[]
         {
-            RailTab(0, "Instruments", IconKeyboard),
-            RailTab(1, "Audio effects", IconSliders),
-            RailTab(2, "MIDI effects", IconMidi),
-            RailTab(3, "Files", IconFolder),
-            RailTab(4, "Presets", IconBookmark),
-            RailTab(5, "Projects", IconDoc),
-            RailTab(6, "MIDI map", IconMap),
-            RailTab(7, "History", IconHistory),
+            RailTab(0, "Instruments", GlyphKind.Keyboard),
+            RailTab(1, "Audio effects", GlyphKind.Sliders),
+            RailTab(2, "MIDI effects", GlyphKind.Midi),
+            RailTab(3, "Files", GlyphKind.Folder),
+            RailTab(4, "Presets", GlyphKind.Bookmark),
+            RailTab(5, "Projects", GlyphKind.Doc),
+            RailTab(6, "MIDI map", GlyphKind.Map),
+            RailTab(7, "History", GlyphKind.History),
         };
         // A hairline above Files and above Map: devices · library · mappings.
         foreach (int i in new[] { 3, 6 })
@@ -288,7 +240,7 @@ public sealed class BrowserView : UserControl
         }
         var tabStack = new StackPanel();
         foreach (var t in _tabs) tabStack.Children.Add(t);
-        _collapseBtn = RailButton(IconSidebar, "Collapse browser", () => SetCollapsed(!_collapsed, persist: true));
+        _collapseBtn = RailButton(GlyphKind.Sidebar, "Collapse browser", () => SetCollapsed(!_collapsed, persist: true));
         _collapseBtn.BorderThickness = new Thickness(0, 1, 0, 0);
         _collapseBtn.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         var rail = new DockPanel { Width = 40 };
@@ -374,6 +326,10 @@ public sealed class BrowserView : UserControl
 
         _sampleChips = new WrapPanel { ItemSpacing = 5, LineSpacing = 5 };
         _sampleChipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _sampleChips, IsVisible = false };
+        // Category chips wrap rather than overflow into "+N": they are the main way to narrow
+        // a device tab, so every one stays in sight.
+        _categoryChips = new WrapPanel { ItemSpacing = 5, LineSpacing = 5 };
+        _categoryChipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _categoryChips, IsVisible = false };
 
         _previewFooter = new PreviewPlayer { IsVisible = false };
         _previewFooter.SetContext(files: _active == FilesTab);
@@ -413,7 +369,7 @@ public sealed class BrowserView : UserControl
         contentHost.Children.Add(_emptyWrap);
 
         var right = new DockPanel();
-        var topStack = new StackPanel { Children = { headerRow, _chipsHost, _sampleChipsHost } };
+        var topStack = new StackPanel { Children = { headerRow, _categoryChipsHost, _chipsHost, _sampleChipsHost } };
         DockPanel.SetDock(topStack, Dock.Top);
         DockPanel.SetDock(_statusBar, Dock.Bottom);
         DockPanel.SetDock(_previewFooter, Dock.Bottom);
@@ -433,15 +389,15 @@ public sealed class BrowserView : UserControl
         grid.Children.Add(railDivider);
         grid.Children.Add(right);
 
-        // The island: a rounded card floating on the app ground. ClipToBounds keeps the
-        // rail, the full-bleed rows and the status line inside the rounded corners.
+        // A docked panel: square, no frame of its own — it meets the canvas on the seam the
+        // shell grid draws. ClipToBounds keeps the full-bleed rows inside it.
         var outer = new Border
         {
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(0),
             ClipToBounds = true,
             Child = grid,
         };
-        outer.BindResource(Border.CornerRadiusProperty, "Radius.Panel");
+        outer.BindResource(Border.CornerRadiusProperty, "Radius.Docked");
         outer.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
         outer.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         Content = outer;
@@ -499,6 +455,7 @@ public sealed class BrowserView : UserControl
         _vm.GroupBySource = settings.Current.BrowserGroupBySource;
         _vm.FavoritesFirst = settings.Current.BrowserFavoritesFirst;
         RefreshRows();
+        RebuildCategoryChips();
     }
 
     public void SetViewModel(BrowserViewModel vm)
@@ -536,6 +493,9 @@ public sealed class BrowserView : UserControl
         // Rebuild the header chips whenever tags/favorites change (also refreshes active state).
         vm.LibraryChanged += RebuildChips;
         RebuildChips();
+        // A plug-in rescan can add or remove the Other chip.
+        vm.DevicesRebuilt += RebuildCategoryChips;
+        RebuildCategoryChips();
         vm.SampleIndexChanged += () => { if (_active == FilesTab) RefreshCounts(); };
         // A rescan (settings, a pack installed) can leave "similar" mode behind the view's back.
         vm.Samples.CollectionChanged += (_, _) =>
@@ -615,7 +575,8 @@ public sealed class BrowserView : UserControl
     private (string Line, string Detail) EmptyMessage(int tab)
     {
         bool searching = !string.IsNullOrEmpty(_search.Text?.Trim());
-        bool filtering = tab is 0 or 1 or 2 && _vm is not null && _vm.FilterMode != BrowserFilter.None;
+        bool filtering = tab is 0 or 1 or 2 && _vm is not null
+                         && (_vm.FilterMode != BrowserFilter.None || _vm.CategoryFilter(tab).Length > 0);
         bool sampleFilter = tab == FilesTab && _vm is not null && (!_vm.SampleFilter.IsEmpty || _vm.SimilarAnchor is not null);
         if (sampleFilter && _vm!.IndexProgress.Total > 0)
             return ("No matches yet", "Nota is still analysing your samples — more matches appear as it goes.");
@@ -625,7 +586,7 @@ public sealed class BrowserView : UserControl
             0 => ("No instruments yet", "Nota's built-in synths plus your VST/AU plug-ins. Scan your plug-ins in Settings → Plug-ins to add more."),
             1 => ("No audio effects yet", "Nota's built-in effects plus your VST/AU plug-ins. Scan your plug-ins in Settings → Plug-ins to add more."),
             2 => ("No MIDI effects yet", "Arpeggiator, chord, scale and more — they process notes before an instrument; drop one to the left of an instrument in a track."),
-            3 => ("No samples yet", "Add audio files to your Samples folder (Settings → Library) or install free packs from Settings → Downloads → Sample Packs, then browse them here as a folder tree. You can also drag files in from Finder."),
+            3 => ("No samples yet", "Add audio files to your Samples folder (Settings → Library) or install free packs from Settings → Downloads → Sample packs, then browse them here as a folder tree. You can also drag files in from Finder."),
             4 => ("No presets yet", "Right-click a device header and choose Save preset; it appears here grouped by category and device."),
             _ => ("No projects yet", MenuKit.Keys("Save a project (⌘S) into your Projects folder (Settings → Library) and it shows up here.")),
         };
@@ -693,17 +654,18 @@ public sealed class BrowserView : UserControl
         if (auditions) SyncPreview(_pages[index]);
         // Favorite/tag filter chips apply only to the device tabs.
         _chipsHost.IsVisible = index is 0 or 1 or 2;
+        RebuildCategoryChips();
         _sampleChipsHost.IsVisible = index == FilesTab && _vm?.HasSampleIndex == true;
         _statusBar.IsVisible = !isMap;
         if (isMap) { _matchCount.Text = ""; _emptyWrap.IsVisible = false; return; }
         RefreshCounts();
     }
 
-    private Border RailTab(int index, string caption, string iconData)
+    private Border RailTab(int index, string caption, GlyphKind iconKind)
     {
         // Icon-only rail; the caption survives as a tooltip. 16px icon in a 36px tab, with
         // a 2px brass edge on the left when active.
-        var icon = GridIcon(iconData, 16);
+        var icon = RailIcon(iconKind, 16);
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         icon.VerticalAlignment = VerticalAlignment.Center;
         var bar = new Border { Classes = { "RailBar" }, VerticalAlignment = VerticalAlignment.Stretch };
@@ -721,9 +683,9 @@ public sealed class BrowserView : UserControl
     }
 
     // A rail-styled action (not a tab): same 36px cell and hover, never marked active.
-    private static Border RailButton(string iconData, string caption, Action onClick)
+    private static Border RailButton(GlyphKind iconKind, string caption, Action onClick)
     {
-        var icon = GridIcon(iconData, 16);
+        var icon = RailIcon(iconKind, 16);
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         icon.VerticalAlignment = VerticalAlignment.Center;
         var btn = new Border { Classes = { "RailTab" }, Child = icon };
@@ -750,13 +712,13 @@ public sealed class BrowserView : UserControl
     {
         var label = new TextBlock
         {
-            Text = item.Name,
+            Text = NotaText.Label(item.Name),
             Classes = { "GroupLabel" },
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(10, 0, 0, 0),
         };
         var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 7, 0) };
-        rule.BindResource(Border.BackgroundProperty, "Brush.BorderDefault");
+        rule.BindResource(Border.BackgroundProperty, "Brush.Rule");
         var count = new TextBlock
         {
             Text = item.GroupCount.ToString(),
@@ -788,15 +750,7 @@ public sealed class BrowserView : UserControl
         Control disclosure;
         if (item.HasChildren)
         {
-            var tri = new Path
-            {
-                Data = Geometry.Parse(item.IsExpanded ? IconExpanded : IconCollapsed),
-                Stretch = Stretch.Uniform,
-                Width = 8, Height = 8,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            tri.BindResource(Shape.FillProperty, "Brush.TextTertiary");
+            var tri = RailIcon(item.IsExpanded ? GlyphKind.CaretDown : GlyphKind.CaretRight, 12, "Brush.TextTertiary");
             var hit = new Border
             {
                 Width = 14, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
@@ -814,15 +768,11 @@ public sealed class BrowserView : UserControl
         Control? icon = null;
         if (item.IsDownloads)
         {
-            var arrow = new Path { Data = Geometry.Parse(IconDownloads), StrokeThickness = 2.2, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round };
-            arrow.BindResource(Shape.StrokeProperty, "Brush.TextSecondary");
-            icon = new Viewbox { Width = 13, Height = 13, Child = new Canvas { Width = 24, Height = 24, Children = { arrow } } };
+            icon = RailIcon(GlyphKind.Downloads, 13, "Brush.TextSecondary");
         }
 
-        // "Nota" drops to tertiary ink so the eye lands on the distinctive word.
-        var prefix = item.Prefix.Length > 0
-            ? new TextBlock { Text = item.Prefix, Classes = { "RowPrefix" } }
-            : null;
+        // A built-in row shows its distinctive word only ("Aurora", not "Nota Aurora"): the
+        // family name would repeat down the whole list. Search still matches the full name.
         var name = new TextBlock
         {
             Text = item.Prefix.Length > 0 ? item.ShortName : item.Name,
@@ -846,7 +796,6 @@ public sealed class BrowserView : UserControl
             Edge = edge,
             Disclosure = disclosure,
             Icon = icon,
-            Prefix = prefix,
             Name2 = name,
             Markers = BuildRowMarkers(item),   // brass ★ + tag colour dots
             Tag2 = tagText,
@@ -900,7 +849,6 @@ public sealed class BrowserView : UserControl
         public Border Edge { get; init; } = null!;
         public Control Disclosure { get; init; } = null!;
         public Control? Icon { get; init; }
-        public TextBlock? Prefix { get; init; }
         public TextBlock Name2 { get; init; } = null!;
         public Control? Markers { get; init; }
         public TextBlock? Tag2 { get; init; }
@@ -920,7 +868,6 @@ public sealed class BrowserView : UserControl
             Children.Add(Edge);
             Children.Add(Disclosure);
             if (Icon is not null) Children.Add(Icon);
-            if (Prefix is not null) Children.Add(Prefix);
             Children.Add(Name2);
             if (Markers is not null) Children.Add(Markers);
             if (Tag2 is not null) Children.Add(Tag2);
@@ -940,11 +887,6 @@ public sealed class BrowserView : UserControl
             {
                 Place(Icon, left, Icon.DesiredSize.Width);
                 left += Icon.DesiredSize.Width + Gap;
-            }
-            if (Prefix is not null)
-            {
-                Place(Prefix, left, Prefix.DesiredSize.Width);
-                left += Prefix.DesiredSize.Width + Gap;
             }
 
             double right = Math.Max(left, finalSize.Width - Gutter);
@@ -996,12 +938,7 @@ public sealed class BrowserView : UserControl
         };
         if (fav)
         {
-            var star = new Path
-            {
-                Data = Geometry.Parse(IconStar), Stretch = Stretch.Uniform, Width = 9, Height = 9,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            star.BindResource(Shape.FillProperty, "Brush.Accent");
+            var star = RailIcon(GlyphKind.StarFilled, 12, "Brush.Accent");
             strip.Children.Add(star);
         }
         int shown = 0;
@@ -1029,7 +966,7 @@ public sealed class BrowserView : UserControl
 
     private Border BuildOptionsButton()
     {
-        var icon = GridIcon(IconOptions, 14, "Brush.TextSecondary", strokeWidth: 1.6);
+        var icon = RailIcon(GlyphKind.Options, 14, "Brush.TextSecondary");
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         icon.VerticalAlignment = VerticalAlignment.Center;
         var btn = new Border
@@ -1057,6 +994,14 @@ public sealed class BrowserView : UserControl
             _settings.Current.BrowserShowTypeTags = v;
             _settings.Save();
             RefreshRows();
+        }));
+        flyout.Items.Add(CheckItem("Category chips", CategoryChipsOn, v =>
+        {
+            if (_settings is not null) { _settings.Current.BrowserCategoryChips = v; _settings.Save(); }
+            // A hidden chip must not keep narrowing the list.
+            if (!v && _vm is not null) for (int t = 0; t < 3; t++) _vm.SetCategoryFilter(t, "");
+            RebuildCategoryChips();
+            RefreshCounts();
         }));
         flyout.Items.Add(CheckItem("Group by source", _vm?.GroupBySource ?? true, v =>
         {
@@ -1230,6 +1175,32 @@ public sealed class BrowserView : UserControl
         _chipsPanel.InvalidateMeasure();
     }
 
+    private bool CategoryChipsOn => _settings?.Current.BrowserCategoryChips ?? true;
+
+    // The active device tab's category chips (spec 013): one per category in the tab's order,
+    // Other last when something lands there. One pick at a time: a click picks, a click on
+    // the picked chip clears, a click on another switches. Each tab keeps its own pick.
+    private void RebuildCategoryChips()
+    {
+        _categoryChips.Children.Clear();
+        bool show = _vm is not null && _active is 0 or 1 or 2 && CategoryChipsOn;
+        _categoryChipsHost.IsVisible = show;
+        if (!show) return;
+        int tab = _active;
+        string picked = _vm!.CategoryFilter(tab);
+        foreach (var name in _vm.CategoriesOn(tab))
+        {
+            var category = name;
+            bool active = picked == category;
+            _categoryChips.Children.Add(MakeChip(category, null, active, () =>
+            {
+                _vm.SetCategoryFilter(tab, active ? "" : category);
+                RebuildCategoryChips();
+                RefreshCounts();
+            }));
+        }
+    }
+
     // The chips that didn't fit on the line, offered as a menu off the "+N".
     private void ShowOverflowChips()
     {
@@ -1369,7 +1340,7 @@ public sealed class BrowserView : UserControl
         if (colorHex is not null)
             content.Children.Add(new Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center, Fill = BrushFromHex(colorHex) });
         var tb = new TextBlock { Text = text, FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
-        tb.BindResource(TextBlock.ForegroundProperty, active ? "Brush.AccentHover" : "Brush.TextStrong");
+        tb.BindResource(TextBlock.ForegroundProperty, active ? "Brush.TextOnAccent" : "Brush.TextPrimary");
         content.Children.Add(tb);
 
         var chip = new ChipBorder
@@ -1379,8 +1350,8 @@ public sealed class BrowserView : UserControl
             BorderThickness = new Thickness(1),
             Cursor = new Cursor(StandardCursorType.Hand), Child = content,
         };
-        chip.BindResource(Border.BackgroundProperty, active ? "Brush.AccentSubtle" : "Brush.SurfaceRaised");
-        chip.BindResource(Border.BorderBrushProperty, active ? "Brush.BorderBrass" : "Brush.BorderDefault");
+        chip.BindResource(Border.BackgroundProperty, active ? "Brush.Accent" : "Brush.SurfaceRaised");
+        chip.BindResource(Border.BorderBrushProperty, active ? "Brush.Accent" : "Brush.Seam");
         chip.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
@@ -1512,7 +1483,7 @@ public sealed class BrowserView : UserControl
         if (item.LibraryKey.Length > 0 && _vm is not null)
         {
             bool fav = _vm.IsFavorite(item);
-            var favItem = new MenuItem { Header = fav ? "Remove from Favorites" : "Add to Favorites" };
+            var favItem = new MenuItem { Header = fav ? "Remove from favorites" : "Add to favorites" };
             favItem.Click += (_, _) => _vm.ToggleFavorite(item);
             flyout.Items.Add(favItem);
 

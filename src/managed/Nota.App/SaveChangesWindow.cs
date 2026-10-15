@@ -64,7 +64,7 @@ public sealed class SaveChangesWindow : NotaWindow
 
         _dontSave = new Button
         {
-            Content = "Don't Save",
+            Content = "Don't save",
             Classes = { "ghost" },
             Padding = new Thickness(12, 0),
             Margin = new Thickness(-12, 0, 0, 0),   // the label, not the hover wash, lines up with the text

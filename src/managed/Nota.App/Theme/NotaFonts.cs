@@ -44,20 +44,21 @@ public static class NotaFonts
         => builder.With(new FontManagerOptions { DefaultFamilyName = UiUri });
 }
 
-/// <summary>The type scales from the almanac, for views that set FontSize in code. Mirrors
-/// the TextBlock role classes in NotaTheme.axaml. Tracking is in px, already multiplied out
-/// from the em value at that size.</summary>
+/// <summary>The type scales (the shell hierarchy, and a device scale held to the 260px card), for
+/// views that set FontSize in code. Mirrors the TextBlock role classes in NotaTheme.axaml.
+/// Labels are sentence case with no tracking: the *Tracking constants are 0 and stay only
+/// so older call sites compile — new code should not set LetterSpacing at all.</summary>
 internal static class NotaType
 {
     // Shell scale
-    public const double Title = 26, Heading = 13, Name = 12, Body = 11, Caption = 11,
-                        SectionLabel = 10, Readout = 13, Value = 10, Eyebrow = 9;
-    public const double SectionLabelTracking = 1.4, EyebrowTracking = 1.62;
+    public const double Title = 13, Heading = 13, Name = 12, Body = 12, Caption = 11,
+                        SectionLabel = 11, Readout = 13, Value = 11, Eyebrow = 10;
+    public const double SectionLabelTracking = 0, EyebrowTracking = 0;
 
-    // Device scale — 7 is the floor, and only for a caps label or its value.
-    public const double DeviceName = 12, DeviceSection = 9, RowLabel = 8, KnobLabel = 7,
-                        KnobValue = 7, Axis = 7;
-    public const double DeviceSectionTracking = 1.08, RowLabelTracking = 0.8, KnobLabelTracking = 0.56;
+    // Device scale — 7 is the floor (plot tick labels only); a label is 8 or more.
+    public const double DeviceName = 12, DeviceSection = 10.5, RowLabel = 9, KnobLabel = 8,
+                        KnobValue = 8, Axis = 7.5;
+    public const double DeviceSectionTracking = 0, RowLabelTracking = 0, KnobLabelTracking = 0;
 
     public const double Floor = 7;
 }

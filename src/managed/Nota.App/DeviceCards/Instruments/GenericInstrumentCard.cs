@@ -4,6 +4,7 @@
 // Detail · Devices — fallback instrument card: an "Open GUI" stub for a built-in with no
 // editor. Hosted plug-ins have their own card (PluginCard).
 
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using static Nota.App.DeviceCardKit;
@@ -20,6 +21,10 @@ internal sealed class GenericInstrumentCard : IInstrumentCard
         var gui = TextButton("Open GUI ↗");
         gui.PointerPressed += (_, _) => { try { engine.OpenPluginEditor(track, -1); } catch { /* no-op */ } };
         var body = new StackPanel { Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { gui } };
-        return SimpleCard("Instrument", 170, body);
+        return new Border { Padding = new Thickness(10), Child = body };
     }
+
+    // Wrapped by the shared shell like every other instrument (spec 012): name, presets, power slot.
+    public bool BodyOnly => true;
+    public double CardWidth => 170;
 }

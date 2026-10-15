@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // A Nota Chord shift (almanac mockups 1a / 1b): a bipolar −12..+12 semitone track centred
-// on zero. Horizontal (L): a 3px well groove with a centre tick, a brass fill from the
-// centre and a 6×9 handle. Vertical (S): a framed well with a centre rule and a bar
+// on zero. Horizontal (L): a 3px well groove with a centre tick, a neutral fill from the
+// centre and a 6×9 handle (accent while dragged). Vertical (S): a framed well with a centre rule and a bar
 // growing up (positive) or down (negative). Unlike the generic SliderTrack the value is
 // positional — press or drag anywhere sets the semitone under the pointer — because the
 // track is a pitch ruler. A switched-off slot draws its fill in Border strong.
@@ -22,7 +22,7 @@ internal sealed class ChordShiftTrack : Control
 {
     private static readonly IBrush Groove = NotaPalette.BgSunken;
     private static readonly IBrush Frame = NotaPalette.GraphBorder;
-    private static readonly IBrush Fill = NotaPalette.Accent;
+    private static readonly IBrush Fill = NotaPalette.VizInk;
     private static readonly IBrush FillOff = NotaPalette.BorderStrong;
     private static readonly IBrush Handle = NotaPalette.TextSecondary;
     private static readonly IBrush Centre = NotaPalette.BorderStrong;
@@ -99,7 +99,7 @@ internal sealed class ChordShiftTrack : Control
         if (w <= 0 || h <= 0) return;
         ctx.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, w, h));   // hit area
         double f = (_value + Range) / (2.0 * Range);
-        var fill = _on ? Fill : FillOff;
+        var fill = !_on ? FillOff : _drag ? NotaPalette.Accent : Fill;
         if (Vertical)
         {
             ctx.DrawRectangle(Groove, new Pen(Frame, 1), new Rect(0.5, 0.5, w - 1, h - 1), 3, 3);
@@ -115,7 +115,7 @@ internal sealed class ChordShiftTrack : Control
             ctx.DrawRectangle(Groove, null, new Rect(0, cy - 1.5, w, 3), 2, 2);
             ctx.DrawRectangle(Centre, null, new Rect(Math.Round(c) - 0.5, cy - 4.5, 1, 9));
             ctx.DrawRectangle(fill, null, new Rect(Math.Min(c, x), cy - 1.5, Math.Abs(x - c), 3), 2, 2);
-            ctx.DrawRectangle(Handle, null, new Rect(Math.Clamp(x - 3, 0, w - 6), cy - 4.5, 6, 9), 2, 2);
+            ctx.DrawRectangle(_drag ? NotaPalette.Accent : Handle, null, new Rect(Math.Clamp(x - 3, 0, w - 6), cy - 4.5, 6, 9), 2, 2);
         }
     }
 }

@@ -35,7 +35,7 @@ internal static class KeyPicker
         var panel = new StackPanel { Spacing = 6, Margin = new Thickness(2) };
         foreach (var mode in new[] { KeyMode.Major, KeyMode.Minor })
         {
-            panel.Children.Add(new TextBlock { Text = mode == KeyMode.Major ? "MAJOR" : "MINOR", Classes = { "SectionLabel" } });
+            panel.Children.Add(new TextBlock { Text = mode == KeyMode.Major ? "Major" : "Minor", Classes = { "SectionLabel" } });
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
             for (int t = 0; t < 12; t++)
             {

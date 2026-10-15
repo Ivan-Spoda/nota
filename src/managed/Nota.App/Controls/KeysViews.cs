@@ -3,14 +3,14 @@
 //
 // Detail · Devices — the Nota Keys graphs (instrument kind 16):
 //
-//   KeysPickupView  the PICKUP transfer curve — the exact function the engine runs
+//   KeysPickupView  the Pickup transfer curve — the exact function the engine runs
 //                   (KeysModel.PickupRaw) — with the tine's travel drawn over it, a dashed
 //                   linear reference and the handle: drag X = Symmetry, Y = Distance. L adds
 //                   the H1–H8 bars of what the curve does to a sine. For Clav it draws the
 //                   string instead, with its two pickups lit by Pickup Position.
-//   KeysTremView    the tremolo: the left (brass) and right (teal) gains scrolling with the
+//   KeysTremView    the tremolo: the left (neutral ink) and right (teal) gains scrolling with the
 //                   engine's LFO, a playhead and the pan dot it puts the sound at.
-//   KeysVoiceGrid   the voice pool: held notes in brass, pedal / release tails dim, free
+//   KeysVoiceGrid   the voice pool: sounding notes in accent, pedal / release tails dim, free
 //                   slots dark, the cells past the voice limit darker still.
 
 using System;
@@ -141,20 +141,20 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions
             for (int i = 0; i <= 40; i++) { var p = Pt(-0.72 + 1.44 * i / 40.0); if (i == 0) g.BeginFigure(p, false); else g.LineTo(p); }
             g.EndFigure(false);
         }
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Accent, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), curve);
+        ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), curve);
         ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.TealBright, 0x80), 4.5, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), travel);
 
         // The handle: X = symmetry, Y = distance, with its crosshair.
         double hx = cx + sym * sx, hy = r.Y + dist * r.Height;
-        var dash = new Pen(NotaPalette.Wash(NotaPalette.Accent, 0xA0), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+        var dash = new Pen(_drag ? NotaPalette.Wash(NotaPalette.Accent, 0xA0) : NotaPalette.Wash(NotaPalette.VizInk, 0x60), 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
         ctx.DrawLine(dash, new Point(hx, frame.Y + 1), new Point(hx, frame.Bottom - 1));
         ctx.DrawLine(dash, new Point(frame.X + 1, hy), new Point(frame.Right - 1, hy));
-        NotaGraph.Node(ctx, new Point(hx, hy), true);
+        NotaGraph.Node(ctx, new Point(hx, hy), _drag);
 
         // Captions.
         string read = $"sym {(sym >= 0 ? "+" : "−")}{Math.Round(Math.Abs(sym) * 100)}\u2009% · dist {Math.Round(dist * 100)}\u2009%";
-        var title = Mono($"PICKUP · {KeysModel.ModelNames[model].ToUpperInvariant()}", NotaPalette.TextTertiary);
-        var readout = Mono(read, NotaPalette.AccentBright);
+        var title = Mono($"Pickup · {KeysModel.ModelNames[model]}", NotaPalette.TextTertiary);
+        var readout = Mono(read, _drag ? NotaPalette.AccentBright : NotaPalette.TextPrimary);
         if (Mini)
         {
             ctx.DrawText(title, new Point(6, 4));
@@ -164,7 +164,7 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions
         ctx.DrawText(title, new Point(6, 4));
         ctx.DrawText(readout, new Point(6, 15));
 
-        // H1–H8 of the curve driven by a sine (brass even, teal odd, the fundamental neutral).
+        // H1–H8 of the curve driven by a sine (neutral ink even, teal odd, the fundamental dim).
         var mags = KeysModel.Harmonics(sym, dist, model);
         double bw = 6, gap = 3, ih = 34, iw = 8 * bw + 7 * gap + 10;
         var inset = new Rect(frame.Right - iw - 8, frame.Bottom - ih - 6, iw, ih);
@@ -174,7 +174,7 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions
         {
             double db = 20 * Math.Log10(mags[k] / Math.Max(1e-9, mags[0]) + 1e-9);
             double bh = Math.Max(1, (1 + db / 60) * (ih - 14));
-            IBrush ink = k == 0 ? NotaPalette.TextSecondary : k % 2 == 1 ? NotaPalette.TealBright : NotaPalette.Accent;
+            IBrush ink = k == 0 ? NotaPalette.TextTertiary : k % 2 == 1 ? NotaPalette.TealBright : NotaPalette.VizInk;
             double x = inset.X + 5 + k * (bw + gap);
             ctx.DrawRectangle(ink, null, new Rect(x, inset.Bottom - 3 - bh, bw, bh));
         }
@@ -199,7 +199,7 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions
             g.EndFigure(false);
             return geo;
         }
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Accent, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round), Shape(1));
+        ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round), Shape(1));
         ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.TealBright, 0xB0), 1.2, lineJoin: PenLineJoin.Round), Shape(-1));
         // Bridge / nut.
         ctx.DrawRectangle(NotaPalette.TextSecondary, null, new Rect(x0 - 3, cy - 8, 3, 16));
@@ -213,10 +213,10 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions
             var ft = Mono(label, lit ? NotaPalette.AccentBright : NotaPalette.TextAxis, 7);
             ctx.DrawText(ft, new Point(X(t) - ft.Width / 2, rr.Bottom + 2));
         }
-        Pickup(0.2, "UP", pos != 2);
-        Pickup(0.34, "LO", pos != 0);
-        ctx.DrawText(Mono("STRING · 2 PICKUPS", NotaPalette.TextTertiary), new Point(6, 4));
-        var read = Mono(KeysModel.PickupPositions[pos], NotaPalette.AccentBright);
+        Pickup(0.2, "Up", pos != 2);
+        Pickup(0.34, "Lo", pos != 0);
+        ctx.DrawText(Mono("String · 2 pickups", NotaPalette.TextTertiary), new Point(6, 4));
+        var read = Mono(KeysModel.PickupPositions[pos], NotaPalette.TextPrimary);
         if (Mini) ctx.DrawText(read, new Point(frame.Right - 6 - read.Width, 4));
         else ctx.DrawText(read, new Point(6, 15));
     }
@@ -259,11 +259,11 @@ internal sealed class KeysTremView : Control
                 g.EndFigure(false);
                 return geo;
             }
-            var ink = on ? NotaPalette.Accent : NotaPalette.BorderStrong;
+            var ink = on ? NotaPalette.VizInk : NotaPalette.BorderStrong;
             if (stereo) ctx.DrawGeometry(null, new Pen(on ? NotaPalette.Teal : NotaPalette.BorderStrong, NotaGraph.SecondaryWidth, lineJoin: PenLineJoin.Round), Line(-1));
             ctx.DrawGeometry(null, new Pen(ink, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round), Line(1));
             ctx.DrawLine(new Pen(NotaPalette.TextAxis, 1), new Point(w * 0.33, 2), new Point(w * 0.33, h - barH - 2));
-            ctx.DrawText(NotaGraph.AxisText(stereo ? "L R" : "MONO"), new Point(6, 3));
+            ctx.DrawText(NotaGraph.AxisText(stereo ? "L R" : "mono"), new Point(6, 3));
 
             // Where the sound sits: the pan dot (stereo) or the level (mono) at the playhead.
             double s = Shape(2 * Math.PI * (0.33 * 2.25 + _phase)) * _get("tremdepth");
@@ -271,7 +271,7 @@ internal sealed class KeysTremView : Control
             ctx.DrawRectangle(NotaPalette.BgSunken, NotaGraph.FramePen, new RoundedRect(bar, 3));
             double pos = stereo && on ? 0.5 + s * 0.5 : 0.5;
             double px = bar.X + pos * bar.Width;
-            ctx.DrawEllipse(on ? NotaPalette.AccentBright : NotaPalette.TextAxis, null, new Point(px, bar.Y + bar.Height / 2), 3, 3);
+            ctx.DrawEllipse(on ? NotaPalette.VizInk : NotaPalette.TextAxis, null, new Point(px, bar.Y + bar.Height / 2), 3, 3);
         }
     }
 }
@@ -299,7 +299,7 @@ internal sealed class KeysVoiceGrid : Control
             int c = i % Cols, r = i / Cols;
             IBrush ink = i >= _limit ? NotaPalette.BgSunken
                 : i < _held ? NotaPalette.Accent
-                : i < _held + _tail ? NotaPalette.AccentDeep
+                : i < _held + _tail ? NotaPalette.TextTertiary
                 : NotaPalette.BorderDefault;
             ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(c * (cw + 1), r * 6, cw, 5), 1));
         }

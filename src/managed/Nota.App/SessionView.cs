@@ -37,7 +37,7 @@ public sealed partial class SessionView : UserControl
     private const double HeaderH = 44;
     private const double Gap = 3;
     private const double GridPad = 10;
-    private const double InspectorW = 300;
+    private const double InspectorW = 260;
 
     private readonly IAudioEngine _engine;
 
@@ -48,6 +48,20 @@ public sealed partial class SessionView : UserControl
     private readonly StackPanel _cellsRow = new() { Orientation = Orientation.Horizontal, Spacing = Gap, Margin = new Thickness(GridPad, Gap, GridPad, 0) };
     private readonly StackPanel _footerRow = new() { Orientation = Orientation.Horizontal, Spacing = Gap, Margin = new Thickness(GridPad, Gap, GridPad, GridPad) };
     private readonly Border _inspectorHost = new() { Width = InspectorW };
+
+    // Whether the inspector column shows (Settings.SessionInspectorOpen, remembered per machine).
+    private static bool InspectorOpen =>
+        App.Services?.GetService(typeof(ISettingsService)) is ISettingsService s ? s.Current.SessionInspectorOpen : true;
+
+    private void SetInspectorOpen(bool open)
+    {
+        _inspectorHost.IsVisible = open;
+        if (App.Services?.GetService(typeof(ISettingsService)) is ISettingsService s && s.Current.SessionInspectorOpen != open)
+        {
+            s.Current.SessionInspectorOpen = open;
+            s.Save();
+        }
+    }
 
     private readonly List<Column> _cols = new();
     private readonly List<SceneCell> _sceneCells = new();
@@ -119,6 +133,8 @@ public sealed partial class SessionView : UserControl
         _inspectorHost.Background = NotaPalette.Panel;
         _inspectorHost.BorderBrush = NotaPalette.BorderDefault;
         _inspectorHost.BorderThickness = new Thickness(1, 0, 0, 0);
+
+        _inspectorHost.IsVisible = InspectorOpen;
 
         var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         body.Children.Add(gridArea);
@@ -208,7 +224,7 @@ public sealed partial class SessionView : UserControl
             return false;
         }
         string Parent(NotaTrackInfo t)
-            => t.GroupId > 0 && byId.TryGetValue(t.GroupId, out var g) ? " · " + TrackNames.Of(_engine, g).ToUpperInvariant() : "";
+            => t.GroupId > 0 && byId.TryGetValue(t.GroupId, out var g) ? " · " + TrackNames.Of(_engine, g) : "";
 
         foreach (var ti in infos)
         {
@@ -225,14 +241,14 @@ public sealed partial class SessionView : UserControl
             {
                 col.Kind = ColKind.Group;
                 col.Children = infos.Where(c => !c.IsGroup && !c.IsReturn && Under(c, ti.Id)).Select(c => c.Id).ToList();
-                col.KindLabel = $"GROUP · {col.Children.Count}{Parent(ti)}";
+                col.KindLabel = $"Group · {col.Children.Count}{Parent(ti)}";
             }
             else
             {
                 col.Kind = ColKind.Track;
                 col.IsInstrument = ti.IsInstrument;
                 col.IsAudio = ti.Type == 0;
-                col.KindLabel = (ti.IsInstrument ? "MIDI" : "AUDIO") + Parent(ti);
+                col.KindLabel = (ti.IsInstrument ? "MIDI" : "Audio") + Parent(ti);
             }
             _cols.Add(col);
         }
@@ -241,11 +257,11 @@ public sealed partial class SessionView : UserControl
         {
             _cols.Add(new Column
             {
-                Kind = ColKind.Return, TrackId = ti.Id, Name = TrackNames.Of(_engine, ti), KindLabel = "RETURN",
+                Kind = ColKind.Return, TrackId = ti.Id, Name = TrackNames.Of(_engine, ti), KindLabel = "Return",
                 ColorIndex = ArrangementView.ReturnColorIndex(r++), Width = ReturnColW,
             });
         }
-        _cols.Add(new Column { Kind = ColKind.Master, TrackId = 0, Name = "Master", KindLabel = "OUT 1/2", ColorIndex = -1, Width = MasterColW });
+        _cols.Add(new Column { Kind = ColKind.Master, TrackId = 0, Name = "Master", KindLabel = "Out 1/2", ColorIndex = -1, Width = MasterColW });
     }
 
     // ---- live state ---------------------------------------------------------------

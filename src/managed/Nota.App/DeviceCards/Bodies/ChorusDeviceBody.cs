@@ -35,7 +35,7 @@ internal sealed class ChorusDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "MODULATION";   // the processing type, shown as the header badge
+    public string? Subtitle => "Modulation";   // the processing type, shown as the header badge
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -87,7 +87,7 @@ internal sealed class ChorusDeviceBody : IDeviceBody
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null) => new()
-        { Text = t, FontSize = 7, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.7, VerticalAlignment = VerticalAlignment.Center };
+        { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -115,16 +115,15 @@ internal sealed class ChorusDeviceBody : IDeviceBody
             return g;
         }
 
-        Border Island(Control head, Control body, double width = double.NaN)
+        RuleSection Island(Control head, Control body, double width = double.NaN)
         {
             var headBar = new Border
             {
                 Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(8, 0, 3, 0), Child = head,
             };
-            return new Border
+            return new RuleSection
             {
-                Width = width, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-                ClipToBounds = true, Child = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), body } },
+                Width = width, Child = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), body } },
             };
         }
         static Grid HeadRow(Control left, Control right)
@@ -154,7 +153,7 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         Learn(modeSeg, Mode);
         ToolTip.SetTip(modeSeg, "Classic — two voices, left and right; Ensemble — three voices 120° apart, a string-machine shimmer; Vibrato — the pitch wobble alone, no dry signal");
 
-        var big = Mono("", 26, AccentBright); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
+        var big = Mono("", 26, TextPrimary); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
         var bigSub = new TextBlock { FontSize = 8, Foreground = TextSecondary };
         var period = Mono("", 7, TextTertiary); period.Margin = new Thickness(0, 2, 0, 0);
         readouts.Add(() =>
@@ -172,7 +171,7 @@ internal sealed class ChorusDeviceBody : IDeviceBody
                 bigSub.Text = "Hz · free";
                 period.Text = "period " + PeriodF(PeriodMs());
             }
-            big.Foreground = On() ? AccentBright : NotaPalette.TextAxis;
+            big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
         });
         var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
         ToolTip.SetTip(bigBlock, "The LFO rate: in Hz, or the note value it takes from the tempo");
@@ -263,7 +262,7 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         {
             string s = State();
             stateWord.Text = s;
-            stateWord.Foreground = s == "resonant" ? AccentBright : s == "bypass" ? NotaPalette.TextAxis : TextSecondary;
+            stateWord.Foreground = s == "resonant" ? TextPrimary : s == "bypass" ? NotaPalette.TextAxis : TextSecondary;
         });
         ToolTip.SetTip(stateWord, "How many voices sing, or that the feedback makes it ring (past 60 %), or that Vibrato plays wet only");
 
@@ -292,7 +291,7 @@ internal sealed class ChorusDeviceBody : IDeviceBody
             ToolTip.SetTip(g, tip);
             return g;
         }
-        var detuneBar = new FlangerBar { Ink = NotaPalette.Accent, VerticalAlignment = VerticalAlignment.Center };
+        var detuneBar = new FlangerBar { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Center };
         var detuneVal = Mono("", 8, TextPrimary);
         var delayBar = new FlangerBar { Ink = NotaPalette.BorderStrong, VerticalAlignment = VerticalAlignment.Center };
         var delayVal = Mono("", 8, TextPrimary);
@@ -339,7 +338,7 @@ internal sealed class ChorusDeviceBody : IDeviceBody
                 foot = "Detune up to ±" + ChorusMath.Ct(MaxCt()) + " ct · τ " + ChorusMath.Ms(TauMin()) + "–" + ChorusMath.Ms(TauMax())
                     + " ms · " + (Ens() ? "3" : "2") + " voices";
             statusLeft.Text = foot;
-            statusLeft.Foreground = warn ? AccentBright : TextSecondary;
+            statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
             double sr = Sc(S_SampleRate);
             statusRight.Text = (sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · ") : "") + NotaNum.F($"{Bpm():0.##} BPM · ")
                 + (P(Warmth) > 0.01f ? NotaNum.F($"warm {P(Warmth) * 100:0} %") : "clean");
@@ -352,7 +351,7 @@ internal sealed class ChorusDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         var centsNow = new double[3];
         void Refresh()

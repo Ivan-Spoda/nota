@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Forge (device kind 17) views, the "Nota Forge" mockup:
-//  · FgTransferView — the transfer curve over input −1 … +1: the whole device in brass (in
+//  · FgTransferView — the transfer curve over input −1 … +1: the whole device in neutral ink (in
 //    Mid/Side and Multiband the selected stage, since each stage sees its own signal), every
 //    stage alone as a faint curve, the LFO-modulated curve as teal dashes and a node where the
 //    input sits on the curve now. Drag up / down for Amount; double-click resets it.
 //  · FgHarmonicsView — harmonics 2 … 9 of a −6 dB test sine through that curve: odd partials in
-//    brass, even ones in ink, with THD and its flavour.
+//    neutral ink, even ones dimmer, with THD and its flavour.
 // The curves and the partials come from the engine (Forge.h scopeRead), computed by the same
 // shapers the audio runs, so the picture is what is heard.
 
@@ -128,7 +128,7 @@ internal sealed class FgTransferView : ShDragView
                     }
                 if (_active && _hasMod)
                     ctx.DrawGeometry(null, new Pen(NotaPalette.TealBright, 1.2, new DashStyle(new double[] { 4, 3 }, 0)), Path(_mod));
-                ctx.DrawGeometry(null, new Pen(_active ? NotaPalette.Accent : NotaPalette.TextDisabled, Dragging ? 2.2 : NotaGraph.PrimaryWidth,
+                ctx.DrawGeometry(null, new Pen(!_active ? NotaPalette.TextDisabled : Dragging ? NotaPalette.Accent : NotaPalette.VizInk, Dragging ? 2.2 : NotaGraph.PrimaryWidth,
                     lineJoin: PenLineJoin.Round), Path(_main));
 
                 // Where the input sits on the curve now.
@@ -137,16 +137,16 @@ internal sealed class FgTransferView : ShDragView
                     double fi = (_in + 1) / 2 * (ForgeMath.kPts - 1);
                     int i0 = Math.Clamp((int)Math.Floor(fi), 0, ForgeMath.kPts - 2);
                     double fr = fi - i0, y = _main[i0] + (_main[i0 + 1] - _main[i0]) * fr;
-                    NotaGraph.Node(ctx, new Point(X(_in), Y(y)), true, NotaPalette.AccentBright);
+                    NotaGraph.Node(ctx, new Point(X(_in), Y(y)), false, NotaPalette.VizInk);
                 }
             }
         }
 
         NotaGraph.Title(ctx, frame, "Transfer");
         if (_active && _hasMod)
-            NotaGraph.Legend(ctx, w - 6, 3, (_label, NotaPalette.AccentBright, NotaGraph.Mark.Line), ("modulated", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
+            NotaGraph.Legend(ctx, w - 6, 3, (_label, NotaPalette.VizInk, NotaGraph.Mark.Line), ("modulated", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
         else
-            NotaGraph.Legend(ctx, w - 6, 3, (_active ? _label : "bypass", _active ? NotaPalette.AccentBright : NotaPalette.TextTertiary, NotaGraph.Mark.Line));
+            NotaGraph.Legend(ctx, w - 6, 3, (_active ? _label : "bypass", _active ? NotaPalette.VizInk : NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "in −1");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "+1");
         var o = NotaGraph.AxisText("out +1");
@@ -189,7 +189,7 @@ internal sealed class FgHarmonicsView : Control
             int k = i + 2;
             double hh = Math.Clamp((_db[i] + 72) / 72, 0, 1);
             double x = x0 + i * (bw + gap);
-            IBrush ink = hh > 0.02 ? (k % 2 == 1 ? NotaPalette.Accent : NotaPalette.TextSecondary) : NotaPalette.SurfaceRaised;
+            IBrush ink = hh > 0.02 ? (k % 2 == 1 ? NotaPalette.VizInk : NotaPalette.TextTertiary) : NotaPalette.SurfaceRaised;
             double bh = Math.Max(1, hh * (bot - top));
             ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(x, bot - bh, bw, bh), 1, 1, 0, 0));
             var kt = NotaGraph.AxisText(k.ToString(), NotaPalette.TextDisabled);

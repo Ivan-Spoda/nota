@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Aurora's wavetable window: the 16 single-cycle frames drawn as a skewed 3-D stack,
-// the frame Position sits on lit brass and the rest fading back into the well — "position
+// the frame Position sits on in bright neutral ink and the rest fading back into the well — "position
 // is a place in a stack, not a number". The shapes come from the same additive recipe as
 // WavetableSynth::harmAmp (a low harmonic count → representative, not sample-exact).
 //
@@ -24,14 +24,14 @@ internal sealed class AuroraStack : Control
 {
     private const int Banks = 4, Frames = 16, N = 96, HarmMax = 28;
 
-    private static readonly IBrush Lit = NotaPalette.AccentBright;
+    private static readonly IBrush Lit = NotaPalette.VizInk;
     private static readonly IBrush Dim = NotaPalette.TextDisabled;
     // Four depth steps from the back of the stack to the front, so the stack reads as
     // depth rather than as sixteen equal lines.
     private static readonly IBrush[] Depth =
     {
-        NotaPalette.Wash(NotaPalette.Accent, 0x38), NotaPalette.Wash(NotaPalette.Accent, 0x58),
-        NotaPalette.Wash(NotaPalette.Accent, 0x80), NotaPalette.Wash(NotaPalette.Accent, 0xB0),
+        NotaPalette.Wash(NotaPalette.VizInk, 0x28), NotaPalette.Wash(NotaPalette.VizInk, 0x40),
+        NotaPalette.Wash(NotaPalette.VizInk, 0x60), NotaPalette.Wash(NotaPalette.VizInk, 0x88),
     };
 
     private static readonly Pen[] DepthPens = MakePens(Depth);

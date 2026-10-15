@@ -14,7 +14,7 @@
 
 - [ ] Engine (C++, `src/native/nota.engine`) — real-time audio rules apply, see `ARCHITECTURE.md` AR table
 - [ ] Managed app (C#, `src/managed/*`) — domain, application, infrastructure, presentation
-- [ ] UI (Avalonia, `src/managed/Nota.Presentation`) — follow `DESIGN.md` (Ember)
+- [ ] UI (Avalonia, `src/managed/Nota.Presentation`) — follow `DESIGN.md` (Studio)
 - [ ] Plugin hosting (`pluginhost/`) — the only place JUCE is allowed
 - [ ] Build / packaging / CI (`scripts/`, `.github/`) — see `BUILD.md`
 - [ ] Docs only
@@ -155,4 +155,4 @@ expectations), [`BUILD.md`](../../BUILD.md), [`DESIGN.md`](../../DESIGN.md),
 - [ ] Managed/native crossings go through the pure C ABI in `nota_engine.h` only (AR-7); no JUCE outside `pluginhost/`
 - [ ] Smoke-test impact assessed: engine behaviour change → extend `tests/Nota.SmokeTest`
 - [ ] User-visible change → `CHANGELOG.md` `[Unreleased]` entry planned (and FEATURES.md / user docs via the nota-features / nota-docs skills when working with an agent that has them)
-- [ ] UI change → follows `DESIGN.md` (Ember design language)
+- [ ] UI change → follows `DESIGN.md` (Studio design language)

@@ -35,7 +35,7 @@ internal static class ClipEditorKit
         };
         var badge = new TextBlock
         {
-            Text = kind, FontFamily = NotaFonts.MonoFamily, FontSize = 9, FontWeight = FontWeight.Medium, LetterSpacing = 0.9,
+            Text = NotaText.Label(kind), FontFamily = NotaFonts.MonoFamily, FontSize = 10,
             Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         };
         cell.Children.Add(nameText);
@@ -141,14 +141,13 @@ internal static class ClipEditorKit
 
     public static Border Rule() => new() { Height = 1, Background = NotaPalette.GraphBorder };
 
-    /// <summary>A caps section title, with an optional mono read-out on the right.</summary>
+    /// <summary>A section title (sentence case, muted), with an optional mono read-out on the right.</summary>
     public static Grid SectionTitle(string title, TextBlock? right = null)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         g.Children.Add(new TextBlock
         {
-            Text = title, FontSize = NotaType.SectionLabel, FontWeight = FontWeight.Bold,
-            LetterSpacing = NotaType.SectionLabelTracking, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
+            Text = NotaText.Label(title), FontSize = NotaType.SectionLabel, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextMuted, VerticalAlignment = VerticalAlignment.Center,
         });
         if (right is not null) { Grid.SetColumn(right, 1); g.Children.Add(right); }
         return g;
@@ -234,7 +233,7 @@ internal static class ClipEditorKit
         {
             int idx = i;
             var mi = new MenuItem { Header = items[i] };
-            if (i == current) mi.Icon = new Glyph(GlyphKind.Dot, 6) { Foreground = NotaPalette.AccentBright };
+            if (i == current) mi.Icon = new Glyph(GlyphKind.Dot, 6) { Foreground = NotaPalette.TextPrimary };
             mi.Click += (_, _) => pick(idx);
             f.Items.Add(mi);
         }
@@ -322,7 +321,7 @@ internal static class ClipEditorKit
         CornerRadius = NotaRadius.Control, Padding = new Thickness(10, 0), Child = child,
     };
 
-    /// <summary>A shell slider row: caps label · 3px track · fixed-width mono value (double-click to type).</summary>
+    /// <summary>A shell slider row: label · 3px track · fixed-width mono value (double-click to type).</summary>
     public static Grid SliderRow(string label, double labelW, Func<double> norm, Action<double> setNorm, Func<string> text,
         out Action sync, Action? reset = null, double valueW = 36, Func<bool>? dim = null)
     {
@@ -330,7 +329,7 @@ internal static class ClipEditorKit
         var track = new SliderTrack { Reset = reset is null ? null : () => { reset(); repaint(); } };
         var lbl = new TextBlock
         {
-            Text = label, Width = labelW, FontSize = 9, FontWeight = FontWeight.Bold, LetterSpacing = 0.72,
+            Text = NotaText.Label(label), Width = labelW, FontSize = 9, FontWeight = FontWeight.Medium,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var val = Mono("", 10);

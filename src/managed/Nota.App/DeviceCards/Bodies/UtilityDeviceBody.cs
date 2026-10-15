@@ -47,7 +47,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "UTILITY";
+    public string? Subtitle => "Utility";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -126,8 +126,8 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         string DeltaText() => ScDb(S_OutLevel) > -119 && ScDb(S_InLevel) > -119 ? NotaNum.F($"Δ {Delta():+0.0;−0.0;0.0} dB") : "Δ —";
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -175,7 +175,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             return seg;
         }
 
-        // Outlined chips: lit = brass edge + wash.
+        // Outlined chips: the chosen one = accent edge + wash.
         Control Chips(string[] names, Func<int, bool> lit, Action<int> pick, int learnParam, string tip, double h = 16, double padX = 7)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
@@ -235,9 +235,10 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         Border Button(string text, Action click, string tip, bool primary)
         {
             var tb = new TextBlock { Text = text, FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
-                FontWeight = primary ? FontWeight.SemiBold : FontWeight.Normal, Foreground = primary ? OnAccent : TextPrimary };
-            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, Background = primary ? Brass : Raised,
-                BorderBrush = primary ? Brass : NotaPalette.BorderStrong, BorderThickness = new Thickness(1),
+                FontWeight = primary ? FontWeight.SemiBold : FontWeight.Normal, Foreground = TextPrimary };
+            // A push button rests raised; `primary` only sets its text heavier (accent is for state, not actions).
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, Background = Raised,
+                BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1),
                 Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; click(); RefreshAll(); e.Handled = true; };
             ToolTip.SetTip(b, tip);
@@ -301,13 +302,13 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         const string ResetTip = "Reset — Gain back to 0 dB, and the meters, holds and the level history start over";
 
         // ======================================================================
-        // LEFT — LEVEL column (input · output)
+        // LEFT — Level column (input · output)
         // ======================================================================
         static AfFader MeterBar(IBrush ink) => new() { Ink = ink, Width = 16, VerticalAlignment = VerticalAlignment.Stretch, IsHitTestVisible = false };
         var levelTitle = Caps("LEVEL"); levelTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inMeter = MeterBar(Brass);
+        var inMeter = MeterBar(NotaPalette.VizInk);
         var outMeter = MeterBar(Teal);
-        var levelIn = Mono("", 7, AccentBright); levelIn.HorizontalAlignment = HorizontalAlignment.Center;
+        var levelIn = Mono("", 7, TextPrimary); levelIn.HorizontalAlignment = HorizontalAlignment.Center;
         var levelOut = Mono("", 7, TextPrimary); levelOut.HorizontalAlignment = HorizontalAlignment.Center;
         ToolTip.SetTip(levelIn, "The input's level in the meter's unit (LUFS-S, 1 s peak or 300 ms RMS)");
         ToolTip.SetTip(levelOut, "The output's level in the meter's unit");
@@ -330,9 +331,9 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         var meters = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
         meters.Children.Add(MeterCell(inMeter, "IN", "Input peak, −60 … 0 dBFS"));
         meters.Children.Add(Col(MeterCell(outMeter, "OUT", "Output peak, −60 … 0 dBFS"), 1));
-        var levelCol = new Border
+        var levelCol = new RuleSection
         {
-            Width = 56, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
+            Width = 56, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(levelTitle, Dock.Top), Docked(levelOut, Dock.Bottom), Docked(levelIn, Dock.Bottom), meters } },
         };
         DockPanel.SetDock(levelCol, Dock.Left);
@@ -353,7 +354,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             field.DragV += v => SetN(Width_, v);
             field.GestureBegin += () => { Begin(Balance); Begin(Width_); };
             field.GestureEnd += () => { End(Balance); End(Width_); };
-            ToolTip.SetTip(field, "The output's stereo field by frequency over the last second — lows at the bottom, highs at the top. Brass: where each band sits between L and R; teal: how far it spreads; dashed: how far the width setting spreads an uncorrelated band. Drag sideways for the balance, up or down for the width.");
+            ToolTip.SetTip(field, "The output's stereo field by frequency over the last second — lows at the bottom, highs at the top. Solid: where each band sits between L and R; teal: how far it spreads; dashed: how far the width setting spreads an uncorrelated band. Drag sideways for the balance, up or down for the width.");
             Learn(field, Width_);
 
             var corr = Mono("", 7, TextTertiary);
@@ -385,10 +386,10 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             widthView.DragV += v => SetN(Width_, v);
             widthView.GestureBegin += () => { Begin(MonoFreq); Begin(Width_); };
             widthView.GestureEnd += () => { End(MonoFreq); End(Width_); };
-            ToolTip.SetTip(widthView, "The width over frequency — brass: what the settings do (0 % = mono, 100 % = unchanged), the mono region shaded; teal dashed: the output's measured width (side against mid). Drag sideways for the mono cutoff, up or down for the width.");
+            ToolTip.SetTip(widthView, "The width over frequency — solid: what the settings do (0 % = mono, 100 % = unchanged), the mono region shaded; teal dashed: the output's measured width (side against mid). Drag sideways for the mono cutoff, up or down for the width.");
             Learn(widthView, MonoFreq);
 
-            var wv = Mono("", 7, AccentBright);
+            var wv = Mono("", 7, TextSecondary);
             readouts.Add(() => wv.Text = NotaNum.F($"width {Sc(S_EffWidth):0}"));
             var onOff = ToggleLatch(MonoBelow, () => On(MonoBelow) ? "On" : "Off", "Mono below — removes the side below the cutoff, so the low end is mono");
             float[] quick = { 60, 120, 240 };
@@ -422,10 +423,10 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             levelView.DragV += v => SetN(Target, v);
             levelView.GestureBegin += () => Begin(Target);
             levelView.GestureEnd += () => End(Target);
-            ToolTip.SetTip(levelView, "Input (teal) and output (brass) over the last 8 s in the meter's unit; dashed: the target. Drag up or down for the target.");
+            ToolTip.SetTip(levelView, "Input (teal) and output (neutral ink) over the last 8 s in the meter's unit; dashed: the target. Drag up or down for the target.");
             Learn(levelView, Target);
 
-            var delta = Mono("", 7, AccentBright);
+            var delta = Mono("", 7, TextSecondary);
             readouts.Add(() => delta.Text = DeltaText());
             var chips = IndexChips(Meter, Meters, "Meter — LUFS-S: short-term loudness (3 s, K-weighted); Peak: sample peak; RMS: 300 ms");
             var head = HeadRow(Row(6, Caps("METER"), chips, Button("Gain match", GainMatch, GainMatchTip, true), Button("Reset", ResetLevels, ResetTip, false)), delta);
@@ -455,7 +456,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         static Control LabelRow(string label, Control c, double labW = 40)
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{labW},*")) };
-            g.Children.Add(new TextBlock { Text = label, FontSize = 7, FontWeight = FontWeight.Bold, Foreground = TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center });
+            g.Children.Add(new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center });
             g.Children.Add(Col(c, 1));
             return g;
         }
@@ -468,7 +469,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
                 ToggleLatch(InvertR, () => "Ø R", "Invert the right channel's phase", h: 15, padX: 6),
                 ToggleLatch(Mute, () => "Mute", "Mute the output", h: 15, padX: 6));
             // Mono on: WIDTH · MONO f | BALANCE; off: WIDTH · BALANCE | GAIN — the mockup's two states.
-            var monoRow = SliderRow("MONO f", MonoFreq, HzF);
+            var monoRow = SliderRow("Mono f", MonoFreq, HzF);
             var balA = SliderRow("BALANCE", Balance, v => NotaNum.F($"{v:+0.00;−0.00;0.00}"), bipolar: true);
             var balB = SliderRow("BALANCE", Balance, v => NotaNum.F($"{v:+0.00;−0.00;0.00}"), bipolar: true, modulation: true);
             var gainRow = SliderRow("GAIN", Gain, Db1, bipolar: true);
@@ -489,9 +490,9 @@ internal sealed class UtilityDeviceBody : IDeviceBody
                 corrBar.Set(c);
                 corrText.Text = NotaNum.F($"{CorrF(c)} · {CorrWords()}");
                 bool lit = Math.Abs(P(Width_) - 100) > 0.5 || On(MonoBelow);
-                corrBox.BorderBrush = lit ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
-                corrTitle.Foreground = lit ? AccentBright : TextTertiary;
-                corrText.Foreground = c < 0 && Sc(S_OutPk) > 1e-4 ? Danger : lit ? AccentBright : TextPrimary;
+                corrBox.BorderBrush = lit ? NotaPalette.BorderStrong : NotaPalette.GraphBorder;   // the width is in play: a stronger frame
+                corrTitle.Foreground = lit ? TextSecondary : TextTertiary;
+                corrText.Foreground = c < 0 && Sc(S_OutPk) > 1e-4 ? Danger : TextPrimary;
             });
             return Spread(
                 LabelRow("PHASE", phase, 40),
@@ -522,13 +523,12 @@ internal sealed class UtilityDeviceBody : IDeviceBody
                     Caps("MEASUREMENTS"),
                     Line("in", () => NotaNum.F($"{LvlF(ScDb(S_InLevel))} {Unit()}")),
                     Line("out", () => NotaNum.F($"{LvlF(ScDb(S_OutLevel))} {Unit()}")),
-                    Line("true peak", () => NotaNum.F($"{LvlF(ScDb(S_TruePeak))} dBTP"), AccentBright) } },
+                    Line("true peak", () => NotaNum.F($"{LvlF(ScDb(S_TruePeak))} dBTP"), TextPrimary) } },
             };
             var matchTo = Seg(MatchTo, new[] { "Input", "Target" }, "What Gain match and Level match aim for — the input's level, or Target");
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
             var gm = Button("Gain match", GainMatch, GainMatchTip, false);
-            gm.Background = NotaPalette.AccentSubtle; gm.BorderBrush = Brass; gm.BorderThickness = new Thickness(1);
-            ((TextBlock)gm.Child!).Foreground = AccentBright; ((TextBlock)gm.Child!).FontWeight = FontWeight.SemiBold;
+            ((TextBlock)gm.Child!).FontWeight = FontWeight.SemiBold;
             btns.Children.Add(gm);
             btns.Children.Add(Col(Button("Reset", ResetLevels, ResetTip, false), 1));
             return Spread(
@@ -566,9 +566,9 @@ internal sealed class UtilityDeviceBody : IDeviceBody
 
         var centre = TabFrame(new[] { "Field", "Mono", "Levels" }, centreHost, CentreBody, false, t => { centreTab = t; Refresh(); }, extras);
         var rightFrame = TabFrame(new[] { "Routing", "Output" }, rightHost, RightBody, true, _ => RefreshAll(), null);
-        var right = new Border { Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip
@@ -625,7 +625,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { levelCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -675,7 +675,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
                     btns[i].Background = on ? Card2 : Brushes.Transparent;
                     btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
                     var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? AccentBright : TextTertiary;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
                     tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }

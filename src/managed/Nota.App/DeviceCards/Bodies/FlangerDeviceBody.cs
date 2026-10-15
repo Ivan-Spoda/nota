@@ -34,7 +34,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "MODULATION";   // the processing type, shown as the header badge
+    public string? Subtitle => "Modulation";   // the processing type, shown as the header badge
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -84,7 +84,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null) => new()
-        { Text = t, FontSize = 7, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.7, VerticalAlignment = VerticalAlignment.Center };
+        { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -106,16 +106,15 @@ internal sealed class FlangerDeviceBody : IDeviceBody
             return g;
         }
 
-        Border Island(Control head, Control body, double width = double.NaN)
+        RuleSection Island(Control head, Control body, double width = double.NaN)
         {
             var headBar = new Border
             {
                 Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(8, 0, 3, 0), Child = head,
             };
-            return new Border
+            return new RuleSection
             {
-                Width = width, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-                ClipToBounds = true, Child = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), body } },
+                Width = width, Child = new DockPanel { LastChildFill = true, Children = { Docked(headBar, Dock.Top), body } },
             };
         }
         static Grid HeadRow(Control left, Control right)
@@ -145,7 +144,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         Learn(waveSeg, Waveform);
         ToolTip.SetTip(waveSeg, "The LFO shape that sweeps the delay: Sine glides, Tri sweeps evenly, Saw rises and drops back");
 
-        var big = Mono("", 26, AccentBright); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
+        var big = Mono("", 26, TextPrimary); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
         var bigSub = new TextBlock { FontSize = 8, Foreground = TextSecondary };
         var period = Mono("", 7, TextTertiary); period.Margin = new Thickness(0, 2, 0, 0);
         readouts.Add(() =>
@@ -163,7 +162,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
                 bigSub.Text = "Hz · free";
                 period.Text = "period " + PeriodF(PeriodMs());
             }
-            big.Foreground = On() ? AccentBright : NotaPalette.TextAxis;
+            big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
         });
         var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
         ToolTip.SetTip(bigBlock, "The LFO rate: in Hz, or the note value it takes from the tempo");
@@ -192,7 +191,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         var legend = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 5, 0),
-            Children = { LegendItem("L", AccentBright), LegendItem("R", NotaPalette.TealBright), tauWord },
+            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", NotaPalette.TealBright), tauWord },
         };
         var comb = new FlangerCombView { Value = () => (P(Delay), P(Feedback)) };
         comb.GestureBegin += () => { Begin(Delay); Begin(Feedback); };
@@ -200,7 +199,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         comb.Changed += (d, f) => { Raw(Delay, d); Raw(Feedback, f); RefreshAll(); };
         comb.ResetRequested += () => { Reset(Delay); Reset(Feedback); RefreshAll(); };
         Learn(comb, Delay);
-        ToolTip.SetTip(comb, "The comb the delay carves into the spectrum, L brass and R teal, with the first notch dashed. Drag left / right to move the notch (Delay), up / down for Feedback; double-click resets both.");
+        ToolTip.SetTip(comb, "The comb the delay carves into the spectrum, L neutral and R teal, with the first notch dashed. Drag left / right to move the notch (Delay), up / down for Feedback; double-click resets both.");
 
         var sweep = new FlangerSweepView { Margin = new Thickness(0, 4, 0, 0) };
         ToolTip.SetTip(sweep, "The delay τ of both channels over two LFO cycles, and where each is now");
@@ -217,7 +216,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         {
             string m = Mode();
             modeWord.Text = m;
-            modeWord.Foreground = m == "resonant" ? AccentBright : m == "negative" ? NotaPalette.TealBright : TextSecondary;
+            modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? NotaPalette.TealBright : TextSecondary;
         });
         ToolTip.SetTip(modeWord, "What the feedback makes: positive sharpens the peaks, negative hollows the tone, past 85\u2009% the comb rings");
 
@@ -320,7 +319,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
                     + FlangerMath.Ms(TauMin()) + "–" + FlangerMath.Ms(TauMax()) + " ms";
             }
             statusLeft.Text = foot;
-            statusLeft.Foreground = warn ? AccentBright : TextSecondary;
+            statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
             double sr = Sc(S_SampleRate);
             statusRight.Text = (sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · ") : "") + NotaNum.F($"{Bpm():0.##} BPM · ") + (Synced() ? "retrig bar" : "free run");
         });
@@ -332,7 +331,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {

@@ -73,7 +73,7 @@ internal static class DeviceParamControls
         var engine = ctx.Engine;
         int track = ctx.TrackId;
         int di = index;
-        var label = new TextBlock { Text = "SIDECHAIN", FontSize = 9, Foreground = TextTertiary };
+        var label = new TextBlock { Text = "Sidechain", FontSize = 9, FontWeight = FontWeight.Medium, Foreground = TextTertiary };
 
         // Source: "None" first, then every track except this one.
         var ids = new List<int> { -1 };
@@ -112,10 +112,10 @@ internal static class DeviceParamControls
         };
 
         // Gain (−24..+24 dB) and Mix (0..100%) sliders.
-        var gain = ScFaderRow("GAIN", (engine.DeviceSidechainGain(track, di) + 24f) / 48f,
+        var gain = ScFaderRow("Gain", (engine.DeviceSidechainGain(track, di) + 24f) / 48f,
             g => $"{g * 48f - 24f:+0.0;−0.0;0.0}\u2009dB",
             g => engine.SetDeviceSidechainGain(track, di, (float)(g * 48.0 - 24.0)));
-        var mix = ScFaderRow("MIX", engine.DeviceSidechainMix(track, di),
+        var mix = ScFaderRow("Mix", engine.DeviceSidechainMix(track, di),
             m => $"{m * 100f:0}\u2009%",
             m => engine.SetDeviceSidechainMix(track, di, (float)m));
 

@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Valve card windows: VlResponseView — a magnitude response on a log-frequency grid,
-// read from the engine (so the picture is the filters the amp runs): the curve now in brass,
+// read from the engine (so the picture is the filters the amp runs): the curve now in neutral ink,
 // a reference dashed in teal (the tone stack flat, or the cabinet on axis) and an optional
 // node. The Amp tab uses it for the tone stack (drag: sideways = the middle frequency, up /
 // down = the middle), the Cab tab for the cabinet (sideways = off-axis, up / down = the mic
@@ -80,7 +80,7 @@ internal sealed class VlResponseView : VtWindowBase
             }
             ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x90), 1.1, new DashStyle(new double[] { 4, 4 }, 0)), Line(_ref));
             ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Line(_now));
-            if (!double.IsNaN(_nodeHz)) NotaGraph.Node(ctx, new Point(X(_nodeHz), Y(At(_now, _nodeHz))), true);
+            if (!double.IsNaN(_nodeHz)) NotaGraph.Node(ctx, new Point(X(_nodeHz), Y(At(_now, _nodeHz))), Dragging);
         }
 
         NotaGraph.Title(ctx, frame, _title);
@@ -89,7 +89,7 @@ internal sealed class VlResponseView : VtWindowBase
         {
             double t = Ticks[i];
             bool near = !double.IsNaN(_nodeHz) && Math.Abs(Math.Log(t / _nodeHz)) < 0.25;
-            var ft = NotaGraph.AxisText(t >= 1000 ? NotaNum.F($"{t / 1000:0.#} k") : NotaNum.F($"{t:0}"), near ? NotaPalette.AccentBright : null);
+            var ft = NotaGraph.AxisText(t >= 1000 ? NotaNum.F($"{t / 1000:0.#} k") : NotaNum.F($"{t:0}"), near ? (Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary) : null);
             double x = Math.Clamp(X(t) - ft.Width / 2, 4, Math.Max(4, w - ft.Width - 4));
             ctx.DrawText(ft, new Point(x, h - ft.Height - 2));
         }

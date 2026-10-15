@@ -5,11 +5,11 @@
 //   • Pattern: rows = the chord over every octave (root rows striped, note names in a left
 //     gutter), one cell per step = the note that step plays. Cell width = Gate × Length,
 //     odd steps pushed right by Swing, a ratchet splits the cell, a muted step is an empty
-//     outline. Played steps are Brass Deep, the sounding one Brass Light, the rest Brass Edge.
+//     outline. Steps rest in neutral ink, the ones already played this pass dimmer, the sounding one accent.
 //   • Groove: the selected lane's per-step bars (Velocity / Length / Chance / Ratchet as
 //     stacked quarters / Transpose bipolar from the centre); drag across the well to draw
 //     (⌥ draws a ramp); the step-number strip under it mutes a step.
-// A brass head band marks the sounding step; it moves with the engine's telemetry.
+// An accent head band marks the sounding step; it moves with the engine's telemetry.
 // ArpPattern mirrors Arpeggiator.h so the picture is exactly what will play.
 
 using System;
@@ -222,7 +222,7 @@ internal sealed class ArpGrid : Control
     }
 
     private IBrush Tone(int c, bool muted, IBrush future)
-        => muted ? NotaPalette.TrackOff : c == _pos ? NotaPalette.AccentBright : _pos >= 0 && c < _pos ? NotaPalette.AccentDeep : future;
+        => muted ? NotaPalette.TrackOff : c == _pos ? NotaPalette.Accent : _pos >= 0 && c < _pos ? NotaPalette.Wash(NotaPalette.VizInk, 0x80) : future;
 
     public override void Render(DrawingContext ctx)
     {
@@ -304,7 +304,7 @@ internal sealed class ArpGrid : Control
             double wFrac = Math.Clamp(gate * len, 0.12, 1.0);
             double off = c % 2 == 1 ? swing * 0.5 * cw : 0;
             double cellW = wFrac * cw;
-            IBrush fill = muted ? Brushes.Transparent : c == _pos ? NotaPalette.AccentBright : _pos >= 0 && c < _pos ? NotaPalette.AccentDeep : NotaPalette.AccentEdge;
+            IBrush fill = muted ? Brushes.Transparent : c == _pos ? NotaPalette.Accent : _pos >= 0 && c < _pos ? NotaPalette.Wash(NotaPalette.VizInk, 0x80) : NotaPalette.VizInk;
             IBrush border = muted ? NotaPalette.BorderStrong : fill;
             foreach (int p in ArpPattern.NotesAt(seq, order, page + c, octs, octMode))
             {
@@ -327,7 +327,7 @@ internal sealed class ArpGrid : Control
             bool muted = G(LOn + c) < 0.5;
             double d = Math.Clamp(lane.ToDisp(G(lane.Base + c)), lane.Min, lane.Max);
             double f = (d - lane.Min) / (lane.Max - lane.Min);
-            var fill = Tone(c, muted, NotaPalette.AccentDim);
+            var fill = Tone(c, muted, NotaPalette.TextSecondary);
             double x = w.X + c * cw + 2, bw = Math.Max(1, cw - 4);
             if (lane.Base == LRatchet)
             {

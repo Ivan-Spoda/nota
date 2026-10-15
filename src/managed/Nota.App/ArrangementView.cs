@@ -134,6 +134,24 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Combined height of every visible row.</summary>
     internal double RowsHeight => _rowTops[_tracks.Count];
 
+    /// <summary>Scroll the track list so <paramref name="trackId"/>'s whole row is in view. Runs
+    /// after the next layout pass, so it also works straight after a Refresh that added the
+    /// row (the scroll extent isn't updated until then). A row already fully visible doesn't move.</summary>
+    public void RevealTrack(int trackId)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            int i = _tracks.FindIndex(t => t.Id == trackId);
+            if (i < 0) return;
+            double top = RowTop(i), bottom = RowTop(i + 1), view = _scroller.Viewport.Height;
+            double y = _scroller.Offset.Y;
+            if (top < y) y = top;
+            else if (bottom > y + view) y = bottom - view;
+            else return;
+            _scroller.Offset = new Vector(_scroller.Offset.X, Math.Max(0, y));
+        }, DispatcherPriority.Background);
+    }
+
     /// <summary>Row containing <paramref name="y"/>, or -1 when it falls outside the rows.</summary>
     internal int RowAtY(double y)
     {
@@ -290,7 +308,7 @@ public sealed partial class ArrangementView : UserControl
             Margin = new Thickness(8, 0, 0, 0),
             Children =
             {
-                new TextBlock { Text = "ZOOM", Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) },
+                new TextBlock { Text = "Zoom", Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) },
                 zoomOut, zoomIn,
             },
         };
@@ -398,30 +416,37 @@ public sealed partial class ArrangementView : UserControl
         bottom.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
         bottom.BindResource(Border.BorderBrushProperty, "Brush.Hairline");
 
+        // The pinned return/master band meets the scrolling tracks on a seam, so a track
+        // scrolled to the bottom edge never reads as sitting on a return row (critique F1).
+        var footerSeam = new Border { Height = 1 };
+        footerSeam.BindResource(Border.BackgroundProperty, "Brush.Seam");
+
         var root = new DockPanel();
         DockPanel.SetDock(_overviewRow, Dock.Top);
         DockPanel.SetDock(_sectionsRow, Dock.Top);
         DockPanel.SetDock(top, Dock.Top);
         DockPanel.SetDock(bottom, Dock.Bottom);
         DockPanel.SetDock(_footer, Dock.Bottom);
+        DockPanel.SetDock(footerSeam, Dock.Bottom);
         root.Children.Add(_overviewRow);   // Overview sits above the ruler
         root.Children.Add(_sectionsRow);   // …then the named song sections
         root.Children.Add(top);
         root.Children.Add(bottom);
         root.Children.Add(_footer);
+        root.Children.Add(footerSeam);     // docked after the footer → sits on top of it
         root.Children.Add(centerArea);
 
-        // The island: like the browser, the arrangement is a rounded card floating on the app
-        // ground rather than a full-bleed region. ClipToBounds keeps the ruler, the header
-        // column and the pinned footer inside the rounded corners.
+        // A docked panel like the browser: square, no frame of its own — it meets its
+        // neighbours on the seam the shell grid draws. ClipToBounds keeps the ruler, the
+        // header column and the pinned footer inside it.
         var island = new Border
         {
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(0),
             ClipToBounds = true,
             Child = root,
         };
-        island.BindResource(Border.CornerRadiusProperty, "Radius.Panel");
-        island.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
+        island.BindResource(Border.CornerRadiusProperty, "Radius.Docked");
+        island.BindResource(Border.BackgroundProperty, "Brush.BgApp");   // lanes sit on the ground
         island.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         Content = island;
     }
@@ -1714,8 +1739,8 @@ public sealed partial class ArrangementView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                ChipToggle("M", t.Muted, danger: false, v => _engine?.SetTrackMute(t.Id, v)),
-                ChipToggle("S", t.Soloed, danger: false, v => _engine?.SetTrackSolo(t.Id, v)),
+                ChipToggle("M", t.Muted, NotaPalette.Mute, v => _engine?.SetTrackMute(t.Id, v)),
+                ChipToggle("S", t.Soloed, NotaPalette.Solo, v => _engine?.SetTrackSolo(t.Id, v)),
             },
         };
 
@@ -1723,7 +1748,7 @@ public sealed partial class ArrangementView : UserControl
         Grid.SetColumn(tri, 0);
         Grid.SetColumn(name, 1);
         Grid.SetColumn(chips, 2);
-        var kind = TypeTag("GROUP");
+        var kind = TypeTag("Group");
         Grid.SetColumn(kind, 3);
         row.Children.Add(tri);
         row.Children.Add(name);
@@ -1791,13 +1816,7 @@ public sealed partial class ArrangementView : UserControl
             // Freeze badge: a drawn chain-link for a sleeping live-freeze source (1);
             // a drawn snowflake for an in-place frozen track or a linked frozen track (2).
             Control badge = t.LiveRole == 1
-                ? new Avalonia.Controls.Shapes.Path
-                {
-                    Data = NotaIcons.ChainLink, Stretch = Stretch.None,
-                    Stroke = FrozenAccent, StrokeThickness = 1.4,
-                    Width = 14, Height = 14,
-                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0),
-                }
+                ? new Glyph(GlyphKind.ChainLink, 14) { Foreground = FrozenAccent, Margin = new Thickness(0, 0, 4, 0) }
                 : new Glyph(GlyphKind.Freeze, 10) { Foreground = FrozenAccent, Margin = new Thickness(0, 0, 4, 0) };
             Grid.SetColumn(badge, 0);
             nameRow.Children.Add(badge);
@@ -1809,8 +1828,8 @@ public sealed partial class ArrangementView : UserControl
 
         // Row 2: M / S / ● (record-arm) — 18×16 chips.
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Margin = new Thickness(0, 5, 0, 0) };
-        btnRow.Children.Add(ChipToggle("M", t.Muted, danger: false, v => _engine?.SetTrackMute(t.Id, v)));
-        btnRow.Children.Add(ChipToggle("S", t.Soloed, danger: false, v => _engine?.SetTrackSolo(t.Id, v)));
+        btnRow.Children.Add(ChipToggle("M", t.Muted, NotaPalette.Mute, v => _engine?.SetTrackMute(t.Id, v)));
+        btnRow.Children.Add(ChipToggle("S", t.Soloed, NotaPalette.Solo, v => _engine?.SetTrackSolo(t.Id, v)));
         // Record-arm applies to instrument (MIDI capture) + audio (input capture) tracks;
         // return and group tracks have no input, so they get no arm chip.
         if (!t.IsReturn && !t.IsGroup)
@@ -2221,10 +2240,10 @@ public sealed partial class ArrangementView : UserControl
         };
         void Paint()
         {
-            // Engaged: the brass wash + edge of M/S; at rest a neutral chip.
-            chip.Background = Brush(state ? "Brush.AccentSubtle" : "Brush.SurfaceRaised");
-            chip.BorderBrush = Brush(state ? "Brush.BorderBrass" : "Brush.BorderDefault");
-            glyph.Foreground = Brush(state ? "Brush.AccentHover" : "Brush.TextStrong");
+            // Engaged: a solid accent key with derived ink (toggled on); at rest a raised key.
+            chip.Background = Brush(state ? "Brush.Accent" : "Brush.SurfaceRaised");
+            chip.BorderBrush = Brush(state ? "Brush.Accent" : "Brush.Seam");
+            glyph.Foreground = Brush(state ? "Brush.TextOnAccent" : "Brush.TextSecondary");
             chip.Opacity = usable ? 1.0 : 0.4;
             ToolTip.SetTip(chip, usable
                 ? (state ? "Monitoring input — click to stop" : "Monitor input: hear it live through this track")
@@ -2339,8 +2358,8 @@ public sealed partial class ArrangementView : UserControl
     {
         var tb = new TextBlock
         {
-            Text = text, FontSize = 8, FontWeight = FontWeight.Medium, Classes = { "Mono" },
-            Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center,
+            Text = NotaText.Label(text), FontSize = 9, Classes = { "Mono" },
+            Foreground = Brush("Brush.TextMuted"), VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(6, 0, 0, 0),
         };
         return tb;
@@ -2371,9 +2390,10 @@ public sealed partial class ArrangementView : UserControl
         return pill;
     }
 
-    // A small 18×16 stateful chip toggle (M/S/●). Danger variant reds when active.
-    // Record-arm, drawn to the almanac's record rule: at rest a neutral chip with a red
-    // disc; armed, solid record red with a pale disc.
+    // A small 18×16 stateful key (M/S/●): a raised key at rest; on, a solid fill in the
+    // toggle's own colour — mute amber, solo blue, arm red — with
+    // derived ink. Record-arm: at rest a neutral key with a red disc; armed, solid red with a
+    // white disc.
     private Control ArmToggle(bool initial, Action<bool> onChanged)
     {
         bool state = initial;
@@ -2382,7 +2402,7 @@ public sealed partial class ArrangementView : UserControl
         void Paint()
         {
             chip.Background = state ? NotaPalette.Record : NotaPalette.SurfaceRaised;
-            chip.BorderBrush = state ? NotaPalette.Record : NotaPalette.BorderDefault;
+            chip.BorderBrush = state ? NotaPalette.Record : NotaPalette.Seam;
             disc.Foreground = state ? NotaPalette.RecordInk : NotaPalette.Record;
         }
         Paint();
@@ -2394,12 +2414,12 @@ public sealed partial class ArrangementView : UserControl
         return chip;
     }
 
-    private Control ChipToggle(string text, bool initial, bool danger, Action<bool> onChanged)
+    private Control ChipToggle(string text, bool initial, SolidColorBrush onFill, Action<bool> onChanged)
     {
         bool state = initial;
         var tb = new TextBlock
         {
-            Text = text, FontSize = 9, FontWeight = FontWeight.Bold,
+            Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
         var chip = new Border
@@ -2411,16 +2431,15 @@ public sealed partial class ArrangementView : UserControl
         {
             if (state)
             {
-                // Engaged (mute / solo): brass edge and brass ink on the wash.
-                chip.Background = Brush(danger ? "Brush.Record" : "Brush.AccentSubtle");
-                chip.BorderBrush = Brush(danger ? "Brush.Record" : "Brush.BorderBrass");
-                tb.Foreground = Brush(danger ? "Brush.RecordInk" : "Brush.AccentHover");
+                chip.Background = onFill;
+                chip.BorderBrush = onFill;
+                tb.Foreground = NotaPalette.InkOn(onFill);
             }
             else
             {
-                chip.Background = Brush("Brush.SurfaceRaised");
-                chip.BorderBrush = Brush("Brush.BorderDefault");
-                tb.Foreground = Brush("Brush.TextStrong");
+                chip.Background = NotaPalette.SurfaceRaised;
+                chip.BorderBrush = NotaPalette.Seam;
+                tb.Foreground = NotaPalette.TextSecondary;
             }
         }
         Paint();
@@ -2474,7 +2493,7 @@ public sealed partial class ArrangementView : UserControl
     private Control BuildSlimRow(string title, int colorIndex, int trackId, string bgKey, double volume,
         Action<double> setVolume, out MeterBar meter, out MiniFader fader, out TextBlock db, bool masterSpine = false)
     {
-        var spineBrush = masterSpine ? NotaPalette.Accent : ClipColors(colorIndex).content;
+        var spineBrush = masterSpine ? NotaPalette.Master : ClipColors(colorIndex).content;
         var name = new TextBlock
         {
             Text = title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextPrimary"),
@@ -2519,7 +2538,7 @@ public sealed partial class ArrangementView : UserControl
         grid.Children.Add(body);
 
         bool sel = trackId > 0 && trackId == SelTrackId;
-        if (sel) spine.Background = NotaPalette.Accent;   // selected: brass stripe, name stays Ink 1
+        if (sel) spine.Background = NotaPalette.Accent;   // selected: accent stripe, name stays primary
         var card = new Border
         {
             Width = HeaderW, Height = FooterRowH, ClipToBounds = true,
@@ -2584,29 +2603,29 @@ public sealed partial class ArrangementView : UserControl
     internal static double Shape(double t, float curve)
         => curve == 0f ? t : Math.Pow(t, Math.Pow(2.0, -curve * 4.0));
 
-    // ---- data colours (mirror the "Ember Graphite" tokens in NotaTheme.axaml) --
-    private static readonly IBrush LaneBgA = NotaPalette.BgSunken; // the canvas is sunken, not the app ground
+    // ---- data colours (mirror the tokens in NotaTheme.axaml) --
+    private static readonly IBrush LaneBgA = NotaPalette.BgApp;    // lanes on the ground
     private static readonly IBrush LaneBgB = NotaPalette.LaneB; // Brush.LaneB
     private static readonly IBrush ChromeBg = NotaPalette.BgSunken; // Brush.BgSunken
     private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1); // Brush.GridBeat
     private static readonly IPen BarPen = new Pen(NotaPalette.GridBar, 1);   // Brush.GridBar
     private static readonly IPen SubBeatPen = new Pen(NotaPalette.GridSubBeat, 1);   // finer than a beat
-    // Playhead: a 1px brass line with a 7×5 flag on the ruler, no glow (almanac § timeline).
+    // Playhead: a 1px accent line with a 7×5 flag on the ruler, no glow (almanac § timeline).
     // The brush is the palette slot itself — a SolidColorBrush built from its Color froze the
     // playhead in one theme.
     private static readonly IBrush PlayheadBrush = NotaPalette.Accent;
     private static readonly IPen PlayheadPen = new Pen(PlayheadBrush, 1);
     // Selection edges a clip with 1px brass — a state never thickens a border to 2px.
-    private static readonly IPen ClipSelBorder = new Pen(NotaPalette.AccentBright, 1);
+    private static readonly IPen ClipSelBorder = new Pen(NotaPalette.Accent, 1);
     private static readonly IBrush EdgeHighlight = NotaPalette.MarkerHot; // resize-edge affordance
     private static readonly IBrush InactiveVeil = NotaPalette.Wash(NotaPalette.Veil, 0xB0); // deactivated-clip scrim
     private static readonly IBrush RulerText = NotaPalette.TextSecondary; // Brush.TextSecondary
     // Drag position tooltip (req 2.9): dark pill + bright text near the cursor.
     private static readonly IBrush TooltipBg = NotaPalette.Wash(NotaPalette.TooltipBg, 0xDC);
     private static readonly IBrush TooltipText = NotaPalette.TooltipText;
-    // Selected-track highlight: just a soft brass wash on the lane row — no edge
-    // lines, so it never fights the grid. Header uses a warm tinted background.
-    private static readonly IBrush SelWash = NotaPalette.Wash(NotaPalette.Accent, 0x20); // Accent @ ~12%
+    // Selected-track highlight: a faint neutral lift on the lane row — no edge lines, so it
+    // never fights the grid; the header's accent edge is what marks the selection.
+    private static readonly IBrush SelWash = NotaPalette.Wash(NotaPalette.TextPrimary, 0x0D); // a neutral lift; the header's accent edge marks the selection
     // A group's lane is chrome between its children, not another lane to scan.
     internal static readonly IBrush GroupLaneBg = NotaPalette.Wash(NotaPalette.BgSunken, 0xE0);
     // Plate behind a clip's name so it survives a dense waveform without a full-width strip.
@@ -2653,7 +2672,7 @@ public sealed partial class ArrangementView : UserControl
 
     // Track palette (mirror Brush.Track1..8 + ReturnA/B), each base offered in 3 shades
     // (normal / lighter / darker) so a colour index is base*Shades + shade. Return buses
-    // sit at ReturnColorBase..; clips derive fill @16%, border @50%, strip @20%, content full.
+    // sit at ReturnColorBase..; clips derive fill @30%, border @50%, strip @20%, content full.
     internal const int PaletteShades = 3;
     internal static readonly int PaletteBases = NotaPalette.TrackColors.Length;   // 8
     internal static readonly int ReturnColorBase = PaletteBases * PaletteShades;  // 24
@@ -2736,11 +2755,24 @@ public sealed partial class ArrangementView : UserControl
     private static (IBrush fill, IPen border, IBrush strip, IBrush content) ClipColors(int idx)
     {
         if (_clipColors.TryGetValue(idx, out var v)) return v;
-        v = (ClipTint(idx, 0.16), new Pen(ClipTint(idx, 0.50), 1), ClipTint(idx, 0.20),
+        v = (ClipTint(idx, 0.30), new Pen(ClipTint(idx, 0.50), 1), ClipTint(idx, 0.20),
              NotaPalette.Derived(() => TrackColorForIndex(idx)));
         _clipColors[idx] = v;
         return v;
     }
+    // A clip's title band: its track colour mixed 30% toward black; its notes and waveform a
+    // deeper shade, 58% toward black, so they read on the full-colour body.
+    private static readonly Dictionary<int, SolidColorBrush> _clipBands = new(), _clipInks = new();
+    internal static SolidColorBrush ClipBand(int idx) => Shade(_clipBands, idx, 0.30);
+    internal static SolidColorBrush ClipInk(int idx) => Shade(_clipInks, idx, 0.58);
+    private static SolidColorBrush Shade(Dictionary<int, SolidColorBrush> cache, int idx, double t)
+    {
+        if (cache.TryGetValue(idx, out var b)) return b;
+        b = NotaPalette.Derived(() => Mix(TrackColorForIndex(idx), NotaPalette.ShadeDown.Color, t));
+        cache[idx] = b;
+        return b;
+    }
+
     /// <summary>The theme-following brush for a palette index. A view that wants a track's
     /// colour takes this; wrapping <see cref="TrackColorForIndex"/> in a new brush freezes it
     /// in the variant that was active when the view was built.</summary>

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// A rotary knob for device / instrument parameters, drawn to the almanac: a 270° groove
-// in the well colour, the value arc over it, a raised cap and a Brass Light pointer —
+// A rotary knob for device / instrument parameters (the Studio dial): a 270° groove in the
+// well colour, the value arc over it — neutral ink at rest, the accent while live — a
+// raised cap on a seam and a primary-ink pointer —
 // all laid out on a 52-unit grid (groove r 21 · stroke 5, cap r 14, pointer 2.4 wide
 // reaching the cap's edge) and scaled to the knob's size. Drag vertically to change
 // (up = increase; Ctrl/⌘/Shift = fine), double-click resets. Same public API as
@@ -24,20 +25,23 @@ namespace Nota.App;
 
 public sealed class Knob : Control
 {
-    private static readonly IBrush Groove = NotaPalette.BgSunken;         // Well
-    private static readonly IBrush NeutralArc = NotaPalette.BorderStrong; // a knob off the audio path, or disabled
-    private static readonly IBrush Brass = NotaPalette.Accent;
-    private static readonly IBrush Cap = NotaPalette.Panel;
-    private static readonly IBrush CapEdge = NotaPalette.BorderStrong;
-    private static readonly IBrush CapEdgeOff = NotaPalette.BorderDefault;
-    private static readonly IBrush PointerBrass = NotaPalette.AccentBright;  // Brass Light
-    private static readonly IBrush PointerNeutral = NotaPalette.TextStrong;
-    private static readonly IBrush PointerOff = NotaPalette.TextTertiary;
+    // The dial: a raised face on a seam, a well-coloured track, the value arc in neutral
+    // ink at rest and in the accent only while the knob is live (under the pointer or in
+    // the hand) — a resting value is never orange.
+    private static readonly IBrush Groove = NotaPalette.BgSunken;         // the track: well
+    private static readonly IBrush NeutralArc = NotaPalette.Rule;         // a knob off the audio path, or disabled
+    private static readonly IBrush RestArc = NotaPalette.VizInk;          // a value at rest
+    private static readonly IBrush LiveArc = NotaPalette.Accent;          // the value while it is being set
+    private static readonly IBrush Cap = NotaPalette.SurfaceRaised;
+    private static readonly IBrush CapEdge = NotaPalette.Seam;
+    private static readonly IBrush CapEdgeOff = NotaPalette.Seam;
+    private static readonly IBrush PointerNeutral = NotaPalette.TextPrimary;
+    private static readonly IBrush PointerOff = NotaPalette.TextDisabled;
 
     private const double StartDeg = 135.0;   // down-left
     private const double SweepDeg = 270.0;   // clockwise to down-right
 
-    // The almanac draws the knob in a 52-unit box; everything scales from it.
+    // The knob is drawn in a 52-unit box; everything scales from it.
     private const double Grid = 52, GrooveR = 21, GrooveStroke = 5, CapR = 14, PointerW = 2.4, PointerLen = 12;
 
     public const double SizeSecondary = NotaSize.KnobSecondary, SizeRegular = NotaSize.KnobRegular, SizeMain = NotaSize.KnobMain, SizeInline = NotaSize.KnobInline;
@@ -61,7 +65,8 @@ public sealed class Knob : Control
     public bool Inline { get => _inline; init { _inline = value; CoerceValue(WidthProperty); CoerceValue(HeightProperty); } }
     private readonly bool _inline;
 
-    /// <summary>Brass value arc instead of neutral grey.</summary>
+    /// <summary>On the audio path: its value arc is drawn in neutral ink (and the accent while
+    /// live) rather than the quieter rule grey of an off-path knob.</summary>
     public bool Accent { get; init; }
 
     /// <summary>Overrides the value-arc colour (e.g. teal for modulation knobs); may change live
@@ -160,7 +165,14 @@ public sealed class Knob : Control
         if (_drag) GestureEnd?.Invoke();
         _drag = false;
         e.Pointer.Capture(null);
+        InvalidateVisual();
     }
+
+    // Under the pointer the knob is live: its arc takes the accent (120ms is the button
+    // fade; a dial repaints on the spot, which reads the same at this size).
+    private bool _hover;
+    protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; InvalidateVisual(); }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hover = false; InvalidateVisual(); }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -179,16 +191,17 @@ public sealed class Knob : Control
         double frac = _max > 0 ? _value / _max : 0;
         bool on = IsEffectivelyEnabled && !_dim;
 
-        var arcBrush = !on ? NeutralArc : ArcColor ?? (Accent ? Brass : NeutralArc);
-        var pointer = !on ? PointerOff : ArcColor is { } c ? PointerFor(c) : Accent ? PointerBrass : PointerNeutral;
+        bool live = on && (_drag || _hover);
+        var arcBrush = !on ? NeutralArc : ArcColor ?? (live ? LiveArc : Accent ? RestArc : NeutralArc);
+        var pointer = !on ? PointerOff : ArcColor is { } c ? PointerFor(c) : PointerNeutral;
 
-        // Groove, then the value arc over it — round caps, as in the almanac.
+        // Groove, then the value arc over it — round caps.
         double r = GrooveR * k, sw = GrooveStroke * k;
         ctx.DrawGeometry(null, new Pen(Groove, sw, lineCap: PenLineCap.Round), Arc(cx, cy, r, 0, 1));
         if (frac > 0.001)
             ctx.DrawGeometry(null, new Pen(arcBrush, sw, lineCap: PenLineCap.Round), Arc(cx, cy, r, 0, frac));
 
-        // Raised cap with a 1px edge.
+        // Raised face with a 1px seam edge.
         ctx.DrawEllipse(Cap, new Pen(on ? CapEdge : CapEdgeOff, 1), new Point(cx, cy), CapR * k, CapR * k);
 
         // Pointer from the centre to the cap's edge.

@@ -65,7 +65,7 @@ public sealed partial class PreferencesWindow
                     Children =
                     {
                         new TextBlock { Text = m.Name, FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = m.Feature.ToUpperInvariant(), FontSize = 9, LetterSpacing = 0.7, FontFamily = NotaFonts.MonoFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = m.Feature, FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
                 new TextBlock { Text = $"{m.Author} · {m.License}", FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary },

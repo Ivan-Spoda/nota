@@ -17,7 +17,7 @@
 //               and the track's meter) or Env (one operator's ADSR, drawn and draggable,
 //               with key and velocity tracking).
 //
-// Brass is a carrier — what reaches the output; teal is a modulator. Everything is a
+// Neutral ink is a carrier — what reaches the output; teal is a modulator. Everything is a
 // plugin param → automation / persist / clone.
 
 using System;
@@ -126,8 +126,8 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         // ---- shared builders --------------------------------------------------
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold,
-            LetterSpacing = NotaType.KnobLabelTracking, Foreground = c ?? TextTertiary,
+            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8)
@@ -212,7 +212,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
 
         var bendWheel = Wheel("bend", 0.5, true, out _);
         var modWheel = Wheel("modwheel", 0, false, out _);
-        var bendVal = Mono("", AccentBright, NotaType.KnobValue);
+        var bendVal = Mono("", TextPrimary, NotaType.KnobValue);
         var modVal = Mono("", TextSecondary, NotaType.KnobValue);
         bendVal.HorizontalAlignment = modVal.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() =>
@@ -221,9 +221,9 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             double semis = (G("bend") - 0.5) * 2 * range;
             bool centred = Math.Abs(semis) < 0.05;
             bendVal.Text = centred ? $"±{range} st" : NotaNum.Unit(semis, "+0.0;−0.0;0", "st");
-            bendVal.Foreground = centred ? TextSecondary : AccentBright;
+            bendVal.Foreground = centred ? TextSecondary : TextPrimary;
             modVal.Text = NotaNum.Pct(G("modwheel"));
-            modVal.Foreground = G("modwheel") > 1e-3f ? AccentBright : TextSecondary;
+            modVal.Foreground = G("modwheel") > 1e-3f ? TextPrimary : TextSecondary;
         });
 
         var wheelPair = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), VerticalAlignment = VerticalAlignment.Stretch };
@@ -278,16 +278,16 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             };
             var role = new TextBlock
             {
-                FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold, LetterSpacing = NotaType.KnobLabelTracking,
+                FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
                 VerticalAlignment = VerticalAlignment.Center,
             };
             readouts.Add(() =>
             {
                 var tgt = OperatorTopo.Algo[AlgoIdx()];
                 bool carrier = tgt[op] == 4;
-                var ink = carrier ? AccentBright : Teal;
-                role.Text = carrier ? "OUT" : "→ " + OperatorTopo.Names[tgt[op]];
-                role.Foreground = ink; letter.Foreground = ink; bar.Background = carrier ? Brass : Teal;
+                var ink = carrier ? NotaPalette.VizInk : Teal;
+                role.Text = carrier ? "out" : "→ " + OperatorTopo.Names[tgt[op]];
+                role.Foreground = ink; letter.Foreground = ink; bar.Background = carrier ? NotaPalette.VizInk : Teal;
             });
 
             // A hairline under each row, drawn behind its cells across the full width.
@@ -403,7 +403,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
                 bool on = i == tab;
                 tabCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
                 tabCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                tabTexts[i].Foreground = on ? AccentBright : TextTertiary;
+                tabTexts[i].Foreground = on ? TextPrimary : TextTertiary;
                 tabTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 bodies[i].IsVisible = on;
             }
@@ -560,11 +560,11 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             string p = OpId[envOp];
             var tgt = OperatorTopo.Algo[AlgoIdx()];
             bool carrier = tgt[envOp] == 4;
-            env.Accent = carrier ? AccentBright : Teal;
+            env.Accent = carrier ? NotaPalette.VizInk : Teal;
             env.Target($"{OperatorTopo.Names[envOp]} ENV",
                 (I(p + "atk"), p + "atk"), (I(p + "dec"), p + "dec"), (I(p + "sus"), p + "sus"), (I(p + "rel"), p + "rel"));
             envRoleText.Text = carrier ? "carrier → out" : "mod → " + OperatorTopo.Names[tgt[envOp]];
-            envRoleText.Foreground = carrier ? AccentBright : Teal;
+            envRoleText.Foreground = carrier ? TextPrimary : Teal;
             for (int o = 0; o < 4; o++)
                 for (int s = 0; s < 4; s++) stageCells[o, s].IsVisible = o == envOp;
             for (int i = 0; i < 4; i++)
@@ -572,7 +572,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
                 bool on = i == envOp;
                 bool carr = tgt[i] == 4;
                 opCells[i].Background = on ? (carr ? Brass : Teal) : Brushes.Transparent;
-                opTexts[i].Foreground = on ? OnAccent : carr ? AccentBright : Teal;
+                opTexts[i].Foreground = on ? OnAccent : carr ? TextPrimary : Teal;
                 opTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
             }
         };
@@ -602,7 +602,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
                 bool on = i == railTab;
                 railCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
                 railCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                railTexts[i].Foreground = on ? AccentBright : TextTertiary;
+                railTexts[i].Foreground = on ? TextPrimary : TextTertiary;
                 railTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 railBodies[i].IsVisible = on;
             }
@@ -677,7 +677,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         DockPanel.SetDock(statusHost, Dock.Bottom);
         var root = new DockPanel
         {
-            LastChildFill = true, Background = NotaPalette.Gutter,
+            LastChildFill = true, Background = NotaPalette.SurfaceCard,
             Children = { statusHost, body },
         };
 
@@ -697,11 +697,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
     }
 
     // A device section: card ground, hairline, radius 6 — the almanac's section box.
-    private static Border SectionBox(Control child) => new()
-    {
-        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = child,
-    };
+    private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
 
     // A section's own header strip: a hairline under it, nothing else.
     private static Border HeaderStrip(Control child) => new()

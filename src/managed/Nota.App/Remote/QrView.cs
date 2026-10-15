@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // A QR code drawn as geometry. Phone cameras read dark modules on a light ground reliably and
-// an inverted code poorly, so the tile is light in both variants: Ink 0 under Graphite, Raised
-// under Paper, with the modules in the opposite ink. Colours are read at render time.
+// an inverted code poorly, so the tile is light in both variants: Ink 0 in Dark, Raised
+// in Light, with the modules in the opposite ink. Colours are read at render time.
 
 using Avalonia;
 using Avalonia.Controls;

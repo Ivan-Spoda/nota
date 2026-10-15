@@ -207,9 +207,10 @@ public sealed partial class PianoRollView : UserControl
     // Scale overlay: out-of-scale rows/keys get a translucent dark wash (they read
     // dimmed / semi-transparent), in-scale rows a faint accent, the root a stronger one.
     private static readonly IBrush OutScaleWash = NotaPalette.Wash(NotaPalette.BgSunken, 0xB4);
-    private static readonly IBrush InScaleTint = NotaPalette.Wash(NotaPalette.AccentBright, 0x1E);
-    private static readonly IBrush RootTint = NotaPalette.Wash(NotaPalette.AccentBright, 0x40);
-    private static readonly IPen PlayheadPen = new Pen(NotaPalette.Accent, 1);   // almanac playhead: 1px brass
+    // Scale rows are a neutral lift, not the accent: a key at rest is neither live nor chosen.
+    private static readonly IBrush InScaleTint = NotaPalette.Wash(NotaPalette.VizInk, 0x0C);
+    private static readonly IBrush RootTint = NotaPalette.Wash(NotaPalette.VizInk, 0x1E);
+    private static readonly IPen PlayheadPen = new Pen(NotaPalette.Accent, 1);   // the playhead: 1px accent
     private static readonly IBrush KeyHover = NotaPalette.Wash(NotaPalette.AccentBright, 0x66);
     // Played-key highlight (currently-pressed keyboard / MIDI note): a solid key tint + a faint row wash.
     private static readonly IBrush HeldKeyFill = NotaPalette.Accent;

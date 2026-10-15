@@ -17,7 +17,7 @@
 //   Rail 186    Global: voice mode, glide, unison, output drive, bend range, legato,
 //               volume, pan and the track's meter.
 //
-// Brass is the parameter itself; teal is modulation and what receives it. Everything is a
+// Neutral ink is the parameter itself; teal is modulation and what receives it. Everything is a
 // plugin param → automation / persist / clone, and the card follows automation live.
 
 using System;
@@ -35,7 +35,7 @@ namespace Nota.App;
 internal sealed class BassInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
-    public string Subtitle => "BASS SYNTH";
+    public string Subtitle => "Bass synth";
     public double CardWidth => 700;
 
     private const double WheelsW = 56, RailW = 186, TabH = 20, StatusH = 18, BodyH = 186;
@@ -126,8 +126,8 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         // ---- shared builders --------------------------------------------------
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold,
-            LetterSpacing = NotaType.KnobLabelTracking, Foreground = c ?? TextTertiary,
+            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
@@ -137,7 +137,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         };
         static TextBlock Section(string t) => new()
         {
-            Text = t, FontSize = NotaType.DeviceSection, FontWeight = FontWeight.SemiBold,
+            Text = NotaText.Label(t), FontSize = NotaType.DeviceSection, FontWeight = FontWeight.SemiBold,
             Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center,
         };
         static Border Rule(Control child, bool top = true) => new()
@@ -315,12 +315,12 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             double semis = (G("bend") - 0.5) * 2 * range;
             bool centred = Math.Abs(semis) < 0.05;
             bendVal.Text = centred ? $"±{range} st" : NotaNum.Unit(semis, "+0.0;−0.0;0", "st");
-            bendVal.Foreground = centred ? TextSecondary : AccentBright;
+            bendVal.Foreground = centred ? TextSecondary : TextPrimary;
             bool modOn = G("modwheel") > 1e-3f;
             modVal.Text = NotaNum.Pct(G("modwheel"));
-            modVal.Foreground = modOn ? AccentBright : TextSecondary;
+            modVal.Foreground = modOn ? TextPrimary : TextSecondary;
             // On the Mod tab the wheel is part of what's on screen — it drives the LFO.
-            modCap.Foreground = tab == 1 ? AccentBright : TextTertiary;
+            modCap.Foreground = tab == 1 ? TextSecondary : TextTertiary;
         });
 
         Grid Pair(Control a, Control b)
@@ -532,7 +532,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
                 bool on = i == tab;
                 tabCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
                 tabCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                tabTexts[i].Foreground = on ? AccentBright : TextTertiary;
+                tabTexts[i].Foreground = on ? TextPrimary : TextTertiary;
                 tabTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 bodies[i].IsVisible = on;
             }
@@ -672,7 +672,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         DockPanel.SetDock(statusHost, Dock.Bottom);
         var root = new DockPanel
         {
-            LastChildFill = true, Background = NotaPalette.Gutter,
+            LastChildFill = true, Background = NotaPalette.SurfaceCard,
             Children = { statusHost, body },
         };
 
@@ -682,11 +682,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
     }
 
     // A device section: card ground, hairline, radius 6 — the almanac's section box.
-    private static Border SectionBox(Control child) => new()
-    {
-        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = child,
-    };
+    private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
 
     // A section's own header strip: a hairline under it, nothing else.
     private static Border HeaderStrip(Control child) => new()

@@ -58,7 +58,7 @@ internal sealed class PentadWaveIcon : Control
 internal sealed class PentadFilterCurve : Control
 {
     private static readonly IBrush Grid = NotaGraph.Grid;
-    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.Accent, 0x1E);
+    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.VizInk, 0x1E);
     private static readonly Typeface Mono = NotaFonts.Mono;
     private double _cut = 0.5, _reso, _comp;
     private bool _drag;
@@ -121,15 +121,15 @@ internal sealed class PentadFilterCurve : Control
             for (double x = 1; x <= w; x += 1.5) { var p = new Point(x, Y(Db(x / w))); lc.LineTo(p); fc.LineTo(p); }
             fc.LineTo(new Point(w, h));
         }
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Accent, NotaGraph.PrimaryWidth), line);
+        ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, NotaGraph.PrimaryWidth), line);
 
         double hz0 = 20 * Math.Pow(1000, _cut);
         string txt = (hz0 >= 1000 ? $"{hz0 / 1000:0.0}\u2009k" : $"{hz0:0}\u2009Hz") + $" · Q {_reso * 10:0.0}";
-        var ft = new FormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, NotaPalette.AccentBright);
+        var ft = new FormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         ctx.DrawText(ft, new Point(w - ft.Width - 4, 3));
 
         double hx = Math.Clamp(_cut * w, 4, w - 4), hy = Math.Clamp(Y(Db(_cut)), 4, h - 4);
-        ctx.DrawEllipse(NotaPalette.AccentBright, new Pen(NotaPalette.BgSunken, 2), new Point(hx, hy), 3.5, 3.5);
+        ctx.DrawEllipse(_drag ? NotaPalette.Accent : NotaPalette.VizInk, new Pen(NotaPalette.BgSunken, 2), new Point(hx, hy), 3.5, 3.5);
     }
 }
 
@@ -137,7 +137,7 @@ internal sealed class PentadFilterCurve : Control
 internal sealed class PentadEnvCurve : Control
 {
     private double _a, _d, _s = 0.8, _r = 0.4;
-    public IBrush Accent { get; set; } = NotaPalette.Accent;
+    public IBrush Accent { get; set; } = NotaPalette.VizInk;   // the curve's ink (neutral at rest)
     public PentadEnvCurve() { ClipToBounds = true; }
 
     public void Set(double a, double d, double s, double r) { _a = a; _d = d; _s = s; _r = r; }
@@ -169,7 +169,7 @@ internal sealed class PentadEnvCurve : Control
     }
 }
 
-// N voice cells, lit (brass) while a voice sounds, brightness following its level.
+// N voice cells, lit (accent) while a voice sounds, brightness following its level.
 internal sealed class PentadVoiceStrip : Control
 {
     private static readonly Typeface Mono = NotaFonts.Mono;

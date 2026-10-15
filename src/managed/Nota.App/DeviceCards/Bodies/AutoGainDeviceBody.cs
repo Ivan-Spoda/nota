@@ -40,7 +40,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "LEVELER";
+    public string? Subtitle => "Leveler";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -79,23 +79,22 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         static string MaxF(double v) => NotaNum.F($"{MaxGainDb(v):0}\u2009dB");
 
         // ---- small builders ------------------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
-        static Border Island(Control child, double width = double.NaN) => new()
+        static RuleSection Island(Control child, double width = double.NaN) => new()
         {
-            Width = width, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-            ClipToBounds = true, Child = child,
+            Width = width, Child = child,
         };
         static Border Bar(Control child, Thickness pad) => new()
         { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = pad, Child = child };
         static Control Rule(Control c) => new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = c };
 
-        // Slider row: caps 7 label · 3px track · mono 8 value (brass-light once off its default).
+        // Slider row: label · 3px track · mono 8 value (primary ink once off its default).
         // `valueHost` replaces the plain value (the Target's menu); `dim` greys the track.
         Control Slider(string label, int p, Func<double, string> fmt, string tip, double labelW, double valueW,
             bool bipolar = false, Func<bool>? dim = null, Func<(string Text, IBrush? Ink)>? valueOverride = null, Action<Control>? valueClick = null)
@@ -137,7 +136,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
                 else
                 {
                     val.Text = fmt(P(p));
-                    val.Foreground = d ? TextTertiary : Math.Abs(P(p) - Def(p)) > 0.003 ? AccentBright : TextPrimary;
+                    val.Foreground = d ? TextTertiary : Math.Abs(P(p) - Def(p)) > 0.003 ? TextPrimary : TextSecondary;
                 }
             });
             Learn(g, p);
@@ -222,13 +221,13 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         var maxTop = Mono("", 7, TextDisabled);
         var modeTag = Mono("", 7, TextDisabled);
         var maxBot = Mono("", 7, TextDisabled);
-        var big = Mono("", 26, AccentBright); big.FontWeight = FontWeight.Bold; big.LineHeight = 28; big.LetterSpacing = -0.5;
+        var big = Mono("", 26, TextPrimary); big.FontWeight = FontWeight.Bold; big.LineHeight = 28; big.LetterSpacing = -0.5;
         var bigSub = new TextBlock { Text = "dB applied", FontSize = 8, Foreground = TextSecondary };
         var reason = Mono("", 7, TextTertiary); reason.Margin = new Thickness(0, 2, 0, 0);
-        var matchTxt = new TextBlock { FontSize = 8, FontWeight = FontWeight.Bold, LetterSpacing = 0.5, Foreground = OnAccent };
+        var matchTxt = new TextBlock { FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary };
         var match = new Border
         {
-            Background = Brass, CornerRadius = NotaRadius.Badge, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand),
+            Background = Raised, CornerRadius = NotaRadius.Badge, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand),
             VerticalAlignment = VerticalAlignment.Bottom, Child = matchTxt,
         };
         match.PointerPressed += (_, e) =>
@@ -246,7 +245,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         };
         readouts.Add(() =>
         {
-            matchTxt.Text = Manual() ? "MATCH" : "RESET";
+            matchTxt.Text = Manual() ? "Match" : "Reset";
             ToolTip.SetTip(match, Manual()
                 ? "Match — set the manual gain to the distance between the measured input and the target"
                 : "Reset — restart the measurement from the loudness now, so the ride catches up at once");
@@ -295,7 +294,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         ToolTip.SetTip(hist, "The last 8\u2009s: input, output and the target with its ±1\u2009LU band (momentary loudness). Drag up / down to move the target; double-click resets it");
 
         IBrush Dim() => TextDisabled;
-        var rIn = Mono("", 8, TextSecondary); var rOut = Mono("", 8, AccentBright); var rDelta = Mono("", 8, TextSecondary); var rTp = Mono("", 8, TextSecondary);
+        var rIn = Mono("", 8, TextSecondary); var rOut = Mono("", 8, TextPrimary); var rDelta = Mono("", 8, TextSecondary); var rTp = Mono("", 8, TextSecondary);
         var readRow = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8, Height = 14, HorizontalAlignment = HorizontalAlignment.Center,
@@ -319,7 +318,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             var m = new LvMeter { VerticalAlignment = VerticalAlignment.Center };
             var v = Mono("", 8, TextPrimary); v.TextAlignment = TextAlignment.Right; v.HorizontalAlignment = HorizontalAlignment.Right;
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("24,*,34"), ColumnSpacing = 6, Background = Brushes.Transparent };
-            var l = Caps(label); l.LetterSpacing = 0.4;
+            var l = Caps(label); if (label == "TP") l.Text = label;   // true peak: an acronym Label would lowercase
             g.Children.Add(l); g.Children.Add(Col(m, 1)); g.Children.Add(Col(v, 2));
             ToolTip.SetTip(g, tip);
             return (g, m, v);
@@ -367,7 +366,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         readouts.Add(() =>
         {
             ceilTxt.Text = NotaNum.F($"{CeilingDb(P(Ceiling)):0.0;−0.0;0.0}\u2009dBTP");
-            ceilTxt.Foreground = !On(Safe) ? TextDisabled : Math.Abs(P(Ceiling) - Def(Ceiling)) > 0.003 ? AccentBright : TextPrimary;
+            ceilTxt.Foreground = !On(Safe) ? TextDisabled : Math.Abs(P(Ceiling) - Def(Ceiling)) > 0.003 ? TextPrimary : TextSecondary;
         });
         var safeRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         safeRow.Children.Add(safeSw); safeRow.Children.Add(Col(ceilBox, 1));
@@ -417,20 +416,20 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             maxBot.Text = NotaNum.F($"−{maxG:0}");
             modeTag.Text = manual ? "fader" : "auto";
             big.Text = on ? Sgn(g) : "off";
-            big.Foreground = on ? AccentBright : TextDisabled;
+            big.Foreground = on ? TextPrimary : TextDisabled;
             string why = !on ? "" : !primed ? "waiting for signal" : silent ? "silence · holding"
                 : tpClamp ? "limited by true-peak" : clamp == 1 && !manual ? "limited by max gain" : clamp == 2 && !manual ? "limited by max cut"
                 : manual ? "manual" : "auto · " + (On(Response) ? "slow" : "fast");
             reason.Text = why;
-            reason.Foreground = on && (tpClamp || (clamp > 0 && !manual)) ? AccentBright : TextTertiary;
+            reason.Foreground = on && (tpClamp || (clamp > 0 && !manual)) ? NotaPalette.Warning : TextTertiary;
 
             // Graph.
-            string tl = HasRef() ? "REF " + Lufs(target) : Lufs(target) + "\u2009LUFS";
+            string tl = HasRef() ? "Ref " + Lufs(target) : Lufs(target) + "\u2009LUFS";
             hist.SetState(on, locked, !on ? "bypass" : !primed ? "waiting" : silent ? "holding" : locked ? "locked ±1\u2009LU" : "tracking", tl, !HasRef());
-            rIn.Text = "IN " + Lufs(measured);
-            rOut.Text = "OUT " + Lufs(outMeas);
+            rIn.Text = "In " + Lufs(measured);
+            rOut.Text = "Out " + Lufs(outMeas);
             rDelta.Text = "Δ " + (primed ? Sgn(delta) : "—") + "\u2009LU";
-            rDelta.Foreground = locked || !primed ? TextSecondary : AccentBright;
+            rDelta.Foreground = locked || !primed ? TextSecondary : TextPrimary;
             rTp.Text = "TP " + Lufs(tp) + "\u2009dB";
             rTp.Foreground = tpOver ? Danger : TextSecondary;
 
@@ -439,8 +438,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             scaleName.Text = ScaleLong[si];
             double tx = MeterX(target);
             mIn.M.Set(0, MeterX(measured), TextTertiary, tx); mIn.V.Text = Lufs(measured);
-            mOut.M.Set(0, MeterX(outMeas), on ? Brass : TextTertiary, tx); mOut.V.Text = Lufs(outMeas);
-            mOut.V.Foreground = locked || !primed ? TextPrimary : AccentBright;
+            mOut.M.Set(0, MeterX(outMeas), on ? NotaPalette.VizInk : TextTertiary, tx); mOut.V.Text = Lufs(outMeas);
+            mOut.V.Foreground = TextPrimary;
             mTp.M.Set(0, MeterX(tp), tpOver ? Danger : TextSecondary, On(Safe) ? MeterX(CeilingDb(P(Ceiling))) : double.NaN);
             mTp.V.Text = Lufs(tp); mTp.V.Foreground = tpOver ? Danger : TextPrimary;
             double cf = Math.Clamp(g / Math.Max(0.01, maxG), -1, 1) / 2;
@@ -452,9 +451,9 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             if (!on) foot = "Leveler bypassed: the output equals the input";
             else if (!primed) foot = "Waiting for signal — the gain holds until the input has been measured";
             else if (silent) foot = "Input silent: the measurement and the gain hold";
-            else if (manual && Math.Abs(delta) >= 1) { foot = $"Output {Sgn(delta)}\u2009LU from the target · Match sets {Sgn(matchG)}\u2009dB"; footInk = AccentBright; }
-            else if (tpClamp) { foot = $"True-peak limits the gain to the {NotaNum.F($"{CeilingDb(P(Ceiling)):0.0;−0.0;0.0}")}\u2009dBTP ceiling"; footInk = AccentBright; }
-            else if (clamp > 0 && !manual) { foot = NotaNum.F($"Needs more than {maxG:0} dB: raise Max gain or Trim"); footInk = AccentBright; }
+            else if (manual && Math.Abs(delta) >= 1) { foot = $"Output {Sgn(delta)}\u2009LU from the target · Match sets {Sgn(matchG)}\u2009dB"; footInk = NotaPalette.Warning; }
+            else if (tpClamp) { foot = $"True-peak limits the gain to the {NotaNum.F($"{CeilingDb(P(Ceiling)):0.0;−0.0;0.0}")}\u2009dBTP ceiling"; footInk = NotaPalette.Warning; }
+            else if (clamp > 0 && !manual) { foot = NotaNum.F($"Needs more than {maxG:0} dB: raise Max gain or Trim"); footInk = NotaPalette.Warning; }
             else
             {
                 foot = (locked ? "On target" : "Catching up") + " · " + ScaleLong[si] + " · window " + WindowF(P(WindowP));
@@ -469,7 +468,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { left, right, centre } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         // One history sample per UI tick (the graph spans N ticks ≈ 8 s); edits only repaint.
         void Tick()

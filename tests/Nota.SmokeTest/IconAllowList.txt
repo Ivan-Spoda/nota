@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+#
+# Icon ratchet for DesignTokenCheck.RunIcons (spec 012 T007).
+#
+# Inline icon geometry outside Controls/Glyph.cs — Geometry.Parse / StreamGeometry.Parse /
+# PathGeometry.Parse calls, axaml Data="M…" attributes and SVG path strings — counted per
+# file on the day the check landed. A count may only go down: a file above its count fails,
+# and so does a file below it (lower the number, or drop the line at 0).
+#
+# Format: path (from src/managed) <TAB> sites <TAB> # reason

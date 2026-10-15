@@ -99,7 +99,7 @@ public partial class MainWindow : Window
         else
         {
             ExtendClientAreaToDecorationsHint = true;
-            ExtendClientAreaTitleBarHeightHint = 36;
+            ExtendClientAreaTitleBarHeightHint = 32;
         }
         DataContextChanged += OnDataContextChanged;
         BuildDownloadIndicator();
@@ -120,7 +120,7 @@ public partial class MainWindow : Window
         }
     }
 
-    // Fullscreen hides the custom bar: the 36-px band and its separator vanish and the
+    // Fullscreen hides the custom bar: the 32-px band and its separator vanish and the
     // workspace fills the top edge; leaving fullscreen restores them. A pure function
     // of the current state — never of transitions — so rapid toggles converge. Maximized
     // keeps the bar (the app launches maximized); Linux never shows it (native frame).
@@ -389,8 +389,8 @@ public partial class MainWindow : Window
 
         // Modular: signal-graph view of the selected track (mockup 1a). Follows track
         // selection like the Detail device chain does.
-        // Same island gutter as the arrangement it replaces in MainContent.
-        _modular = new ModularView(vm.Engine) { IsVisible = false, Margin = new Thickness(0, NotaSpace.Gutter, NotaSpace.Gutter, NotaSpace.Gutter) };
+        // Docked like the arrangement it replaces in MainContent: no margin, it meets the browser on the seam.
+        _modular = new ModularView(vm.Engine) { IsVisible = false };
         _modular.Changed += () => { Timeline.Refresh(); if (_deviceChain is { } dc && dc.TrackId > 0) dc.Refresh(); };
         _modular.TrackActivated += OnTrackSelected;   // Global-view island → select that track
         _modular.ItemDropped += OnModularDrop;        // browser drag onto the modular canvas
@@ -581,7 +581,8 @@ public partial class MainWindow : Window
         if (modular)
         {
             int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack();
-            if (t > 0) _modular.Show(t);
+            if (t <= 0) t = _modular.FirstPatchableTrack();   // after opening a project nothing is selected (F3)
+            _modular.Show(t);                                   // Show(-1) still builds the sidebar and its empty state
         }
         SyncClipTab();   // Clip tab availability is per-context (arrangement vs session)
     }

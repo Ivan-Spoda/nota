@@ -41,7 +41,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "CHARACTER";
+    public string? Subtitle => "Character";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -96,8 +96,10 @@ internal sealed class VintageDeviceBody : IDeviceBody
         string StageName() => Sel(OutputStage, 3) switch { 1 => "tube stage", 2 => "analog stage", _ => "" };
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        // An acronym NotaText.Label does not know (OS, GR) keeps its case: the label as written.
+        static TextBlock Acr(string t, IBrush? c = null) { var tb = Caps(t, c); tb.Text = t; return tb; }
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -139,7 +141,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             return seg;
         }
 
-        // Outlined chips: lit = brass edge + wash.
+        // Outlined chips: the chosen one = accent edge + wash.
         Control Chips(string[] names, Func<int, bool> lit, Action<int> pick, int learnParam, double h = 16, double padX = 7)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
@@ -208,12 +210,12 @@ internal sealed class VintageDeviceBody : IDeviceBody
         // The character list: [name ▾] opens the six voicings; the wheel steps through them.
         Control CharDrop()
         {
-            var name = new TextBlock { FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = AccentBright, VerticalAlignment = VerticalAlignment.Center };
+            var name = new TextBlock { FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
             var box = new Border
             {
-                Height = 16, MinWidth = 74, Background = Sunken, BorderBrush = Brass, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 16, MinWidth = 74, Background = Sunken, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
                 Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-                Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 7) { Foreground = NotaPalette.AccentDim, Margin = new Thickness(6, 0, 0, 0) }, Dock.Right), name } },
+                Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, Margin = new Thickness(6, 0, 0, 0) }, Dock.Right), name } },
             };
             readouts.Add(() => name.Text = ModeName());
             ToolTip.SetTip(box, "Character — the era the signal passes through: its saturation, tone, band-limit and how much hiss, crackle, wow and flutter it brings. Scroll to step.");
@@ -280,7 +282,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             return new DockPanel { Children = { Docked(lb, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = f } } };
         }
         var stateTitle = Caps("STATE"); stateTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var stateDrv = Mono("", 7, AccentBright); stateDrv.HorizontalAlignment = HorizontalAlignment.Center;
+        var stateDrv = Mono("", 7, TextPrimary); stateDrv.HorizontalAlignment = HorizontalAlignment.Center;
         var stateWear = Mono("", 7, TextPrimary); stateWear.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() =>
         {
@@ -289,11 +291,11 @@ internal sealed class VintageDeviceBody : IDeviceBody
             stateTitle.Foreground = Sc(S_InPk) > 0.01 ? AccentBright : TextTertiary;   // lit while signal passes
         });
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        faders.Children.Add(StateFader(Drive, "DRV", Brass, "Drive — how hard the signal hits the saturation. Double-click resets."));
+        faders.Children.Add(StateFader(Drive, "DRV", NotaPalette.VizInk, "Drive — how hard the signal hits the saturation. Double-click resets."));
         faders.Children.Add(Col(StateFader(Wear, "WEAR", Teal, "Wear — the age of the medium: a narrower band, more hiss and crackle, a wandering flutter. Double-click resets."), 1));
-        var stateCol = new Border
+        var stateCol = new RuleSection
         {
-            Width = 56, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
+            Width = 56, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(stateTitle, Dock.Top), Docked(stateWear, Dock.Bottom), Docked(stateDrv, Dock.Bottom), faders } },
         };
         DockPanel.SetDock(stateCol, Dock.Left);
@@ -316,7 +318,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             readouts.Add(() => thd.Text = "THD " + ThdF(Sc(S_Thd)));
             var count = Mono("", 7, TextTertiary);
             readouts.Add(() => count.Text = NotaNum.F($"{Sel(Mode, 6) + 1} / 6"));
-            var head = HeadRow(Row(6, Caps("CHAR"), CharDrop(), count, new Border { Width = 4 }, Caps("OS"), Seg(OS, OsNames)), thd);
+            var head = HeadRow(Row(6, Caps("CHAR"), CharDrop(), count, new Border { Width = 4 }, Acr("OS"), Seg(OS, OsNames)), thd);
             var knobs = KnobRow(new[]
             {
                 K(Drive, "DRIVE", Pct),
@@ -347,7 +349,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             wearView.DragH += v => Raw(wearShow == 1 ? FlutterRate : WowRate, (float)v);
             wearView.GestureBegin += () => { Begin(Wow); Begin(Flutter); Begin(WowRate); Begin(FlutterRate); };
             wearView.GestureEnd += () => { End(Wow); End(Flutter); End(WowRate); End(FlutterRate); };
-            ToolTip.SetTip(wearView, "The pitch drift over the last four seconds — wow in brass, flutter in teal. Drag up or down for the depth of what is picked above, sideways for its rate.");
+            ToolTip.SetTip(wearView, "The pitch drift over the last four seconds — wow in neutral ink, flutter in teal. Drag up or down for the depth of what is picked above, sideways for its rate.");
             Learn(wearView, Wow);
 
             var show = Chips(new[] { "Wow", "Flutter", "Both" }, i => wearShow == i, i => wearShow = i, -1);
@@ -355,7 +357,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             var sync = Latch(WowSync, () => On(WowSync), () => SetP(WowSync, On(WowSync) ? 0f : 1f),
                 () => Synced() ? "Sync " + SyncNames[Sel(WowRate, 6)] : "Sync off",
                 "Sync — the wow follows the tempo: one sway every 4 bars … 1/8 (RATE picks it)");
-            var drift = Mono("", 7, AccentBright);
+            var drift = Mono("", 7, TextSecondary);
             readouts.Add(() => drift.Text = "drift " + HzF(WowHz()));
             var head = HeadRow(Row(6, Caps("CHAR"), CharDrop(), show, sync), drift);
             var knobs = KnobRow(new[]
@@ -395,11 +397,11 @@ internal sealed class VintageDeviceBody : IDeviceBody
             ToolTip.SetTip(harm, "The harmonics the saturation adds at the input's level (the fundamental at the top), against the hiss floor in teal. Drag up or down for the drive.");
             Learn(harm, Drive);
 
-            var peak = Mono("", 7, AccentBright);
+            var peak = Mono("", 7, TextSecondary);
             readouts.Add(() => peak.Text = DbfsF(Sc(S_OutPk)));
             var comp = ToggleLatch(AutoComp, () => Sc(S_CompDb) != 0 && On(AutoComp) ? NotaNum.F($"Auto-comp {Sc(S_CompDb):+0.0;−0.0;0.0}") : "Auto-comp",
                 "Auto-comp — the output level follows the input's, however hard the drive");
-            var head = HeadRow(Row(6, Caps("CHAR"), CharDrop(), new Border { Width = 4 }, Caps("OS"), Seg(OS, OsNames), comp), peak);
+            var head = HeadRow(Row(6, Caps("CHAR"), CharDrop(), new Border { Width = 4 }, Acr("OS"), Seg(OS, OsNames), comp), peak);
             var knobs = KnobRow(new[]
             {
                 K(Drive, "DRIVE", Pct),
@@ -427,16 +429,16 @@ internal sealed class VintageDeviceBody : IDeviceBody
         Control Box(string title, Func<string> line1, Func<string> line2, Func<bool>? lit = null)
         {
             var t = Caps(title);
-            var l1 = Mono("", 9, AccentBright);
+            var l1 = Mono("", 9, TextPrimary);
             var l2 = Mono("", 8, TextSecondary);
             var b = new Border { Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 2, Children = { t, l1, l2 } } };
             readouts.Add(() =>
             {
                 l1.Text = line1(); l2.Text = line2();
-                bool on = lit?.Invoke() ?? false;
-                b.BorderBrush = on ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
-                t.Foreground = on ? AccentBright : TextTertiary;
+                bool on = lit?.Invoke() ?? false;   // engaged: a stronger frame, not the accent
+                b.BorderBrush = on ? NotaPalette.BorderStrong : NotaPalette.GraphBorder;
+                t.Foreground = on ? TextSecondary : TextTertiary;
             });
             return b;
         }
@@ -510,7 +512,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
                     Caps("OUTPUT"),
                     Line("in", () => DbF(Sc(S_InPk))),
                     Line("out", () => DbF(Sc(S_OutPk))),
-                    Line("THD", () => ThdF(Sc(S_Thd)), AccentBright) } },
+                    Line("THD", () => ThdF(Sc(S_Thd)), TextPrimary) } },
             };
             var sliders = new StackPanel { Spacing = 6, Children = {
                 SliderRow("MIX", Mix, Pct),
@@ -553,9 +555,9 @@ internal sealed class VintageDeviceBody : IDeviceBody
 
         var centre = TabFrame(new[] { "Curve", "Wear", "Output" }, centreHost, CentreBody, false, t => { centreTab = t; Refresh(); }, extras);
         var rightFrame = TabFrame(new[] { "Tone", "Output" }, rightHost, RightBody, true, _ => RefreshAll(), null);
-        var right = new Border { Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip
@@ -612,7 +614,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { stateCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -641,7 +643,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
                     btns[i].Background = on ? Card2 : Brushes.Transparent;
                     btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
                     var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? AccentBright : TextTertiary;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
                     tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }

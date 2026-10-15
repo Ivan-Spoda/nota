@@ -59,7 +59,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "PITCH";
+    public string? Subtitle => "Pitch";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -201,8 +201,8 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         }
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -299,10 +299,10 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
             {
                 bool on = lit();
                 name.Text = text();
-                name.Foreground = on ? AccentBright : TextPrimary;
+                name.Foreground = TextPrimary;   // emphasis, not state: a stronger frame and weight
                 name.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
-                box.BorderBrush = on ? Brass : BorderDef;
-                chev.Foreground = on ? NotaPalette.AccentDim : TextTertiary;
+                box.BorderBrush = on ? NotaPalette.BorderStrong : BorderDef;
+                chev.Foreground = on ? TextSecondary : TextTertiary;
             });
             ToolTip.SetTip(box, tip);
             if (learnP >= 0) LearnBind(box, learnP);
@@ -388,7 +388,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         }
         TextBlock RightInfo(Func<string> text)
         {
-            var t = Mono("", 7, AccentBright);
+            var t = Mono("", 7, TextSecondary);
             readouts.Add(() => t.Text = text());
             return t;
         }
@@ -421,7 +421,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         // LEFT — PITCH column (where the voice sits · the correction now)
         // ======================================================================
         var pitchTitle = Caps("PITCH"); pitchTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inPill = new AsPill { Ink = Brass, VerticalAlignment = VerticalAlignment.Stretch };
+        var inPill = new AsPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch };
         var corrPill = new AsPill { Ink = Teal, Bipolar = true, VerticalAlignment = VerticalAlignment.Stretch };
         var inLbl = Caps("IN"); inLbl.HorizontalAlignment = HorizontalAlignment.Center;
         var corrLbl = Caps("CORR"); corrLbl.HorizontalAlignment = HorizontalAlignment.Center;
@@ -444,9 +444,9 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
         pills.Children.Add(PillCol(inPill, inLbl));
         pills.Children.Add(Col(PillCol(corrPill, corrLbl), 1));
-        var pitchCol = new Border
+        var pitchCol = new RuleSection
         {
-            Width = 56, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
+            Width = 56, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(pitchTitle, Dock.Top), Docked(pitchCents, Dock.Bottom), Docked(pitchNote, Dock.Bottom), pills } },
         };
         DockPanel.SetDock(pitchCol, Dock.Left);
@@ -458,7 +458,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         Control TraceTab()
         {
             trace = new AsTraceView();
-            ToolTip.SetTip(trace, "The detected pitch (teal dots) and the corrected output (brass) over the last two seconds, on the scale's note lanes; the target lane is lit");
+            ToolTip.SetTip(trace, "The detected pitch (teal dots) and the corrected output (neutral ink) over the last two seconds, on the scale's note lanes; the target lane is lit");
             var head = HeadRow(Row(6, Caps("KEY"), KeyDrop(false), ScaleDrop(), SourceSeg(), LearnLatch()), RightInfo(() => TargetNote() >= 0 ? "target " + TargetText() : ""));
             var knobs = KnobRow(new[]
             {
@@ -481,7 +481,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         {
             histView = new AsHistView();
             histView.NoteClicked += ToggleNote;
-            ToolTip.SetTip(histView, "How long each note was sung (the last ~16 bars) over the scale's notes — brass in the scale, teal outside it. Click a column to add or remove its note");
+            ToolTip.SetTip(histView, "How long each note was sung (the last ~16 bars) over the scale's notes — neutral in the scale, teal outside it. Click a column to add or remove its note");
             LearnBind(histView, Custom);
             var scaleSeg = Seg(Scale, new[] { "Chrom", "Major", "Minor", "Pent", "Custom" },
                 "Scale — Chromatic, Major, Minor, Pentatonic (major or minor — click again to swap) or Custom (the notes below)",
@@ -547,7 +547,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         Control MidiTab()
         {
             midiView = new AsTraceView();
-            ToolTip.SetTip(midiView, "The source track's notes (brass blocks) and the voice (teal) over the last two seconds — with Key Source MIDI the voice is pulled to the notes");
+            ToolTip.SetTip(midiView, "The source track's notes (neutral blocks, accent while sounding) and the voice (teal) over the last two seconds — with Key Source MIDI the voice is pulled to the notes");
             var head = HeadRow(Row(6, Caps("FROM"), FromDrop(),
                     Seg(MidiMode, new[] { "Note", "Scale" }, "Note — the voice goes to the last held note; Scale — the held notes form the scale"),
                     ToggleLatch(MidiLatch, "Latch", "Latch — keep the last target between notes (off = no correction while no note is held)"),
@@ -573,7 +573,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         static Control LabelRow(string label, Control c, double labW = 44)
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{labW},*")) };
-            g.Children.Add(new TextBlock { Text = label, FontSize = 7, FontWeight = FontWeight.Bold, Foreground = TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center });
+            g.Children.Add(new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center });
             g.Children.Add(Col(c, 1));
             return g;
         }
@@ -601,7 +601,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
             readouts.Add(() =>
             {
                 var r = read();
-                t.Text = r.title; l1.Text = r.l1; l2.Text = r.l2;
+                t.Text = NotaText.Label(r.title); l1.Text = r.l1; l2.Text = r.l2;
                 t.Foreground = r.hot ? AccentBright : TextTertiary;
                 l1.Foreground = r.hot ? AccentBright : TextPrimary;
                 b.BorderBrush = r.hot ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
@@ -691,9 +691,9 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
 
         var centre = TabFrame(new[] { "Trace", "Scale", "MIDI" }, centreHost, CentreBody, false, centreTab, t => { centreTab = t; Refresh(); }, extrasHost);
         var rightFrame = TabFrame(new[] { "Shift", "Detect" }, rightHost, RightBody, true, 0, _ => RefreshAll(), null);
-        var right = new Border { Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip
@@ -753,7 +753,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { pitchCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -783,7 +783,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                     btns[i].Background = on ? Card2 : Brushes.Transparent;
                     btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
                     var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? AccentBright : TextTertiary;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
                     tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }

@@ -180,7 +180,7 @@ public partial class MainWindow
         {
             items.Add(FreezeMenuItem("Freeze track", SnowflakeIcon(),
                 async () => { Timeline.Select(trackId, -1); await FreezeTrackAsync(trackId); }));
-            items.Add(FreezeMenuItem("Live Freeze", ChainLinkIcon(),
+            items.Add(FreezeMenuItem("Live freeze", ChainLinkIcon(),
                 async () => { Timeline.Select(trackId, -1); await LiveFreezeAsync(trackId); }));
         }
         return items;
@@ -269,14 +269,10 @@ public partial class MainWindow
         => new Glyph(GlyphKind.Freeze, 11) { Foreground = IceBrush };
 
     private static Control ChainLinkIcon()
-        => new Avalonia.Controls.Shapes.Path
-        {
-            Data = NotaIcons.ChainLink, Stretch = Stretch.None, Stroke = IceBrush, StrokeThickness = 1.4,
-            Width = 14, Height = 14, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-        };
+        => new Glyph(GlyphKind.ChainLink, 14) { Foreground = IceBrush };
 
     private Control GlyphIcon(GlyphKind glyph, bool accent)
-        => new Glyph(glyph, 11) { Foreground = accent ? NotaPalette.AccentBright : NotaPalette.TextTertiary };
+        => new Glyph(glyph, 11) { Foreground = accent ? NotaPalette.TextPrimary : NotaPalette.TextTertiary };
 
     // --- Flatten -----------------------------------------------------------
 

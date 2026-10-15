@@ -88,9 +88,11 @@ public partial class App : Avalonia.Application
             e.SetObserved();
         };
 
-        // Palette variant (Preferences → Appearance), applied before the first window
-        // paints so nothing flashes graphite on the way to paper.
-        NotaThemeService.Set(Services.GetRequiredService<ISettingsService>().Current.Theme);
+        // Colour theme (Preferences → Appearance), applied before the first window paints so
+        // nothing flashes one theme on the way to another. Old Dark / Light / System
+        // settings resolve onto the Studio themes (Appearance.Resolve).
+        foreach (var err in NotaThemes.LoadErrors) log.Error($"Colour theme skipped — {err}", null);
+        NotaThemeService.Set(Appearance.Resolve(Services.GetRequiredService<ISettingsService>().Current, NotaThemeService.KnownThemes));
 
         // Nota Mosaic's samples resolve against the Samples and data folders; installed sample
         // packs get their Mosaic presets in the background (once per pack version).

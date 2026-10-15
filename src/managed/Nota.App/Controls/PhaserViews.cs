@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Phaser views (device kind 24) — the pictures on the Phaser card:
-//   PhaserResponseView — the live all-pass response of both channels (L brass, R teal) over 20 Hz …
+//   PhaserResponseView — the live all-pass response of both channels (L neutral ink, R teal) over 20 Hz …
 //                        20 kHz, −36 … +12 dB, the left corner dashed and every notch ticked on
 //                        the top edge. Drag left / right moves Center, up / down the Feedback;
 //                        double-click resets both.
@@ -170,12 +170,12 @@ internal sealed class PhaserResponseView : Control
 
         // R first so L reads on top where they meet.
         Curve(_fcR, _on ? NotaPalette.TealBright : NotaPalette.TextAxis, 1.2, 0.75);
-        Curve(_fcL, _on ? NotaPalette.Accent : NotaPalette.TextAxis, 1.6, 1);
+        Curve(_fcL, _on ? NotaPalette.VizInk : NotaPalette.TextAxis, 1.6, 1);
 
         if (_on)
         {
             Ticks(_fcR, NotaPalette.TealBright);
-            Ticks(_fcL, NotaPalette.AccentBright);
+            Ticks(_fcL, NotaPalette.VizInk);
         }
 
         void Label(string s, double x, double y)
@@ -243,7 +243,7 @@ internal sealed class PhaserSweepView : Control
         ctx.DrawLine(new Pen(NotaPalette.GraphBorder, 1, new DashStyle(new double[] { 2, 3 }, 0)), new Point(X(1), 0), new Point(X(1), h));
 
         Curve(_off, _on ? NotaPalette.TealBright : NotaPalette.TextAxis, 1.2, 0.75);
-        Curve(0, _on ? NotaPalette.Accent : NotaPalette.TextAxis, 1.4, 1);
+        Curve(0, _on ? NotaPalette.VizInk : NotaPalette.TextAxis, 1.4, 1);
 
         var tl = NotaGraph.AxisText("fc 20k", size: 6);
         ctx.DrawText(tl, new Point(5, 1));
@@ -258,7 +258,7 @@ internal sealed class PhaserSweepView : Control
             double hx = X(Math.Clamp(_head, 0, 2));
             ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1), new Point(hx, 0), new Point(hx, h));
             DrawDot(new Point(hx, Y(_fcR)), NotaPalette.TealBright);
-            DrawDot(new Point(hx, Y(_fcL)), NotaPalette.AccentBright);
+            DrawDot(new Point(hx, Y(_fcL)), NotaPalette.VizInk);
         }
 
         void DrawDot(Point p, IBrush ink) => ctx.DrawEllipse(ink, new Pen(NotaGraph.Ground, 2), p, 3, 3);

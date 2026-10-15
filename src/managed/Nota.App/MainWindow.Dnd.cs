@@ -149,6 +149,7 @@ public partial class MainWindow
                 _ => DeviceChainView.ChainKind.Effect,
             }, pl.Index, pl.Name, pl.FactoryId);
         Timeline.Refresh();
+        if (r.CreatedTrack && t > 0) Timeline.RevealTrack(t);   // a new track lands in view (F1)
         _session?.Refresh();
         if (_modular?.IsVisible == true) _modular.Refresh();
         if (revealDevices && r.ShowDevices && t > 0) ShowDevices(t);

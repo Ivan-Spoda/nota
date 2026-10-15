@@ -49,7 +49,7 @@ public sealed partial class SessionView
                 Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
                 Children =
                 {
-                    Text("SCENES", 9, NotaPalette.TextTertiary, FontWeight.Bold),
+                    Text("Scenes", 10, NotaPalette.TextMuted, FontWeight.SemiBold),
                     Mono(_sceneCount.ToString(CultureInfo.CurrentCulture), 9, NotaPalette.TextDisabled),
                 },
             },
@@ -74,7 +74,7 @@ public sealed partial class SessionView
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 7,
-                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = "Stop All Clips", FontSize = 10, FontWeight = FontWeight.SemiBold } },
+                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = "Stop all clips", FontSize = 10, FontWeight = FontWeight.SemiBold } },
             },
         };
         ToolTip.SetTip(stopAll, "Stop every session clip");
@@ -223,7 +223,7 @@ public sealed partial class SessionView
             BorderThickness = new Thickness(1);
             ClipToBounds = true;
 
-            var stripe = new Border { Height = 3, VerticalAlignment = VerticalAlignment.Top, Background = c.Kind == ColKind.Master ? NotaPalette.Accent : c.Brush };
+            var stripe = new Border { Height = 3, VerticalAlignment = VerticalAlignment.Top, Background = c.Kind == ColKind.Master ? NotaPalette.Master : c.Brush };
             var name = new TextBlock
             {
                 Text = c.Name, FontSize = 12, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis,
@@ -251,7 +251,7 @@ public sealed partial class SessionView
             }
             if (c.Kind == ColKind.Track)
             {
-                var arrText = new TextBlock { Text = "ARR", FontSize = 8, FontWeight = FontWeight.Medium, Foreground = NotaPalette.Accent };
+                var arrText = new TextBlock { Text = "Arr", FontSize = 8, FontWeight = FontWeight.Medium, Foreground = NotaPalette.Accent };
                 arrText.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
                 _arr = new Border
                 {
@@ -266,7 +266,7 @@ public sealed partial class SessionView
             }
             top.Children.Add(name);
 
-            var kind = new TextBlock { Text = c.KindLabel, FontSize = 8, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextDisabled, TextTrimming = TextTrimming.CharacterEllipsis };
+            var kind = new TextBlock { Text = c.KindLabel, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextMuted, TextTrimming = TextTrimming.CharacterEllipsis };
             kind.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
             var stack = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 3, 8, 0), Children = { top, kind } };
             Child = new Panel { Children = { stripe, stack } };

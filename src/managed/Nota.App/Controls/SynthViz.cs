@@ -9,8 +9,8 @@
 //   Filter  the response curve for the chosen type, a drag pad for cutoff (X) / reso (Y),
 //           with the envelope's reach on the cutoff drawn as a teal ghost
 //
-// Filter also draws the mini (S) card's one graph (Mini = true): no Hz axis, a soft brass
-// wash under the curve, and the captions cut to "LP · Saw" and the cutoff in brass.
+// Filter also draws the mini (S) card's one graph (Mini = true): no Hz axis, a soft neutral
+// wash under the curve, and the captions cut to "LP · Saw" and the cutoff.
 //
 // All three read the engine's normalized params straight and denormalise them with the
 // exact maps Synth.h uses, so the scales are real. Drawn through NotaGraph — well ground,
@@ -33,9 +33,9 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
 
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
     private static readonly IBrush Teal = NotaPalette.Teal;
-    private static readonly IBrush Brass = NotaPalette.Accent;
+    private static readonly IBrush Ink = NotaPalette.VizInk;   // curves at rest: neutral ink
     private static readonly IBrush Axis = NotaPalette.TextAxis;
-    private static readonly IBrush Ghost = NotaPalette.Wash(NotaPalette.Accent, 0x40);
+    private static readonly IBrush Ghost = NotaPalette.Wash(NotaPalette.VizInk, 0x40);
     private static readonly Typeface Mono = NotaFonts.Mono;
 
     private const double Pad = 6;
@@ -198,7 +198,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
 
     private static readonly string[] WaveWords = { "saw", "square", "triangle", "sine" };
     private static readonly string[] WaveNames = { "Saw", "Square", "Triangle", "Sine" };
-    private static readonly IBrush Wash = NotaPalette.Wash(NotaPalette.Accent, 0x18);
+    private static readonly IBrush Wash = NotaPalette.Wash(NotaPalette.VizInk, 0x18);
 
     private void RenderOsc(DrawingContext ctx, double x0, double x1, double top, double bot)
     {
@@ -240,7 +240,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
                 Curve(Math.Pow(2.0, cents * t / 1200.0), ghostPen);
             }
         }
-        Curve(1.0, new Pen(Brass, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round));
+        Curve(1.0, new Pen(Ink, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round));
 
         string left = $"{WaveWords[wave]} · {cycles} cycles · unison {uni}";
         if (wave == 1) left += $" · pw {(pw * 100).ToString("0", NotaNum.Culture)} %";
@@ -256,7 +256,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
         for (int i = 1; i <= 3; i++) { double gy = top + (bot - top) * i / 4.0; ctx.DrawLine(gridPen, new Point(x0, gy), new Point(x1, gy)); }
 
         var (xa, xd, sy, xh, xr) = EnvNodes();
-        var pen = new Pen(Brass, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        var pen = new Pen(Ink, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         ctx.DrawLine(pen, new Point(x0, bot), new Point(xa, top));
         ctx.DrawLine(pen, new Point(xa, top), new Point(xd, sy));
         ctx.DrawLine(pen, new Point(xd, sy), new Point(xh, sy));
@@ -265,9 +265,9 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
         // Note-off: where the key is released and the release stage begins.
         ctx.DrawLine(new Pen(Ghost, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) }, new Point(xh, top - 5), new Point(xh, bot));
 
-        NotaGraph.Node(ctx, new Point(xa, top), active: true);
-        NotaGraph.Node(ctx, new Point(xd, sy), active: true);
-        NotaGraph.Node(ctx, new Point(xr, bot), active: true);
+        NotaGraph.Node(ctx, new Point(xa, top), active: _drag == 0);
+        NotaGraph.Node(ctx, new Point(xd, sy), active: _drag == 1);
+        NotaGraph.Node(ctx, new Point(xr, bot), active: _drag == 2);
 
         double a = ExpMap(G("attack"), 0.001, 2.0), d = ExpMap(G("decay"), 0.002, 2.0), r = ExpMap(G("release"), 0.002, 3.0);
         string left = $"{NotaNum.Time(a)} · {NotaNum.Time(d)} · {NotaNum.Db(AudioMath.LinToDb(G("sustain")))} · {NotaNum.Time(r)}";
@@ -306,11 +306,11 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
             DrawCurve(ctx, x0, x1, top, bot, modCut, res, type, NotaGraph.SecondaryPen(Teal, NotaGraph.SecondaryWidth));
         }
         if (Mini) DrawCurve(ctx, x0, x1, top, bot, cut, res, type, null, Wash);
-        DrawCurve(ctx, x0, x1, top, bot, cut, res, type, new Pen(Brass, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round));
+        DrawCurve(ctx, x0, x1, top, bot, cut, res, type, new Pen(Ink, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round));
 
         double cx = x0 + cut * span;
         ctx.DrawLine(new Pen(Ghost, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) }, new Point(cx, top - 5), new Point(cx, bot));
-        NotaGraph.Node(ctx, new Point(cx, CurveTop(top, bot, res)), active: true);
+        NotaGraph.Node(ctx, new Point(cx, CurveTop(top, bot, res)), active: _drag == 0);
 
         double hz = ExpMap(cut, 20, 18000);
         string[] names = { "Off", "LP", "HP", "BP" };
@@ -318,7 +318,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
         {
             Text(ctx, $"{names[type]} · {WaveNames[Wave()]}", x0 + 1, Pad - 3, TextTertiary);
             string hzs = NotaNum.Hz(hz);
-            Text(ctx, hzs, x1 - 1 - MeasureW(hzs), Pad - 3, NotaPalette.AccentBright);
+            Text(ctx, hzs, x1 - 1 - MeasureW(hzs), Pad - 3, _drag == 0 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
             return;
         }
         Text(ctx, $"{names[type]} 12 dB/oct · {NotaNum.Hz(hz)} · Q {res.ToString("0.00", NotaNum.Culture)}", x0 + 1, Pad - 3, TextTertiary);

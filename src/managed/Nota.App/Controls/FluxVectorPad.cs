@@ -2,10 +2,10 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — the Nota Flux vector field: a draggable XY control whose four corners
-// are "timbre worlds" (WARM / GLASS / MOOG / GRAIN). It is a graph window (NotaGraph): well,
+// are "timbre worlds" (Warm / Glass / Moog / Grain). It is a graph window (NotaGraph): well,
 // hairline, radius 4, a crosshair in the grid colour, and the corner names in the four role
-// chromas — brass, steel, rose, teal — the only place on the card they appear. The brass
-// dot is the vector the parameters hold; a dashed teal ring, reached by a dashed arc, is
+// chromas — neutral ink, steel, rose, teal — the only place on the card they appear. The
+// neutral dot is the vector the parameters hold (accent while dragged); a dashed teal ring, reached by a dashed arc, is
 // where Motion and React pull it right now.
 // X = 0..1 left→right, Y = 0..1 top→bottom. Reports drags via ValueChanged; Begin/End frame
 // an automation-write gesture on both axes. Left button only; double-click resets.
@@ -98,10 +98,10 @@ internal sealed class FluxVectorPad : Control
         ctx.DrawLine(NotaGraph.GridPen, new Point(1, Math.Round(r.Height / 2) + 0.5), new Point(r.Width - 1, Math.Round(r.Height / 2) + 0.5));
 
         // corner worlds, in the graph chromas.
-        Label(ctx, "WARM",  NotaPalette.Accent, 6, 4, false);
-        Label(ctx, "GLASS", NotaPalette.Steel,  r.Width - 6, 4, true);
-        Label(ctx, "MOOG",  NotaPalette.Rose,   6, r.Height - 13, false);
-        Label(ctx, "GRAIN", NotaPalette.Teal,   r.Width - 6, r.Height - 13, true);
+        Label(ctx, "Warm",  NotaPalette.VizInk, 6, 4, false);
+        Label(ctx, "Glass", NotaPalette.Steel,  r.Width - 6, 4, true);
+        Label(ctx, "Moog",  NotaPalette.Rose,   6, r.Height - 13, false);
+        Label(ctx, "Grain", NotaPalette.Teal,   r.Width - 6, r.Height - 13, true);
 
         var b = new Point(_x * r.Width, _y * r.Height);
         if (_ghost)
@@ -122,13 +122,13 @@ internal sealed class FluxVectorPad : Control
             ctx.DrawEllipse(null, new Pen(NotaPalette.Teal, 1.5, new DashStyle(new double[] { 2, 1.5 }, 0)), g, 6, 6);
         }
 
-        // the vector: Brass Light with a ground-coloured ring.
-        ctx.DrawEllipse(NotaPalette.AccentBright, new Pen(NotaPalette.AccentSubtle, 2), b, 7, 7);
+        // the vector: neutral ink with a ground-coloured ring; accent while dragged.
+        ctx.DrawEllipse(_drag ? NotaPalette.Accent : NotaPalette.VizInk, new Pen(NotaPalette.BgSunken, 2), b, 7, 7);
     }
 
     private static void Label(DrawingContext ctx, string text, IBrush ink, double x, double y, bool rightAlign)
     {
-        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansBold, NotaType.KnobLabel, ink);
+        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, NotaType.KnobLabel, ink);
         ctx.DrawText(ft, new Point(rightAlign ? x - ft.Width : x, y));
     }
 }

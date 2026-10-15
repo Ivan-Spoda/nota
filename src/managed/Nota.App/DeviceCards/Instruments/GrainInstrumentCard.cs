@@ -20,7 +20,7 @@
 //               track's meter. On screen on every tab.
 //   Status 18   the tab read back in words, and the sample, voices and grains live.
 //
-// Brass is the parameter itself; teal is variation and scatter (spread, spray, the three
+// Neutral ink is the parameter itself; teal is variation and scatter (spread, spray, the three
 // jitters and the grains they make). Drop a sample from the browser to replace the
 // procedural default. Everything is a plugin param → automation / persist / clone, and the
 // card follows automation live.
@@ -40,7 +40,7 @@ namespace Nota.App;
 internal sealed class GrainInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
-    public string Subtitle => "GRANULAR";
+    public string Subtitle => "Granular";
 
     private const double RailW = 186, TabH = 20, StatusH = 18;
 
@@ -171,8 +171,8 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         // ---- shared builders --------------------------------------------------
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold,
-            LetterSpacing = NotaType.KnobLabelTracking, Foreground = c ?? TextTertiary,
+            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
@@ -231,8 +231,8 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             return row;
         }
 
-        // The window shape: four drawn chips in a 2 × 2 block; the chosen one in Brass Wash
-        // with a brass edge and a brass curve.
+        // The window shape: four drawn chips in a 2 × 2 block; the chosen one in an accent
+        // wash with an accent edge and curve.
         Control ShapeChips()
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 4, RowSpacing = 4, VerticalAlignment = VerticalAlignment.Center };
@@ -378,7 +378,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
                 bool on = i == tab;
                 tabCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
                 tabCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                tabTexts[i].Foreground = on ? AccentBright : TextTertiary;
+                tabTexts[i].Foreground = on ? TextPrimary : TextTertiary;
                 tabTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 bodies[i].IsVisible = on;
             }
@@ -520,7 +520,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         DockPanel.SetDock(statusHost, Dock.Bottom);
         var root = new DockPanel
         {
-            LastChildFill = true, Background = NotaPalette.Gutter,
+            LastChildFill = true, Background = NotaPalette.SurfaceCard,
             Children = { statusHost, body },
         };
 
@@ -588,11 +588,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
     }
 
     // A device section: card ground, hairline, radius 6 — the almanac's section box.
-    private static Border SectionBox(Control child) => new()
-    {
-        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = child,
-    };
+    private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
 
     // A section's own header strip: a hairline under it, nothing else.
     private static Border HeaderStrip(Control child) => new()

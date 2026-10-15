@@ -57,6 +57,7 @@ public sealed partial class DeviceChainView
         {
             var (ok, _) = DropTargetAt(e, showHints: true);
             e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
+            if (_addDash is not null) _addDash.IsVisible = ok;   // the add target shows its outline while a drag is over the chain
         });
         DragDrop.AddDragLeaveHandler(this, (_, _) => ClearDropHints());
         DragDrop.AddDropHandler(this, (_, e) =>
@@ -76,6 +77,7 @@ public sealed partial class DeviceChainView
         _dropGlow.IsVisible = false;
         _dropInsertBar.IsVisible = false;
         _dropReplaceRing.IsVisible = false;
+        if (_addDash is not null) _addDash.IsVisible = false;
     }
 
     // Resolves the drop target under the pointer and (optionally) shows its hint.

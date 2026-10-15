@@ -4,13 +4,13 @@
 // Nota Utility card windows (the centre panel's three tabs), all read from the engine
 // (Utility.h scopeRead), so the picture is what the device measures and runs:
 //  • UtFieldView — Field: the stereo field by frequency — lows at the bottom, highs at the
-//                  top; where each band's energy sits (brass trace), how wide it is (teal
+//                  top; where each band's energy sits (neutral trace), how wide it is (teal
 //                  dots either side) and, dashed, how wide the width setting makes an
 //                  uncorrelated signal. Drag sideways for the balance, up / down for the width;
-//  • UtWidthView — Mono: the configured width over frequency (brass) — the mono region
+//  • UtWidthView — Mono: the configured width over frequency (neutral ink) — the mono region
 //                  shaded — against the output's measured width (teal, dashed). Drag
 //                  sideways for the mono cutoff, up / down for the width;
-//  • UtLevelView — Levels: input (teal) and output (brass) over the last 8 s in the
+//  • UtLevelView — Levels: input (teal) and output (neutral ink) over the last 8 s in the
 //                  meter's unit, the target dashed. Drag up / down for the target.
 // UtCorrBar is the −1 … +1 correlation bar of the Routing panel.
 
@@ -89,7 +89,7 @@ internal sealed class UtFieldView : VtWindowBase
                     ctx.DrawEllipse(dot, null, new Point(Math.Clamp(x0 - s, 2, w - 2), y), 1.7, 1.7);
                     ctx.DrawEllipse(dot, null, new Point(Math.Clamp(x0 + s, 2, w - 2), y), 1.7, 1.7);
                 }
-                // Brass trace: where each band's energy sits.
+                // Neutral trace: where each band's energy sits.
                 var g = new StreamGeometry();
                 using (var c = g.Open())
                 {
@@ -116,7 +116,7 @@ internal sealed class UtFieldView : VtWindowBase
         }
 
         NotaGraph.Title(ctx, frame, "Stereo field");
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _legend, NotaPalette.AccentBright);
+        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _legend, NotaPalette.VizInk);
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "L");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "R");
         var c0 = NotaGraph.AxisText("C");
@@ -236,11 +236,11 @@ internal sealed class UtWidthView : VtWindowBase
                 c.EndFigure(false);
             }
             ctx.DrawGeometry(null, NotaGraph.PrimaryPen, g);
-            if (!double.IsNaN(_monoHz)) NotaGraph.Node(ctx, new Point(X(_monoHz), Y(At(_resp, _nr, _rLo, _rHi, _monoHz))), true);
+            if (!double.IsNaN(_monoHz)) NotaGraph.Node(ctx, new Point(X(_monoHz), Y(At(_resp, _nr, _rLo, _rHi, _monoHz))), Dragging);
         }
 
         NotaGraph.Title(ctx, frame, "Width by frequency");
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _legend, NotaPalette.AccentBright);
+        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _legend, NotaPalette.VizInk);
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "20");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "18 k");
         foreach (double t in new double[] { 2000 })
@@ -250,7 +250,7 @@ internal sealed class UtWidthView : VtWindowBase
         }
         if (!double.IsNaN(_monoHz))
         {
-            var ft = NotaGraph.AxisText(_monoHz >= 1000 ? NotaNum.F($"{_monoHz / 1000:0.#} k") : NotaNum.F($"{_monoHz:0}"), NotaPalette.AccentBright);
+            var ft = NotaGraph.AxisText(_monoHz >= 1000 ? NotaNum.F($"{_monoHz / 1000:0.#} k") : NotaNum.F($"{_monoHz:0}"), Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
             ctx.DrawText(ft, new Point(Math.Clamp(X(_monoHz) - ft.Width / 2, 22, Math.Max(22, w - ft.Width - 30)), h - ft.Height - 2));
         }
         var scale = NotaGraph.AxisText("100 %");
@@ -315,7 +315,7 @@ internal sealed class UtLevelView : VtWindowBase
         }
 
         NotaGraph.Title(ctx, frame, "Input and output");
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _legend, NotaPalette.AccentBright);
+        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _legend, NotaPalette.VizInk);
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, NotaNum.F($"−{_sec:0} s"));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "now");
         var tt = NotaGraph.AxisText(_targetText);
@@ -342,7 +342,7 @@ internal sealed class UtCorrBar : Control
         ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.GraphBorder, 1), rr);
         using (ctx.PushClip(rr)) ctx.FillRectangle(NotaPalette.Wash(NotaPalette.Danger, 0x55), new Rect(0, 0, w / 2, h));
         double x = (_c + 1) / 2 * w;
-        var ink = _c < 0 ? NotaPalette.Danger : _c < 0.3 ? NotaPalette.Accent : NotaPalette.Success;
+        var ink = _c < 0 ? NotaPalette.Danger : _c < 0.3 ? NotaPalette.Warning : NotaPalette.Success;
         ctx.FillRectangle(ink, new Rect(Math.Clamp(x - 1.5, 0, w - 3), -1, 3, h + 2));
     }
 }

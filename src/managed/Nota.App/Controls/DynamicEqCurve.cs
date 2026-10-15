@@ -4,9 +4,9 @@
 // Nota Dynamic EQ-8 (device kind 13) response graph, a build of the "Nota Dynamic EQ" mockup.
 // A dynamic EQ has two answers at once — where a band sits and where it is right now — so the
 // window draws the live response (static gain + each band's momentary dynamic gain) as the
-// brass primary curve and the static response as a teal dashed line, shown only while the two
+// neutral primary curve and the static response as a teal dashed line, shown only while the two
 // differ. Under them: the output spectrum (the engine's FFT, a dim line) and the selected
-// band's own curve (a faint brass line). Every band is a numbered node — selected brass, the
+// band's own curve (a faint accent line). Every band is a numbered node — selected accent, the
 // rest Ink 3, an off band Ink 6. A dynamic band grows a whisker from its node to where Range
 // can take it (teal for a cut, rose for a boost), with a dot riding it at the gain it has now.
 // A tooltip beside the selected node reads the band, and for a dynamic band its gain now with
@@ -356,7 +356,7 @@ public sealed class DynamicEqCurve : Control
     // ---- render ----
     private static FormattedText Text(string s, IBrush ink, double size, bool bold = false, bool mono = true)
         => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? (bold ? NotaFonts.MonoBold : NotaFonts.Mono) : bold ? NotaFonts.SansBold : NotaFonts.Sans, size, ink);
+            mono ? (bold ? NotaFonts.MonoBold : NotaFonts.Mono) : bold ? NotaFonts.SansSemiBold : NotaFonts.Sans, size, ink);
 
     public override void Render(DrawingContext ctx)
     {
@@ -442,9 +442,9 @@ public sealed class DynamicEqCurve : Control
         ctx.DrawText(m12, new Point(w - 5 - m12.Width, Y(-12) + 1));
 
         // title + legend
-        var title = solo >= 0 ? NotaNum.F($"SOLO · B{solo + 1}") : "RESPONSE";
+        var title = solo >= 0 ? NotaNum.F($"Solo · B{solo + 1}") : "Response";
         ctx.DrawText(Text(title, solo >= 0 ? NotaPalette.AccentBright : NotaGraph.TitleInk, 7, bold: true, mono: false), new Point(5, 3));
-        NotaGraph.Legend(ctx, w - 5, 2, ("static", NotaPalette.TealBright, NotaGraph.Mark.Dashed), ("live", NotaPalette.AccentBright, NotaGraph.Mark.Line));
+        NotaGraph.Legend(ctx, w - 5, 2, ("static", NotaPalette.TealBright, NotaGraph.Mark.Dashed), ("live", NotaPalette.VizInk, NotaGraph.Mark.Line));
 
         // whiskers (dynamic bands): node → where Range can take it, a dot at the gain it has now
         for (int b = 0; b < DynEq.Bands; b++)
@@ -483,7 +483,7 @@ public sealed class DynamicEqCurve : Control
         int b = _selected, ty = BandType(b);
         bool bOn = BandOn(b), g = DynEq.HasGain(ty), dyn = IsDyn(b);
         double r = P(b, DynEq.RangeF);
-        var a = Text(NotaNum.F($"B{b + 1} {DynEq.TypeNames[ty]}") + (bOn ? "" : " · off"), NotaPalette.AccentBright, 8, bold: true, mono: false);
+        var a = Text(NotaNum.F($"B{b + 1} {DynEq.TypeNames[ty]}") + (bOn ? "" : " · off"), NotaPalette.TextPrimary, 8, bold: true, mono: false);
         var l2 = Text(DynEq.Hz(P(b, DynEq.FreqF)) + (g ? " · " + DynEq.Db(P(b, DynEq.GainF)) + " dB" : "") + NotaNum.F($" · Q {P(b, DynEq.QF):0.00}"),
             NotaPalette.TextPrimary, 7);
         IBrush dynInk = r >= 0 ? NotaPalette.RoseBright : NotaPalette.TealBright;

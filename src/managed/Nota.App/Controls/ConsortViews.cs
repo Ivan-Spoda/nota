@@ -82,8 +82,9 @@ internal static class ConsortJacks
     public static readonly HashSet<int> Normalled = new() { 2, 3, 13, 15, 19 };
     public static int Points => Sources.Length - 1 + Dests.Length - 1;
 
-    public static IBrush ToneBrush(Tone t) => t switch { Tone.Env => NotaPalette.Teal, Tone.Audio => NotaPalette.Accent, _ => ChamberInk.Mauve };
-    public static Color ToneColor(Tone t) => t switch { Tone.Env => NotaPalette.Teal.Color, Tone.Audio => NotaPalette.AccentColor, _ => ChamberInk.MauveColor };
+    // Audio cables are the primary source and draw in neutral ink; envelope and modulation keep their chromas.
+    public static IBrush ToneBrush(Tone t) => t switch { Tone.Env => NotaPalette.Teal, Tone.Audio => NotaPalette.VizInk, _ => ChamberInk.Mauve };
+    public static Color ToneColor(Tone t) => t switch { Tone.Env => NotaPalette.Teal.Color, Tone.Audio => NotaPalette.VizInk.Color, _ => ChamberInk.MauveColor };
     public static Jack Src(int i) => i > 0 && i < Sources.Length ? Sources[i] : Sources[0];
     public static Jack Dst(int i) => i > 0 && i < Dests.Length ? Dests[i] : Dests[0];
     public static string ShortName(string n) => n.Replace(" out", "").Replace(" in", "").Replace("Osc ", "Osc").Replace("Filt ", "Filt").Replace(" cutoff", "").Replace("Delay ", "Dly ").Replace(" pitch", "").Replace("Env ", "Env");
@@ -163,7 +164,7 @@ internal sealed class ConsortJackDot : Control
     }
 }
 
-// ---- dual transistor-ladder response: L (slate) / R (brass) or the series HP→LP curve ----
+// ---- dual transistor-ladder response: L (slate) / R (neutral ink) or the series HP→LP curve ----
 internal sealed class ConsortFilterCurve : Control
 {
     private static readonly Typeface Mono = NotaFonts.Mono;
@@ -225,25 +226,25 @@ internal sealed class ConsortFilterCurve : Control
             return g;
         }
         double Wr(double xn, double cn) => Math.Pow(1000, xn - cn);
-        var brass = NotaPalette.Accent;
+        var ink = NotaPalette.VizInk;
         if (_mode == 0)
         {
             var faint = NotaPalette.Wash(NotaPalette.Ink("#6D8FB5"), 0x55);
             ctx.DrawGeometry(null, new Pen(faint, 1), Curve(x => Db(Mag(Wr(x, _cut), true))));
-            ctx.DrawGeometry(null, new Pen(brass, 1.5), Curve(x => Db(Mag(Wr(x, _cut), true) * Mag(Wr(x, cutB), false))));
+            ctx.DrawGeometry(null, new Pen(ink, 1.5), Curve(x => Db(Mag(Wr(x, _cut), true) * Mag(Wr(x, cutB), false))));
         }
         else
         {
             ctx.DrawGeometry(null, new Pen(ChamberInk.Slate, 1.5), Curve(x => Db(Mag(Wr(x, _cut), _mode == 2))));
-            ctx.DrawGeometry(null, new Pen(brass, 1.5), Curve(x => Db(Mag(Wr(x, cutB), false))));
+            ctx.DrawGeometry(null, new Pen(ink, 1.5), Curve(x => Db(Mag(Wr(x, cutB), false))));
         }
         string Hz(double n) { double hz = 20 * Math.Pow(1000, n); return hz >= 1000 ? $"{hz / 1000:0.0}\u2009k" : $"{hz:0}\u2009Hz"; }
         var lt = new FormattedText((_mode == 0 ? "HP " : "L ") + Hz(_cut), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, _mode == 0 ? NotaPalette.TextSecondary : ChamberInk.Slate);
-        var rt = new FormattedText((_mode == 0 ? "LP " : "R ") + Hz(cutB), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, NotaPalette.AccentBright);
+        var rt = new FormattedText((_mode == 0 ? "LP " : "R ") + Hz(cutB), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, NotaPalette.TextPrimary);
         ctx.DrawText(lt, new Point(4, 3));
         ctx.DrawText(rt, new Point(w - rt.Width - 4, 3));
         double hx = Math.Clamp(_cut * w, 4, w - 4), hy = Math.Clamp(Y(Db(Mag(1, _mode == 2 || _mode == 0))), 4, h - 4);
-        ctx.DrawEllipse(_mode == 1 ? ChamberInk.Slate : NotaPalette.AccentBright, new Pen(NotaPalette.BgSunken, 2), new Point(hx, hy), 3.5, 3.5);
+        ctx.DrawEllipse(_drag ? NotaPalette.Accent : _mode == 1 ? ChamberInk.Slate : NotaPalette.VizInk, new Pen(NotaPalette.BgSunken, 2), new Point(hx, hy), 3.5, 3.5);
     }
 }
 
@@ -277,7 +278,7 @@ internal sealed class ConsortDelayView : Control
         }
         double span = Math.Max(_tl, _tr) * 4.2;
         span = ChamberInk.Axis(0, span);
-        var bl = ChamberInk.Slate; var br = NotaPalette.Accent;
+        var bl = ChamberInk.Slate; var br = NotaPalette.VizInk;
         foreach (var (t, a, r) in taps)
         {
             if (t > span) continue;
@@ -340,7 +341,7 @@ internal sealed class ConsortStepGrid : Control
         if (w < 16 || h < 4) return;
         const double gap = 3;
         double cw = (w - gap * 15) / 16;
-        var ac = NotaPalette.AccentColor; var mv = ChamberInk.MauveColor; var tl = NotaPalette.Teal.Color;
+        var ac = NotaPalette.VizInk.Color; var mv = ChamberInk.MauveColor; var tl = NotaPalette.Teal.Color;
         for (int i = 0; i < 16; i++)
         {
             var r = new Rect(i * (cw + gap) + 0.5, 0.5, cw - 1, h - 1);
@@ -360,7 +361,7 @@ internal sealed class ConsortStepGrid : Control
 // ---- step pitch lane: one bar per step at its pitch (±24 st); drag up/down to set ----
 internal sealed class ConsortPitchLane : Control
 {
-    private static readonly Typeface Sans = NotaFonts.SansBold;
+    private static readonly Typeface Sans = NotaFonts.SansSemiBold;
     private static readonly Typeface Mono = NotaFonts.Mono;
     private readonly int[] _p = new int[16], _t = new int[16];
     private int _len = 16, _play = -1, _dragStep = -1;
@@ -402,13 +403,13 @@ internal sealed class ConsortPitchLane : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 16 || h < Top + 6) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
-        var cap = new FormattedText(_arp ? "PITCH · ARP (STEP TYPES SHAPE THE RHYTHM)" : "PITCH · STEP OFFSETS FROM THE KEY", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, 7, NotaPalette.TextTertiary);
+        var cap = new FormattedText(_arp ? "Pitch · arp (step types shape the rhythm)" : "Pitch · step offsets from the key", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, 7, NotaPalette.TextTertiary);
         ctx.DrawText(cap, new Point(6, 3));
         double hh = h - Top - 4, cw = w / 16;
         double Y(int p) => Top + (1 - (p + 24) / 48.0) * hh;
         var grid = new Pen(NotaPalette.SurfaceCard, 1);
         foreach (int p in new[] { -12, 0, 12 }) ctx.DrawLine(grid, new Point(0, Y(p)), new Point(w, Y(p)));
-        var ac = NotaPalette.AccentColor; var mv = ChamberInk.MauveColor; var tl = NotaPalette.Teal.Color;
+        var ac = NotaPalette.VizInk.Color; var mv = ChamberInk.MauveColor; var tl = NotaPalette.Teal.Color;
         for (int i = 0; i < 16; i++)
         {
             if (_t[i] == 3) continue;
@@ -441,7 +442,8 @@ internal sealed class ConsortJackField : Control
 {
     private static readonly Typeface Mono = NotaFonts.Mono;
     private static readonly Typeface Sans = NotaFonts.Sans;
-    private static readonly Typeface SansBold = NotaFonts.SansBold;
+    private static readonly Typeface SansSemiBold = NotaFonts.SansSemiBold;
+    private static readonly Typeface SansMedium = NotaFonts.SansMedium;
 
     public readonly record struct Group(string Title, ConsortJacks.Jack[] Jacks);
     private readonly List<List<Group>> _rows;     // strip mode: rows of groups; list mode: columns (one group each)
@@ -566,7 +568,7 @@ internal sealed class ConsortJackField : Control
             double colW = w / _rows.Count;
             for (int c = 0; c < _rows.Count; c++)
             {
-                var t = new FormattedText(_rows[c][0].Title, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansBold, 7.5, NotaPalette.TextTertiary);
+                var t = new FormattedText(NotaText.Label(_rows[c][0].Title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansSemiBold, 7.5, NotaPalette.TextTertiary);
                 ctx.DrawText(t, new Point(c * colW + 4, 4));
             }
         }
@@ -577,7 +579,7 @@ internal sealed class ConsortJackField : Control
                 foreach (var g in _rows[r])
                 {
                     if (g.Jacks.Length == 0 || !_pos.TryGetValue((g.Jacks[0].Out, g.Jacks[0].Index), out var p0)) continue;
-                    var t = new FormattedText(g.Title, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansBold, 7, NotaPalette.TextTertiary);
+                    var t = new FormattedText(NotaText.Label(g.Title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansSemiBold, 7, NotaPalette.TextTertiary);
                     ctx.DrawText(t, new Point(p0.X - 5, r * rowH + rowH * 0.5 - 17));
                 }
         }
@@ -637,7 +639,8 @@ internal sealed class ConsortPatchMatrix : Control
 {
     private static readonly Typeface Mono = NotaFonts.Mono;
     private static readonly Typeface Sans = NotaFonts.Sans;
-    private static readonly Typeface SansBold = NotaFonts.SansBold;
+    private static readonly Typeface SansSemiBold = NotaFonts.SansSemiBold;
+    private static readonly Typeface SansMedium = NotaFonts.SansMedium;
     private int[] _rows = Array.Empty<int>(), _cols = Array.Empty<int>();
     private IReadOnlyList<ConsortCable> _cables = Array.Empty<ConsortCable>();
     private const double HeadH = 16, RowHdrW = 78;
@@ -698,12 +701,12 @@ internal sealed class ConsortPatchMatrix : Control
         if (w < 40 || h < 30 || _rows.Length == 0 || _cols.Length == 0) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
         double rh = RowH, cw = ColW;
-        var corner = new FormattedText("SRC → DST", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansBold, 7, NotaPalette.TextDisabled);
+        var corner = new FormattedText("Src → dst", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, 7, NotaPalette.TextDisabled);
         ctx.DrawText(corner, new Point(4, (HeadH - corner.Height) / 2));
         for (int c = 0; c < _cols.Length; c++)
         {
             var d = ConsortJacks.Dst(_cols[c]);
-            var t = new FormattedText(d.Name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansBold, 7.5, NotaPalette.TextSecondary) { MaxTextWidth = cw - 4, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
+            var t = new FormattedText(d.Name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, SansMedium, 7.5, NotaPalette.TextSecondary) { MaxTextWidth = cw - 4, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
             ctx.DrawText(t, new Point(RowHdrW + c * cw + (cw - t.Width) / 2, (HeadH - t.Height) / 2));
         }
         var line = new Pen(NotaPalette.BorderDefault, 1);

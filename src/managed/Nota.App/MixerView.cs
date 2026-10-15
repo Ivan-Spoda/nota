@@ -28,10 +28,10 @@ public enum MixerViewMode { Strips, StereoMap }
 public sealed class MixerView : UserControl
 {
     private static readonly IBrush Card = NotaPalette.SurfaceCard;
-    private static readonly IBrush MasterBg = NotaPalette.SurfaceRaised;
+    private static readonly IBrush MasterBg = NotaPalette.SurfaceCard;   // every strip is the panel tone
     private static readonly IBrush Sunken = NotaPalette.BgSunken;
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-    private static readonly IBrush BorderInner = NotaPalette.SurfaceRaised;
+    private static readonly IBrush BorderInner = NotaPalette.Rule;       // the rule that divides inside a strip
     private static readonly IBrush BorderStrong = NotaPalette.BorderStrong;
     private static readonly IBrush Brass = NotaPalette.Accent;
     private static readonly IBrush Danger = NotaPalette.Danger;
@@ -55,7 +55,7 @@ public sealed class MixerView : UserControl
     public Action<float>? SetMasterVolume { get; set; }
     private VFader? _masterFader;
     private DragNumber? _masterDb;
-    // Project pan law (specs/006): the footer's PAN LAW control, its hint, the OLDER PROJECT
+    // Project pan law (specs/006): the footer's Pan law control, its hint, the Older project
     // badge and a BAL badge on every group strip — all re-synced from the engine, so undo/redo
     // and project load show up without a rebuild.
     public Func<bool>? IsOlderProject { get; set; }
@@ -75,6 +75,18 @@ public sealed class MixerView : UserControl
     public StereoMapView? Map { get; private set; }
     /// <summary>Called once when the map is created, to wire its callbacks.</summary>
     public Action<StereoMapView>? MapCreated { get; set; }
+
+    private int _builtTrackCount = -1;
+
+    /// <summary>Raised after <see cref="Refresh"/> rebuilds the strips, so a host window can
+    /// fit its width to them.</summary>
+    public event Action? StripsChanged;
+
+    /// <summary>The width the strip row wants (all strips + master + margin), unclipped.</summary>
+    public double StripsWidth
+    {
+        get { _row.Measure(Size.Infinity); return _row.DesiredSize.Width; }
+    }
 
     public MixerView(IAudioEngine engine)
     {
@@ -141,11 +153,15 @@ public sealed class MixerView : UserControl
         _row.Children.Add(MasterStrip());
         _shownLaw = null;   // the strips are new: repaint the law state onto them
         SyncPanLaw();
+        _builtTrackCount = n;
+        StripsChanged?.Invoke();
     }
 
     /// <summary>Pushes fresh meter readings to every strip (called at the UI clock).</summary>
     public void UpdateMeters()
     {
+        // A track added or removed while the mixer is open gets (or loses) its strip.
+        if (_builtTrackCount >= 0 && _engine.TrackCount != _builtTrackCount) Refresh();
         foreach (var (id, meter) in _meters)
         {
             if (id < 0) meter.Push(_engine.MasterMeter());
@@ -173,7 +189,7 @@ public sealed class MixerView : UserControl
         string io1 = isReturn ? "Return in" : ti.IsGroup ? "Group in" : ti.IsInstrument ? "MIDI in" : "In 1";
         string io2 = isReturn ? "→ Master"
                    : ti.IsGroup ? "→ " + (ti.GroupId >= 0 ? TrackNames.Of(_engine, ti.GroupId) : "Master")
-                   : ti.IsInstrument ? "Monitor Auto" : "Monitor In";
+                   : ti.IsInstrument ? "Monitor auto" : "Monitor in";
         // Instrument tracks get a live "MIDI To" selector in place of the static I/O text.
         var ioRow = ti.IsInstrument ? MidiIoRow(id) : IoRow(io1, io2);
         ioRow.IsVisible = _ioVisible;
@@ -204,14 +220,14 @@ public sealed class MixerView : UserControl
     private Control MasterStrip()
     {
         var col = new StackPanel();
-        col.Children.Add(Header("Master", NotaPalette.Accent, MasterBg));
+        col.Children.Add(Header("Master", NotaPalette.Master, MasterBg));
         var ioRow = IoRow("Sum bus", "→ Output");
         ioRow.IsVisible = _ioVisible;
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
 
         Control db;
-        var faderRow = FaderRow(-1, GetMasterVolume?.Invoke() ?? 1f, NotaPalette.Accent, out db, out var meter);
+        var faderRow = FaderRow(-1, GetMasterVolume?.Invoke() ?? 1f, NotaPalette.Master, out db, out var meter);
         _meters.Add((-1, meter));
         col.Children.Add(faderRow);
         col.Children.Add(db);
@@ -250,26 +266,26 @@ public sealed class MixerView : UserControl
         var xf = Crossfader();
         Grid.SetColumn(xf, 2);
         grid.Children.Add(xf);
-        return new Border { Height = 44, Background = MasterBg, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(12, 0), Child = grid };
+        return new Border { Height = 44, Background = MasterBg, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(12, 0), Child = grid };
     }
 
     private Border SectionToggle(string label, bool initial, Action<bool> set)
     {
         bool on = initial;
         var t = new TextBlock { Text = label, FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var b = new Border { Height = 20, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Tile, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
-        // Engaged, not the primary action: Brass Wash + brass border + Brass Hover text (solid brass is for one action only).
-        void Paint() { b.Background = on ? NotaPalette.AccentSubtle : MasterBg; b.BorderBrush = on ? NotaPalette.BorderBrass : BorderStrong; t.Foreground = on ? NotaPalette.AccentHover : TextSecondary; }
+        var b = new Border { Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
+        // Toggled on: a solid accent key with derived ink; off: a raised key.
+        void Paint() { b.Background = on ? Brass : NotaPalette.SurfaceRaised; b.BorderBrush = on ? Brass : NotaPalette.Seam; t.Foreground = on ? OnAccent : TextSecondary; }
         b.PointerPressed += (_, e) => { e.Handled = true; on = !on; set(on); Paint(); };
         Paint();
         return b;
     }
 
-    // PAN LAW: the project's pan law as shell segments, a one-line hint, and the OLDER PROJECT
+    // Pan law: the project's pan law as shell segments, a one-line hint, and the Older project
     // badge for projects made before the law existed (they keep Balance until switched).
     private Control PanLawGroup()
     {
-        var label = new TextBlock { Text = "PAN LAW", FontSize = 10, FontWeight = FontWeight.Bold, LetterSpacing = 1.4, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var label = new TextBlock { Text = "Pan law", FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var seg = ClipEditorKit.Segments(new[] { "Stereo", "Balance" }, _engine.PanLaw == PanLaw.Stereo ? 0 : 1, i =>
         {
             var law = i == 0 ? PanLaw.Stereo : PanLaw.Balance;
@@ -284,7 +300,7 @@ public sealed class MixerView : UserControl
             for (int i = 0; i < buttons.Children.Count && i < tips.Length; i++) ToolTip.SetTip(buttons.Children[i], tips[i]);
         }
         _lawHint = new TextBlock { FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        _olderBadge = Tag("OLDER PROJECT", 9, 1.6, 18, "Projects saved before stereo pan law open with Balance so existing mixes do not change");
+        _olderBadge = Tag("Older project", 9, 0, 18, "Projects saved before stereo pan law open with Balance so existing mixes do not change");
         return new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center,
@@ -310,7 +326,7 @@ public sealed class MixerView : UserControl
         foreach (var b in _balBadges) b.IsVisible = stereo;
     }
 
-    // A small mono tag in a hairline frame (OLDER PROJECT, BAL), with a tooltip.
+    // A small mono tag in a hairline frame (Older project, BAL), with a tooltip.
     private static Border Tag(string text, double size, double tracking, double height, string tip)
     {
         var t = new TextBlock { Text = text, FontSize = size, LetterSpacing = tracking, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
@@ -349,8 +365,9 @@ public sealed class MixerView : UserControl
 
     private Control Header(string name, IBrush topColor, IBrush bg)
     {
-        var grid = new Grid { RowDefinitions = new RowDefinitions("2,*") };
-        grid.Children.Add(new Border { Background = topColor, Height = 2, VerticalAlignment = VerticalAlignment.Top });
+        // The strip header: a 3px bar in the track colour on top (muted grey for master).
+        var grid = new Grid { RowDefinitions = new RowDefinitions("3,*") };
+        grid.Children.Add(new Border { Background = topColor, Height = 3, VerticalAlignment = VerticalAlignment.Top });
         var label = new TextBlock { Text = name, FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 7, 0), TextTrimming = TextTrimming.CharacterEllipsis };
         Grid.SetRow(label, 1);
         grid.Children.Add(label);
@@ -455,7 +472,7 @@ public sealed class MixerView : UserControl
             MidiLearn.Bind(knob, MidiTarget.TrackPan(id), "Track Pan");
         }
         knob.GestureEnd += undo.End;
-        Control label = Mono("PAN", TextTertiary);
+        Control label = Mono("Pan", TextTertiary);
         if (isGroup)   // groups keep their unity-centre balance whatever the project law (specs/006)
         {
             var bal = Tag("BAL", 7, 0.84, 11, "Groups keep a unity-centre balance so grouping stays level-transparent");
@@ -506,7 +523,7 @@ public sealed class MixerView : UserControl
 
         meter = new MeterBar();   // the almanac stereo meter: 11 + 5 + 11
         var scaleGrid = new Grid { Width = 16, RowDefinitions = new RowDefinitions("*,*,*,*") };
-        string[] marks = { "+6", "0", "-12", "-48" };
+        string[] marks = { "+6", "0", "−12", "−48" };
         for (int i = 0; i < 4; i++)
         {
             var t = new TextBlock { Text = marks[i], FontSize = 7, Foreground = TextDisabled, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = i == 0 ? VerticalAlignment.Top : i == 3 ? VerticalAlignment.Bottom : VerticalAlignment.Center };
@@ -553,7 +570,7 @@ public sealed class MixerView : UserControl
         void Paint()
         {
             b.Background = on ? NotaPalette.Record : MasterBg;
-            b.BorderBrush = on ? NotaPalette.Record : BorderStrong;
+            b.BorderBrush = on ? NotaPalette.Record : NotaPalette.Seam;
             disc.Foreground = on ? NotaPalette.RecordInk : NotaPalette.Record;
         }
         b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on); Paint(); };
@@ -564,14 +581,15 @@ public sealed class MixerView : UserControl
     private Border Toggle(string label, bool danger, bool initial, Action<bool> set)
     {
         bool on = initial;
-        var t = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var t = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = t };
         void Paint()
         {
-            var accent = danger ? Danger : Brass;
-            b.Background = on ? accent : MasterBg;
-            b.BorderBrush = on ? accent : BorderStrong;
-            t.Foreground = on ? OnAccent : TextSecondary;
+            // On: mute amber, solo blue, with derived ink.
+            var fill = danger ? NotaPalette.Danger : label == "S" ? NotaPalette.Solo : NotaPalette.Mute;
+            b.Background = on ? fill : NotaPalette.SurfaceRaised;
+            b.BorderBrush = on ? fill : NotaPalette.Seam;
+            t.Foreground = on ? NotaPalette.InkOn(fill) : TextSecondary;
         }
         b.PointerPressed += (_, e) => { e.Handled = true; on = !on; set(on); Paint(); };
         Paint();

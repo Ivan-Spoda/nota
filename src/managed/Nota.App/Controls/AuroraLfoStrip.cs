@@ -15,7 +15,7 @@ namespace Nota.App;
 
 internal sealed class AuroraLfoStrip : Control
 {
-    private static readonly Pen Curve = new(NotaPalette.AccentBright, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+    private static readonly Pen Curve = new(NotaPalette.VizInk, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
     private static readonly Pen Zero = new(NotaGraph.Grid, 1);
     private const int Samples = 180;
 

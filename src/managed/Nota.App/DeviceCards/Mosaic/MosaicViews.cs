@@ -4,9 +4,9 @@
 // Nota Mosaic's windows:
 //
 //   MosaicZoneMap    the zone map — keys on X, velocity on Y, the keyboard under it with a
-//                    brass tick under every root. Zones are tiles; the selected one is
-//                    outlined in Brass Light with its root written in; zones sounding now
-//                    fill brass (muted brass while the pedal holds them, a deeper wash for
+//                    neutral tick under every root. Zones are tiles; the selected one is
+//                    outlined in bright accent with its root written in; zones sounding now
+//                    fill accent (muted accent while the pedal holds them, a deeper wash for
 //                    release samples and fades); an exclusive group is outlined. Click a
 //                    tile to select it (again: the next round-robin tile under it), drag it
 //                    to move, drag an edge to resize. The keyboard plays (press / release).
@@ -290,7 +290,7 @@ internal sealed class MosaicZoneMap : Control
                 ctx.DrawText(t, new Point(AxisW - 2 - t.Width, y));
             }
 
-        // The keyboard: white / black keys, sounding keys brass, a tick under every root.
+        // The keyboard: white / black keys, sounding keys accent, a neutral tick under every root.
         double ky = m.Bottom + 1, kh = Mini ? KeyH * 0.75 - 2 : KeyH;
         var held = new HashSet<int>(_keysDown);
         held.UnionWith(_playing);
@@ -303,7 +303,7 @@ internal sealed class MosaicZoneMap : Control
                 : black ? NotaPalette.KeyBlack : NotaPalette.MiniKeyWhite;
             ctx.DrawRectangle(fill, null, r);
             if (roots.Contains(k) && !Mini)
-                ctx.DrawRectangle(NotaPalette.Accent, null, new Rect(r.X + r.Width * 0.2, ky + kh + 1, Math.Max(1, r.Width * 0.6), 1.5));
+                ctx.DrawRectangle(NotaPalette.VizInk, null, new Rect(r.X + r.Width * 0.2, ky + kh + 1, Math.Max(1, r.Width * 0.6), 1.5));
         }
         if (!Mini)
             for (int k = _lo; k <= _hi; k++)
@@ -388,7 +388,7 @@ internal sealed class MosaicCurveView : Control
         if (Node is { } nx)
         {
             double y = Math.Clamp(Curve(nx), 0, 1);
-            NotaGraph.Node(ctx, new Point(inner.X + nx * inner.Width, inner.Bottom - y * inner.Height), true);
+            NotaGraph.Node(ctx, new Point(inner.X + nx * inner.Width, inner.Bottom - y * inner.Height), _drag);
         }
     }
 }

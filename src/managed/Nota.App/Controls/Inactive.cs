@@ -32,9 +32,12 @@ internal static class Inactive
         foreach (var v in root.GetVisualDescendants().Prepend(root)) Visit(v, inactive);
     }
 
+    // The accent and the neutral value ink both drop to the disabled tone: a bypassed card's
+    // resting values (VizInk since the Studio restyle) must not stay bright.
     private static bool IsBrass(object? brush)
         => ReferenceEquals(brush, NotaPalette.Accent) || ReferenceEquals(brush, NotaPalette.AccentBright)
-        || ReferenceEquals(brush, NotaPalette.AccentHover) || ReferenceEquals(brush, NotaPalette.BorderBrass);
+        || ReferenceEquals(brush, NotaPalette.AccentHover) || ReferenceEquals(brush, NotaPalette.BorderBrass)
+        || ReferenceEquals(brush, NotaPalette.VizInk);
 
     private static void Visit(Visual v, bool inactive)
     {

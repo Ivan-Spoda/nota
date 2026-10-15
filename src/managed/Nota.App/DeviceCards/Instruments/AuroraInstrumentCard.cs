@@ -22,7 +22,8 @@
 //               amount and one of twelve targets). Picking Mod brings the macros up, as
 //               the almanac draws that state.
 //
-// Brass is the parameter itself; teal is modulation and what receives it. Everything is a
+// Neutral ink is the parameter itself; teal is modulation and what receives it; the accent
+// marks only live or chosen state. Everything is a
 // plugin param → automation / persist / clone, and the card follows automation live.
 //
 // The live tick runs thirty times a second, so Refresh first asks whether ANY parameter
@@ -44,7 +45,7 @@ namespace Nota.App;
 internal sealed class AuroraInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
-    public string Subtitle => "WAVETABLE";
+    public string Subtitle => "Wavetable";
     public double CardWidth => 700;
 
     private const double WheelsW = 56, RailW = 186, TabH = 20, StatusH = 18, BodyH = 186;
@@ -78,8 +79,8 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
     // What a macro on that target is called on the patch — the word a player reads.
     private static readonly string[] MacroWords =
     {
-        "PITCH", "SHAPE", "INTERVAL", "LAYER", "SHIMMER", "WEIGHT",
-        "AIR", "EDGE", "WIDTH", "SWELL", "GRIT", "PLACE",
+        "pitch", "shape", "interval", "layer", "shimmer", "weight",
+        "air", "edge", "width", "swell", "grit", "place",
     };
 
     // The engine's own maps (WavetableSynth.h), so a readout says what it does.
@@ -178,8 +179,8 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         // ---- shared builders ------------------------------------------------------
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold,
-            LetterSpacing = NotaType.KnobLabelTracking, Foreground = c ?? TextTertiary,
+            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
@@ -189,7 +190,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         };
         static TextBlock Section(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.DeviceSection, FontWeight = FontWeight.SemiBold,
+            Text = NotaText.Label(t), FontSize = NotaType.DeviceSection, FontWeight = FontWeight.SemiBold,
             Foreground = c ?? TextPrimary, VerticalAlignment = VerticalAlignment.Center,
         };
         static Border Rule() => new() { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0) };
@@ -278,7 +279,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             {
                 value.Text = fmt(G(id));
                 bool moved = Math.Abs(G(id) - engine.InstrumentParamDefault(track, pi)) > 1e-4f;
-                cap.Foreground = moved && ink is null ? AccentBright : TextTertiary;
+                cap.Foreground = moved && ink is null ? TextPrimary : TextTertiary;
             });
             ToolTip.SetTip(cell, learn + " · drag to change, double-click to reset");
             MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), learn);
@@ -390,9 +391,9 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             double semis = (G("bend") - 0.5) * 2 * range;
             bool centred = Math.Abs(semis) < 0.05;
             bendVal.Text = centred ? $"±{range} st" : NotaNum.Unit(semis, "+0.0;−0.0;0", "st");
-            bendVal.Foreground = centred ? TextSecondary : AccentBright;
+            bendVal.Foreground = centred ? TextSecondary : TextPrimary;
             modVal.Text = NotaNum.Pct(G("modwheel"));
-            modVal.Foreground = G("modwheel") > 1e-3f ? AccentBright : TextSecondary;
+            modVal.Foreground = G("modwheel") > 1e-3f ? TextPrimary : TextSecondary;
         });
         static Grid Pair(Control a, Control b)
         {
@@ -508,7 +509,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var posMod = Mono("", Teal, NotaType.Axis);
         readouts.Add(() =>
         {
-            tableCap.Text = $"TABLE {osel + 1} · {Banks[Sel(osel == 0 ? "table" : "osc2table", 4)].ToUpperInvariant()}";
+            tableCap.Text = $"Table {osel + 1} · {Banks[Sel(osel == 0 ? "table" : "osc2table", 4)]}";
             frameCap.Text = "frame " + FrameText(G(osel == 0 ? "position" : "osc2position"));
             int best = -1; double mag = 0.02;
             for (int s = 0; s < SrcNames.Length; s++)
@@ -558,7 +559,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                     ? k switch { 0 => "cutoff", 1 => "resonance", _ => "fil1" + filtIds[k] }
                     : "fil2" + filtIds[k];
                 Func<float, string> fmt = k switch { 0 => Hz, 1 => Pct, 4 => Pct, _ => Bip };
-                Control cell = PKnob(id, filtLbl[k].ToUpperInvariant(), $"Filter {f + 1} {filtLbl[k]}", fmt, 24, 33, k >= 2 ? Teal : null);
+                Control cell = PKnob(id, filtLbl[k], $"Filter {f + 1} {filtLbl[k]}", fmt, 24, 33, k >= 2 ? Teal : null);
                 cell.IsVisible = false;
                 filtStack[f, k] = cell;
                 filtCells[k].Children.Add(cell);
@@ -727,7 +728,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         readouts.Add(() =>
         {
             string pre = lfoShown == 0 ? "lfo1" : "lfo2";
-            lfoShapeCap.Text = $"SHAPE · LFO {lfoShown + 1}";
+            lfoShapeCap.Text = $"Shape · LFO {lfoShown + 1}";
             lfoStrip.Set(Sel(pre + "shape", 4), LfoCycles(lfoShown), G(pre + "depth"));
             lfoShapeSum.Text = $"{ShapeNames[Sel(pre + "shape", 4)]} · "
                 + (SyncDiv(G(pre + "sync")) > 0 ? SyncText(G(pre + "sync")) : SlowHz(ExpMap(G(pre + "rate"), 0.05, 20)))
@@ -854,7 +855,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 bool on = i == tab;
                 tabCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
                 tabCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                tabTexts[i].Foreground = on ? AccentBright : TextTertiary;
+                tabTexts[i].Foreground = on ? TextPrimary : TextTertiary;
                 tabTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 bodies[i].IsVisible = on;
             }
@@ -947,7 +948,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             string destId = $"mac{mv}dest";
             var name = new TextBlock
             {
-                FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Bold, LetterSpacing = NotaType.KnobLabelTracking,
+                FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
                 Foreground = NotaPalette.TextStrong, TextTrimming = TextTrimming.CharacterEllipsis,
             };
             var dest = new TextBlock
@@ -1060,7 +1061,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 bool on = i == railTab;
                 railCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
                 railCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
-                railTexts[i].Foreground = on ? AccentBright : TextTertiary;
+                railTexts[i].Foreground = on ? TextPrimary : TextTertiary;
                 railTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 railBodies[i].IsVisible = on;
             }
@@ -1159,7 +1160,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         DockPanel.SetDock(statusHost, Dock.Bottom);
         var root = new DockPanel
         {
-            LastChildFill = true, Background = NotaPalette.Gutter,
+            LastChildFill = true, Background = NotaPalette.SurfaceCard,
             Children = { statusHost, body },
         };
 
@@ -1170,11 +1171,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
     }
 
     // A device section: card ground, hairline, radius 6 — the almanac's section box.
-    private static Border SectionBox(Control child) => new()
-    {
-        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = child,
-    };
+    private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
 
     // A section's own header strip: a hairline under it, nothing else.
     private static Border HeaderStrip(Control child) => new()

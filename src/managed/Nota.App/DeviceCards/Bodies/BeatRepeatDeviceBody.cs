@@ -50,7 +50,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
 
     public double Width => 700;
     public bool FullBleed => true;
-    public string? Subtitle => "REPEAT";
+    public string? Subtitle => "Repeat";
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -106,8 +106,8 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         int RepeatNo() => State() == 2 ? Math.Max(1, (int)Sc(S_Pass) - 1) : 0;
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 7) => new()
-        { Text = t, FontSize = fs, FontWeight = FontWeight.Bold, Foreground = c ?? TextTertiary, LetterSpacing = 0.8, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -118,7 +118,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         void Learn(Control c, int p) => MidiLearn.Bind(c, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        // `steps` > 1 snaps a discrete param; `lit` lights the label and value (the knob that matters now).
+        // `steps` > 1 snaps a discrete param; `lit` brightens the label and value (the knob that matters now).
         Control K(int p, string name, Func<double, string> fmt, IBrush? arc = null, int steps = 0, string? tip = null, Func<bool>? lit = null)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
@@ -142,8 +142,8 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
                 if (lit is not null)
                 {
                     bool on = lit();
-                    val.Foreground = on ? AccentBright : TextPrimary;
-                    if (label is not null) label.Foreground = on ? AccentBright : TextTertiary;
+                    val.Foreground = on ? TextPrimary : TextSecondary;
+                    if (label is not null) label.Foreground = on ? TextSecondary : TextTertiary;
                 }
             });
             return cell;
@@ -213,10 +213,10 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             bool held = false;
             void Hi()
             {
-                bool on = On(RepeatP);
-                b.Background = on ? Brass : NotaPalette.AccentSubtle;
-                b.BorderBrush = Brass;
-                tb.Foreground = on ? OnAccent : AccentBright;
+                bool on = On(RepeatP);   // accent only while it repeats
+                b.Background = on ? Brass : Raised;
+                b.BorderBrush = on ? Brass : NotaPalette.BorderStrong;
+                tb.Foreground = on ? OnAccent : TextPrimary;
                 tb.FontWeight = FontWeight.SemiBold;
             }
             b.PointerPressed += (_, e) =>
@@ -254,7 +254,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
                 readouts.Add(() =>
                 {
                     bool on = lit();
-                    foreach (var c in bar.Children) if (c is TextBlock tb && tb.TextAlignment == TextAlignment.Right) tb.Foreground = on ? AccentBright : TextPrimary;
+                    foreach (var c in bar.Children) if (c is TextBlock tb && tb.TextAlignment == TextAlignment.Right) tb.Foreground = on ? TextPrimary : TextSecondary;
                 });
             return g;
         }
@@ -342,13 +342,13 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         // LEFT — REPEAT column (input · repeats)
         // ======================================================================
         var colTitle = Caps("REPEAT"); colTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inPill = new ShPill { Ink = Brass, VerticalAlignment = VerticalAlignment.Stretch };
+        var inPill = new ShPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch };
         var repPill = new ShPill { Ink = Teal, VerticalAlignment = VerticalAlignment.Stretch };
         var inLbl = Caps("IN"); inLbl.HorizontalAlignment = HorizontalAlignment.Center;
         var repLbl = Caps("REP"); repLbl.HorizontalAlignment = HorizontalAlignment.Center;
         ToolTip.SetTip(inPill, "The input level");
         ToolTip.SetTip(repPill, "The repeats' level — after pitch, filter, decay and volume");
-        var colIn = Mono("", 7, AccentBright); colIn.HorizontalAlignment = HorizontalAlignment.Center;
+        var colIn = Mono("", 7, TextPrimary); colIn.HorizontalAlignment = HorizontalAlignment.Center;
         var colRep = Mono("", 7, TextPrimary); colRep.HorizontalAlignment = HorizontalAlignment.Center;
         static double Norm60(double db) => Math.Clamp((db + 60) / 60, 0, 1);
         readouts.Add(() =>
@@ -363,9 +363,9 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
         pills.Children.Add(PillCol(inPill, inLbl));
         pills.Children.Add(Col(PillCol(repPill, repLbl), 1));
-        var leftCol = new Border
+        var leftCol = new RuleSection
         {
-            Width = 56, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(0, 5, 0, 4),
+            Width = 56, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(colTitle, Dock.Top), Docked(colRep, Dock.Bottom), Docked(colIn, Dock.Bottom), pills } },
         };
         DockPanel.SetDock(leftCol, Dock.Left);
@@ -377,8 +377,8 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         Control TimelineTab()
         {
             timeline = new BrTimelineView();
-            ToolTip.SetTip(timeline, "Two intervals on the grid: each step is the input's level — dim when dry, full brass where the slice is captured, dimmer with every repeat as it decays. Brass ticks mark where the interval fires.");
-            var slice = Mono("", 7, AccentBright);
+            ToolTip.SetTip(timeline, "Two intervals on the grid: each step is the input's level — dim when dry, full where the slice is captured, dimmer with every repeat as it decays. Ticks at the top mark where the interval fires.");
+            var slice = Mono("", 7, TextSecondary);
             readouts.Add(() => slice.Text = "slice " + MsF(SliceMs(GridBeats())));
             var head = HeadRow(Row(6, ModeSeg(), new Border { Width = 2 }, Caps("INTERVAL"),
                 Drop(Interval, IntervalName, () => Sel(Interval, 6), i => SetP(Interval, i / 5f), "Interval — how often it rolls Chance"),
@@ -429,14 +429,14 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         {
             filter = new BrFilterView();
             WireDrag(filter, h => h == BrFilterView.HFreq ? FilterFreq : FilterWidth);
-            ToolTip.SetTip(filter, "The repeat filter — only the repeats go through it. Brass: the first repeat; teal dashed: a later one when the band narrows and follows the pitch. Drag the node for the frequency, a band edge for the width; double-click resets.");
+            ToolTip.SetTip(filter, "The repeat filter — only the repeats go through it. Solid: the first repeat; teal dashed: a later one when the band narrows and follows the pitch. Drag the node for the frequency, a band edge for the width; double-click resets.");
             Learn(filter, FilterFreq);
             var type = Seg(FilterNames, () => On(FilterOn) ? FType() + 1 : 0,
                 i => { if (i == 0) SetP(FilterOn, 0f); else { SetP(FilterType, (i - 1) / 2f); if (!On(FilterOn)) SetP(FilterOn, 1f); } },
                 FilterType, "Filter — Off, or a low-pass, band-pass or high-pass on the repeats");
             var narrow = Latch(FilterNarrow, () => On(FilterNarrow), () => SetP(FilterNarrow, On(FilterNarrow) ? 0f : 1f), () => "Narrow with repeats",
                 "Narrow with repeats — each repeat narrows the band and moves it with the pitch");
-            var drop = Mono("", 7, AccentBright);
+            var drop = Mono("", 7, TextSecondary);
             readouts.Add(() => drop.Text = PDecaySt() > 0.01 ? NotaNum.F($"{StF(PitchSt())} → {StF(LaterPitch())} by repeat {LaterRepeat()}") : "pitch " + StF(PitchSt()));
             var head = HeadRow(Row(6, Caps("FILTER"), type, narrow), drop);
             var knobs = KnobRow(new[]
@@ -540,7 +540,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
                     Caps("MEASUREMENTS"),
                     Line("in", () => DbF(Sc(S_InDb))),
                     Line("repeat", () => DbF(Sc(S_RepDb))),
-                    Line("out", () => DbF(Sc(S_OutDb)), AccentBright) } },
+                    Line("out", () => DbF(Sc(S_OutDb)), TextPrimary) } },
             };
             var sliders = new StackPanel { Spacing = 6, Children = {
                 SliderRow("VOLUME", Volume, VolF, bipolar: true, modulation: true),
@@ -580,9 +580,9 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
 
         var centre = TabFrame(new[] { "Timeline", "Slices", "Filter" }, centreHost, CentreBody, false, t => { centreTab = t; Refresh(); }, extras);
         var rightFrame = TabFrame(new[] { "Character", "Output" }, rightHost, RightBody, true, _ => RefreshAll(), null);
-        var right = new Border { Width = 186, Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, ClipToBounds = true, Child = rightFrame };
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = new Border { Background = Card2, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Margin = new Thickness(5, 0), ClipToBounds = true, Child = centre };
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
         // ======================================================================
         // Status strip
@@ -634,7 +634,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
 
         // ---- assemble ---------------------------------------------------------------
         var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { leftCol, right, centreBox } };
-        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceInset, Children = { status, bodyRow } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -675,7 +675,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
                     btns[i].Background = on ? Card2 : Brushes.Transparent;
                     btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
                     var tb = (TextBlock)btns[i].Child!;
-                    tb.Foreground = on ? AccentBright : TextTertiary;
+                    tb.Foreground = on ? TextPrimary : TextTertiary;
                     tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             }

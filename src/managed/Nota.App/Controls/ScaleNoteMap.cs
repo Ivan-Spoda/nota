@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Nota Scale NOTE MAP (almanac mockups 1a / 1b): the twelve pitch classes C → B as a row of
+// Nota Scale note map (almanac mockups 1a / 1b): the twelve pitch classes C → B as a row of
 // key-shaped cells — the black keys shorter and hung from the top, the white ones standing on
-// the bottom. Scale notes are filled Brass Deep with a brass edge, the root gets a Brass Light
-// edge and "root", every other note names where Fold sends it ("→ D"). Clicking a cell toggles
+// the bottom. Scale notes (chosen — the cells are toggles) are filled with an accent wash and an accent
+// edge, the root gets a bright accent edge and "root", every other note names where Fold sends it ("→ D"). Clicking a cell toggles
 // it (the owner switches the scale to Custom). The note sounding now lights up: its input cell
-// brightens under a Brass Light ring, the cell it folded onto gets a fainter ring — and both
+// brightens under a bright accent ring, the cell it folded onto gets a fainter ring — and both
 // fade out over a few frames after the key is released (the owner feeds Hit / Held each tick).
 
 using System;
@@ -147,7 +147,7 @@ internal sealed class ScaleNoteMap : Control
         var card = NotaPalette.SurfaceCard.Color;
         var brass = NotaPalette.Accent.Color;
         var lit = NotaPalette.AccentBright.Color;
-        var deep = Over(brass, 0x1A, card);          // Brass Deep fill (#2A2317 in Graphite)
+        var deep = Over(brass, 0x1A, card);          // accent wash: a chosen scale note
         var deepLive = Over(brass, 0x44, card);      // …while it sounds (#4A3A1C)
         Color offWhite = NotaPalette.GridRow.Color, offBlack = NotaPalette.BgSunken.Color, offLive = NotaPalette.TrackOff.Color;
         double r = Mini ? 2 : 3;

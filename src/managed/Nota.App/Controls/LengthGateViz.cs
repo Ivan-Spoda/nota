@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Nota Length GATE window (almanac mockups 1a / 1b): one bar of five demo notes of different
+// Nota Length gate window (almanac mockups 1a / 1b): one bar of five demo notes of different
 // pitch and velocity, and what the device does to each. Per row: the input note as an
-// outline, the output note as a brass fill, and a dark band behind it — the range Random
+// outline, the output note as a neutral fill, and a dim band behind it — the range Random
 // spreads that note's length over. The window runs 1¼ bars; the part after the bar line is
 // shaded (Clip length limit cuts there). A playhead sweeps the bar; the note under it lights
-// Brass Light, and Random re-rolls each pass. The full view adds note labels, the output
+// in accent, and Random re-rolls each pass. The full view adds note labels, the output
 // length tags and a ms ruler; the mini view is the window alone.
 //
 // The model mirrors MidiNoteLength::len/schedule so the picture is what the device plays.
@@ -27,8 +27,8 @@ internal sealed class LengthGateViz : Control
     private static readonly IBrush BeatLine = NotaPalette.GraphBorder;
     private static readonly IBrush HalfLine = NotaPalette.SurfaceCard;
     private static readonly IBrush PastBar = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0xA0);   // like the piano roll past the clip end
-    private static readonly IBrush Band = NotaPalette.Ink("#2A2317");
-    private static readonly IBrush Fill = NotaPalette.Ink("#B8862E");
+    private static readonly IBrush Band = NotaPalette.Wash(NotaPalette.VizInk, 0x20);
+    private static readonly IBrush Fill = NotaPalette.Wash(NotaPalette.VizInk, 0xB0);
     private static readonly IBrush FillLit = NotaPalette.AccentBright;
     private static readonly IBrush FillOff = NotaPalette.BorderStrong;
     private static readonly IBrush Outline = NotaPalette.TextMuted;

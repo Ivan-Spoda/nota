@@ -24,8 +24,8 @@
             <NativeMenuItem Header="New" app:Commands.Id="file.new"/>
             <NativeMenuItem Header="Open…" app:Commands.Id="file.open"/>
             <NativeMenuItem Header="Save" app:Commands.Id="file.save"/>
-            <NativeMenuItem Header="Save As…" app:Commands.Id="file.saveAs"/>
-            <NativeMenuItem Header="Save Version with Note…" app:Commands.Id="file.saveVersion"/>
+            <NativeMenuItem Header="Save as…" app:Commands.Id="file.saveAs"/>
+            <NativeMenuItem Header="Save version with note…" app:Commands.Id="file.saveVersion"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Import audio…" app:Commands.Id="file.import"/>
             <NativeMenuItem Header="Export audio…" app:Commands.Id="file.export"/>
@@ -47,23 +47,23 @@
             <NativeMenuItem Header="Duplicate time" app:Commands.Id="edit.duplicateTime"/>
             <NativeMenuItem Header="Insert silence" app:Commands.Id="edit.insertSilence"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Lock Envelopes" app:Commands.Id="edit.lockEnvelopes" ToggleType="CheckBox"/>
+            <NativeMenuItem Header="Lock envelopes" app:Commands.Id="edit.lockEnvelopes" ToggleType="CheckBox"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Cut" app:Commands.Id="edit.cut"/>
             <NativeMenuItem Header="Copy" app:Commands.Id="edit.copy"/>
             <NativeMenuItem Header="Paste" app:Commands.Id="edit.paste"/>
-            <NativeMenuItem Header="Paste Bounced Audio" app:Commands.Id="edit.pasteBounced"/>
-            <NativeMenuItem Header="Copy Clips to Session / Arrangement" app:Commands.Id="edit.copyToOtherView"/>
+            <NativeMenuItem Header="Paste bounced audio" app:Commands.Id="edit.pasteBounced"/>
+            <NativeMenuItem Header="Copy clips to Session / Arrangement" app:Commands.Id="edit.copyToOtherView"/>
             <NativeMenuItem Header="Delete" app:Commands.Id="edit.delete"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Grid">
               <NativeMenuItem.Menu>
                 <NativeMenu>
-                  <NativeMenuItem Header="Narrow Grid" app:Commands.Id="grid.narrower"/>
-                  <NativeMenuItem Header="Widen Grid" app:Commands.Id="grid.wider"/>
-                  <NativeMenuItem Header="Triplet Grid" app:Commands.Id="grid.triplets"/>
-                  <NativeMenuItem Header="Snap to Grid" app:Commands.Id="grid.snap"/>
-                  <NativeMenuItem Header="Adaptive Grid" app:Commands.Id="grid.adaptive"/>
+                  <NativeMenuItem Header="Narrow grid" app:Commands.Id="grid.narrower"/>
+                  <NativeMenuItem Header="Widen grid" app:Commands.Id="grid.wider"/>
+                  <NativeMenuItem Header="Triplet grid" app:Commands.Id="grid.triplets"/>
+                  <NativeMenuItem Header="Snap to grid" app:Commands.Id="grid.snap"/>
+                  <NativeMenuItem Header="Adaptive grid" app:Commands.Id="grid.adaptive"/>
                 </NativeMenu>
               </NativeMenuItem.Menu>
             </NativeMenuItem>
@@ -73,16 +73,16 @@
       <NativeMenuItem Header="View">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="Command Palette…" app:Commands.Id="view.palette"/>
+            <NativeMenuItem Header="Command palette…" app:Commands.Id="view.palette"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Mixer" app:Commands.Id="view.mixer"/>
-            <NativeMenuItem Header="Connect Phone…" app:Commands.Id="view.connectPhone"/>
+            <NativeMenuItem Header="Connect phone…" app:Commands.Id="view.connectPhone"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Toggle browser" app:Commands.Id="view.toggleBrowser"/>
             <NativeMenuItem Header="Toggle detail panel" app:Commands.Id="view.toggleDetail"/>
             <NativeMenuItem Header="Toggle overview" app:Commands.Id="view.toggleOverview"/>
             <NativeMenuItem Header="Toggle sections" app:Commands.Id="view.toggleSections"/>
-            <NativeMenuItem Header="Toggle Full Screen" app:Commands.Id="view.fullscreen"/>
+            <NativeMenuItem Header="Toggle full screen" app:Commands.Id="view.fullscreen"/>
             <NativeMenuItemSeparator/>
             <!-- Header text is matched from code to keep this checkmark in step with the
                  transport bar's Follow button — see MainWindow.SetFollowPlayhead. -->
@@ -95,7 +95,7 @@
       <NativeMenuItem Header="Transport">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="Play / Stop" app:Commands.Id="transport.playStop"/>
+            <NativeMenuItem Header="Play / stop" app:Commands.Id="transport.playStop"/>
             <NativeMenuItem Header="Record" app:Commands.Id="transport.record"/>
             <NativeMenuItem Header="Loop" app:Commands.Id="transport.loop"/>
             <NativeMenuItem Header="Metronome" app:Commands.Id="transport.metronome"/>
@@ -106,7 +106,7 @@
         <NativeMenuItem.Menu>
           <NativeMenu>
             <NativeMenuItem Header="Documentation" app:Commands.Id="help.docs"/>
-            <NativeMenuItem Header="What's New" app:Commands.Id="help.whatsNew"/>
+            <NativeMenuItem Header="What's new" app:Commands.Id="help.whatsNew"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="About Nota" app:Commands.Id="help.about"/>
           </NativeMenu>
@@ -116,12 +116,12 @@
   </NativeMenu.Menu>
 
   <Panel>
-  <DockPanel Background="{DynamicResource Brush.Gutter}">
-    <!-- Header (36) — custom frameless: macOS traffic lights sit in the left inset;
-         the project name is centred on the window. Draggable.
+  <DockPanel Background="{DynamicResource Brush.Seam}">
+    <!-- Header (32) on the ground, a seam under it — custom frameless: macOS traffic lights
+         sit in the left inset; the project name is centred on the window. Draggable.
          (Transport sits right under it, at the top of the window.) -->
-    <Border x:Name="TitleBar" DockPanel.Dock="Top" Height="36"
-            Background="{DynamicResource Brush.ChromeBg}"
+    <Border x:Name="TitleBar" DockPanel.Dock="Top" Height="32"
+            Background="{DynamicResource Brush.BgApp}"
             BorderBrush="{DynamicResource Brush.BorderDefault}" BorderThickness="0,0,0,1"
             PointerPressed="OnTitleBarPressed">
       <Grid x:Name="TitleBarRow" ColumnDefinitions="78,*,Auto" Margin="0,0,12,0">
@@ -132,41 +132,54 @@
       </Grid>
     </Border>
 
-    <!-- In-window menu bar for Windows/Linux (empty on macOS: menus go to the system bar) -->
-    <NativeMenuBar DockPanel.Dock="Top"/>
+    <!-- In-window menu bar for Windows/Linux (empty on macOS: menus go to the system bar):
+         a menubar-style row — the ground, with a seam under it. -->
+    <Border DockPanel.Dock="Top" Background="{DynamicResource Brush.BgApp}">
+      <NativeMenuBar/>
+    </Border>
 
-    <!-- Transport (60) under the header, above the work area — an island on the gutter like
-         the browser and the arrangement. Stop / play / record, position and loop share one
-         42px recess on Void inside it, so playback reads as one object rather than a row of
-         buttons. Reads left to right as: which view · what plays · the numbers you set ·
+    <!-- Transport (44) under the header, above the work area — a flat docked row on the
+         panel tone with a seam under it. Stop / play / record, position and loop share one
+         30px recessed group inside it, so playback reads as one object rather than a row of
+         keys. Reads left to right as: which view · what plays · the numbers you set ·
          the switches you flip · then, pinned right, what the machine is doing. Launch
          quantize shows only in Session, where it applies. The view switch leads the row.
          When the window is too narrow the row sheds its least-needed parts first —
          see MainWindow.TransportFit.cs for the order. -->
-    <Border x:Name="TransportBar" DockPanel.Dock="Top" Classes="transport" Height="{StaticResource Control.TransportBar}"
-            Margin="12,12,12,0">
+    <Border x:Name="TransportBar" DockPanel.Dock="Top" Classes="transport" Height="{StaticResource Control.TransportBar}">
       <Grid x:Name="TransportGrid" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
         <!-- Project name, then the view switch -->
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" Margin="2,0,14,0" VerticalAlignment="Center">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Margin="2,0,10,0" VerticalAlignment="Center">
           <TextBlock x:Name="ProjectNameText" Text="Untitled" FontSize="13" FontWeight="SemiBold"
                      MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                      Foreground="{DynamicResource Brush.TextPrimary}"/>
           <Border Classes="segmented" VerticalAlignment="Center">
-            <StackPanel Orientation="Horizontal" Spacing="2">
-              <ToggleButton x:Name="ArrangeBtn" Classes="seg" Content="Arrangement" IsChecked="True" Click="OnShowArrangement"/>
-              <ToggleButton x:Name="SessionBtn" Classes="seg" Content="Session" Click="OnShowSession"/>
-              <ToggleButton x:Name="ModularBtn" Classes="seg" Content="Modular" Click="OnShowModular"/>
+            <StackPanel Orientation="Horizontal" Spacing="1">
+              <!-- The views as icon keys (spec 012): the tooltip and the accessible name carry
+                   the view name. View → Arrangement / Session / Modular do the same. -->
+              <ToggleButton x:Name="ArrangeBtn" Classes="seg view" IsChecked="True" Click="OnShowArrangement"
+                            ToolTip.Tip="Arrangement" AutomationProperties.Name="Arrangement">
+                <app:Glyph Kind="Arrangement" Size="16"/>
+              </ToggleButton>
+              <ToggleButton x:Name="SessionBtn" Classes="seg view" Click="OnShowSession"
+                            ToolTip.Tip="Session" AutomationProperties.Name="Session">
+                <app:Glyph Kind="Session" Size="16"/>
+              </ToggleButton>
+              <ToggleButton x:Name="ModularBtn" Classes="seg view" Click="OnShowModular"
+                            ToolTip.Tip="Modular" AutomationProperties.Name="Modular">
+                <app:Glyph Kind="Modular" Size="16"/>
+              </ToggleButton>
             </StackPanel>
           </Border>
         </StackPanel>
 
         <!-- The console: transport · position · loop in one recess -->
         <Border Grid.Column="1" Classes="console">
-          <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-              <!-- Shapes built from geometry (almanac): stop a 10px square r1, play an 11×14
-                   triangle, record an 11px disc. No glyph font. -->
+          <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+              <!-- Shapes built from geometry: stop a square, play a filled triangle, record a
+                   filled disc. No glyph font. Keys butt against each other on 1px seams. -->
               <Button x:Name="StopBtn" Classes="tp-icon" ToolTip.Tip="Stop"
                       Foreground="{DynamicResource Brush.TextStrong}" Command="{Binding Transport.StopCommand}">
                 <app:Glyph x:Name="StopGlyph" Kind="Stop" Width="9" Height="9"/>
@@ -181,24 +194,24 @@
               </ToggleButton>
             </StackPanel>
 
-            <Border Width="1" Height="24" Background="{DynamicResource Brush.Hairline}"/>
+            <Border Width="1" Height="18" Background="{DynamicResource Brush.Rule}"/>
 
-            <!-- Position — click to flip bars.beats ↔ minutes:seconds; the unit below says which -->
-            <StackPanel Spacing="1" VerticalAlignment="Center" Cursor="Hand" Background="Transparent"
+            <!-- Position — click to flip bars.beats ↔ minutes:seconds; the unit beside says which -->
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Cursor="Hand" Background="Transparent"
                         PointerPressed="OnTogglePositionDisplay"
                         ToolTip.Tip="Switch between bars and time">
-              <TextBlock Classes="Readout" Text="{Binding Transport.PositionText}" FontSize="19" LineHeight="20"
-                         MinWidth="96" Foreground="{DynamicResource Brush.TextPrimary}"/>
-              <TextBlock Classes="CellLabel" Text="{Binding Transport.PositionUnitText}"/>
+              <TextBlock Classes="Readout" Text="{Binding Transport.PositionText}" FontSize="14" LetterSpacing="0.28"
+                         MinWidth="72" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
+              <TextBlock Classes="CellLabel" Text="{Binding Transport.PositionUnitText}" VerticalAlignment="Center"/>
             </StackPanel>
 
-            <Border x:Name="LoopSep" Width="1" Height="24" Background="{DynamicResource Brush.Hairline}"/>
+            <Border x:Name="LoopSep" Width="1" Height="18" Background="{DynamicResource Brush.Rule}"/>
 
-            <!-- Loop: the range is the button -->
-            <ToggleButton x:Name="LoopCell" Classes="cell" IsChecked="{Binding Transport.LoopOn}" ToolTip.Tip="Loop the range set on the ruler">
-              <StackPanel Spacing="2">
-                <TextBlock Classes="CellLabel" Text="LOOP" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
-                <TextBlock Classes="Mono" FontSize="11" LineHeight="12" MinWidth="58"
+            <!-- Loop: the range is the key -->
+            <ToggleButton x:Name="LoopCell" Classes="cell" Height="22" IsChecked="{Binding Transport.LoopOn}" ToolTip.Tip="Loop the range set on the ruler">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Classes="CellLabel" Text="Loop" VerticalAlignment="Center" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
+                <TextBlock Classes="Mono" FontSize="11" MinWidth="58" VerticalAlignment="Center"
                            Text="{Binding Transport.LoopRangeText}"
                            Foreground="{Binding $parent[ToggleButton].Foreground}"/>
               </StackPanel>
@@ -206,75 +219,68 @@
           </StackPanel>
         </Border>
 
-        <!-- Readouts: value over label, one shape for all of them -->
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="14,0,0,0">
+        <!-- Readouts: one 26px well each, a mono value and its muted unit on one line -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="10,0,0,0">
           <!-- Tempo (drag ↕ or double-click to type) -->
-          <StackPanel Spacing="2" VerticalAlignment="Center" Margin="7,0" ToolTip.Tip="Set the tempo — drag, or double-click to type">
-            <Panel x:Name="BpmHost" Width="52" Height="18"/>
-            <TextBlock Classes="CellLabel" Text="BPM" HorizontalAlignment="Center"/>
-          </StackPanel>
+          <Border Classes="well" ToolTip.Tip="Set the tempo — drag, or double-click to type">
+            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+              <Panel x:Name="BpmHost" Width="52" Height="18" VerticalAlignment="Center"/>
+              <TextBlock Classes="CellLabel" Text="BPM" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Border>
           <!-- Tap tempo: fires on press (a release lags the beat). The dots count the beats
                of the current series, brass as each one lands; they clear when it times out. -->
           <Button x:Name="TapChip" Classes="cell" ClickMode="Press" Click="OnTapTempo"
                   ToolTip.Tip="Tap the beat to set the tempo">
-            <StackPanel Spacing="2">
-              <StackPanel x:Name="TapDots" Orientation="Horizontal" Spacing="3" Height="16"
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <StackPanel x:Name="TapDots" Orientation="Horizontal" Spacing="3"
                           HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Ellipse Width="4" Height="4" Fill="{DynamicResource Brush.BorderStrong}"/>
                 <Ellipse Width="4" Height="4" Fill="{DynamicResource Brush.BorderStrong}"/>
                 <Ellipse Width="4" Height="4" Fill="{DynamicResource Brush.BorderStrong}"/>
                 <Ellipse Width="4" Height="4" Fill="{DynamicResource Brush.BorderStrong}"/>
               </StackPanel>
-              <TextBlock Classes="CellLabel" Text="TAP" HorizontalAlignment="Center"/>
+              <TextBlock Classes="CellLabel" Text="Tap" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
           <!-- Time signature (drag ↕ each field) -->
-          <StackPanel x:Name="TimeSigCell" Spacing="2" VerticalAlignment="Center" Margin="7,0" ToolTip.Tip="Set the time signature — drag each field">
-            <StackPanel Orientation="Horizontal" Spacing="1" Height="18">
+          <Border x:Name="TimeSigCell" Classes="well" ToolTip.Tip="Set the time signature — drag each field">
+            <StackPanel Orientation="Horizontal" Spacing="1" Height="18" VerticalAlignment="Center">
               <Panel x:Name="TimeSigNumHost" Width="16"/>
-              <TextBlock Classes="Mono" Text="/" FontSize="14" VerticalAlignment="Center"
-                         Foreground="{DynamicResource Brush.TextTertiary}"/>
+              <TextBlock Classes="Mono" Text="/" FontSize="13" VerticalAlignment="Center"
+                         Foreground="{DynamicResource Brush.TextMuted}"/>
               <Panel x:Name="TimeSigDenHost" Width="16"/>
             </StackPanel>
-            <TextBlock Classes="CellLabel" Text="SIG" HorizontalAlignment="Center"/>
-          </StackPanel>
+          </Border>
           <!-- Project key: loops dropped in can be transposed to it -->
           <Button x:Name="KeyChip" Classes="cell" Click="OnPickProjectKey" ToolTip.Tip="Set the project key — samples can be transposed to it">
-            <StackPanel Spacing="2">
-              <TextBlock x:Name="KeyLabel" Classes="Mono" Text="—" FontSize="14" LineHeight="16"
-                         MinWidth="30" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextTertiary}"/>
-              <TextBlock Classes="CellLabel" Text="KEY" HorizontalAlignment="Center"/>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock x:Name="KeyLabel" Classes="Mono" Text="—" FontSize="13"
+                         MinWidth="30" TextAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextMuted}"/>
+              <TextBlock Classes="CellLabel" Text="Key" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
           <!-- Clip snap grid (SnapChip.cs): the step in effect, live with the zoom in Auto;
                click for the grid menu. SnapChip sizes the value to its widest label. -->
           <Button x:Name="SnapChip" Classes="cell">
-            <StackPanel Spacing="2">
-              <TextBlock x:Name="SnapLabel" Classes="Mono" Text="1/4" FontSize="14" LineHeight="16"
-                         MinWidth="36" TextAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
-              <TextBlock x:Name="SnapCaption" Classes="CellLabel" Text="GRID" HorizontalAlignment="Center"/>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock x:Name="SnapLabel" Classes="Mono" Text="1/4" FontSize="13"
+                         MinWidth="36" TextAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
+              <TextBlock x:Name="SnapCaption" Classes="CellLabel" Text="Grid" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
         </StackPanel>
 
         <!-- Switches. Each draws the thing it does, so the row carries no prose: a
              metronome, a magnet, a breakpoint envelope. None sets Foreground, so the
-             engaged state turns the glyph brass through the base ToggleButton:checked. -->
-        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="14,0,0,0">
+             engaged state fills the key with the accent and the glyph takes the derived ink
+             through the base ToggleButton:checked. -->
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="10,0,0,0">
           <!-- Metronome: body, pendulum rod, weight -->
           <ToggleButton x:Name="MetronomeBtn" Classes="tp-icon" IsChecked="{Binding Transport.MetronomeOn}"
                         ContextRequested="OnMetronomeContext"
                         ToolTip.Tip="Turn the metronome on or off (M) · right-click for count-in">
-            <Viewbox Width="15" Height="15">
-              <Canvas Width="24" Height="24">
-                <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.7"
-                      StrokeJoin="Round" Data="M9.8 5.5 H14.2 L19 20 H5 Z"/>
-                <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.7"
-                      StrokeLineCap="Round" Data="M12 19 L13.9 3.2"/>
-                <Ellipse Canvas.Left="11.33" Canvas.Top="9.4" Width="3.2" Height="3.2"
-                         Fill="{Binding $parent[ToggleButton].Foreground}"/>
-              </Canvas>
-            </Viewbox>
+            <app:Glyph Kind="Metronome" Size="15"/>
           </ToggleButton>
           <!-- Follow playhead: keep the arrangement scrolling with the cursor. The
                playhead marker standing on its ruler. A flag (block + point) rather than a
@@ -283,50 +289,23 @@
                which shares one code path. -->
           <ToggleButton x:Name="FollowBtn" Classes="tp-icon" Click="OnToggleFollow"
                         ToolTip.Tip="Scroll the arrangement to keep the playhead in view">
-            <Viewbox Width="15" Height="15">
-              <Canvas Width="24" Height="24">
-                <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.7"
-                      StrokeLineCap="Round" Data="M3.5 17.8 H20.5"/>
-                <Path Fill="{Binding $parent[ToggleButton].Foreground}" Data="M6.5 5 H12.5 V9 L9.5 12.5 L6.5 9 Z"/>
-                <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.7"
-                      StrokeLineCap="Round" Data="M9.5 12.5 V17.8"/>
-              </Canvas>
-            </Viewbox>
+            <app:Glyph Kind="Follow" Size="15"/>
           </ToggleButton>
           <!-- Snapping on/off, independent of which grid the GRID cell shows. Off is the
                same as holding Alt, but latched. A horseshoe magnet: the poles are banded
                off the body by a transparent gap, so the shape reads on any button state. -->
           <ToggleButton x:Name="SnapToggle" Classes="tp-icon" IsChecked="True" Click="OnToggleSnapEnabled"
                         ToolTip.Tip="Snap clips to the grid (hold Alt to drag freely)">
-            <Viewbox Width="15" Height="15">
-              <Canvas Width="24" Height="24">
-                <Path Fill="{Binding $parent[ToggleButton].Foreground}"
-                      Data="M4 17 V12.5 A8 8 0 0 1 20 12.5 V17 H15.5 V12.5 A3.5 3.5 0 0 0 8.5 12.5 V17 Z"/>
-                <Rectangle Canvas.Left="4" Canvas.Top="19" Width="4.5" Height="2.5"
-                           Fill="{Binding $parent[ToggleButton].Foreground}"/>
-                <Rectangle Canvas.Left="15.5" Canvas.Top="19" Width="4.5" Height="2.5"
-                           Fill="{Binding $parent[ToggleButton].Foreground}"/>
-              </Canvas>
-            </Viewbox>
+            <app:Glyph Kind="Snap" Size="15"/>
           </ToggleButton>
           <!-- Automation: a breakpoint envelope — the ramp and handles the lanes draw -->
           <ToggleButton x:Name="AutomationToggle" Classes="tp-icon" Click="OnToggleAutomation">
-            <Viewbox Width="15" Height="15">
-              <Canvas Width="24" Height="24">
-                <Path Stroke="{Binding $parent[ToggleButton].Foreground}" StrokeThickness="1.8"
-                      StrokeLineCap="Round" StrokeJoin="Round" Data="M3 17.5 H9 L14.5 7.5 H21"/>
-                <Ellipse Canvas.Left="7.1" Canvas.Top="15.6" Width="3.8" Height="3.8"
-                         Fill="{Binding $parent[ToggleButton].Foreground}"/>
-                <Ellipse Canvas.Left="12.6" Canvas.Top="5.6" Width="3.8" Height="3.8"
-                         Fill="{Binding $parent[ToggleButton].Foreground}"/>
-              </Canvas>
-            </Viewbox>
+            <app:Glyph Kind="Automation" Size="15"/>
           </ToggleButton>
           <!-- Shown only while a hand-moved control has taken a lane over from
                playback (M9-C); one click hands every overridden lane back. -->
           <Button x:Name="ReenableAutoBtn" Classes="chip" Content="Re-enable"
                   IsVisible="False" Click="OnReenableAutomation"
-                  Foreground="{DynamicResource Brush.AccentBright}"
                   ToolTip.Tip="Hand overridden controls back to their automation"/>
         </StackPanel>
 
@@ -334,7 +313,7 @@
         <!-- <Button Grid.Column="5" Classes="chip" Margin="12,0,0,0" ToolTip.Tip="Add a track"> -->
         <!--   <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center"> -->
         <!--     <TextBlock Text="+ Track" VerticalAlignment="Center"/> -->
-        <!--     <Path Data="M0,0 L3.5,4 L7,0 Z" Fill="{DynamicResource Brush.TextTertiary}" VerticalAlignment="Center"/> -->
+        <!--     <app:Glyph Kind="CaretDown" Size="9" Foreground="{DynamicResource Brush.TextTertiary}"/> -->
         <!--   </StackPanel> -->
         <!--   <Button.Flyout> -->
         <!--     <MenuFlyout Placement="BottomEdgeAlignedLeft"> -->
@@ -362,7 +341,7 @@
           <Button x:Name="RemoteBtn" Classes="chip" Click="OnRemoteClick"
                   ToolTip.Tip="Play and control Nota from a phone">
             <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
-              <Border x:Name="RemoteGlyph" Width="8" Height="12" CornerRadius="2" BorderThickness="1.5"
+              <Border x:Name="RemoteGlyph" Width="8" Height="12" CornerRadius="{StaticResource Radius.Clip}" BorderThickness="1.5"
                       BorderBrush="{Binding $parent[Button].Foreground}" VerticalAlignment="Center"/>
               <TextBlock x:Name="RemoteLabel" Text="Remote" VerticalAlignment="Center"
                          Foreground="{Binding $parent[Button].Foreground}"/>
@@ -374,38 +353,39 @@
           </Button>
         </StackPanel>
 
-        <Border x:Name="CpuSep" Grid.Column="7" Width="1" Height="26" Margin="14,0"
-                Background="{DynamicResource Brush.Hairline}"/>
+        <Border x:Name="CpuSep" Grid.Column="7" Width="1" Height="18" Margin="10,0"
+                Background="{DynamicResource Brush.Rule}"/>
 
         <!-- CPU: live DSP load -->
         <StackPanel x:Name="CpuMeter" Grid.Column="8" Spacing="3" VerticalAlignment="Center">
-          <Border Width="52" Height="4" Background="{DynamicResource Brush.SurfaceAbyss}"
-                  CornerRadius="2" ClipToBounds="True">
-            <Border x:Name="CpuFill" Width="0" HorizontalAlignment="Left" CornerRadius="2"
+          <Border Width="52" Height="4" Background="{DynamicResource Brush.BgSunken}"
+                  CornerRadius="{StaticResource Radius.Clip}" ClipToBounds="True">
+            <Border x:Name="CpuFill" Width="0" HorizontalAlignment="Left" CornerRadius="{StaticResource Radius.Clip}"
                     Background="{DynamicResource Brush.Success}"/>
           </Border>
           <TextBlock x:Name="CpuText" Classes="Mono CellLabel" Text="CPU 0%" FontWeight="Normal"/>
         </StackPanel>
 
         <!-- Master: fader over its meter, with the gain in dB -->
-        <Border x:Name="MasterWell" Grid.Column="9" Classes="tp-well" Margin="14,0,0,0">
-          <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
-            <TextBlock Classes="CellLabel" Text="MST" VerticalAlignment="Center"/>
+        <Border x:Name="MasterWell" Grid.Column="9" Classes="tp-well" Margin="10,0,0,0">
+          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <TextBlock Classes="CellLabel" Text="Master" VerticalAlignment="Center"/>
             <StackPanel Spacing="3" VerticalAlignment="Center">
-              <Panel x:Name="MasterVolHost" Width="88" Height="12"/>
-              <Panel x:Name="MasterMeterHost" Width="88" Height="5"/>
+              <Panel x:Name="MasterVolHost" Width="88" Height="10"/>
+              <Panel x:Name="MasterMeterHost" Width="88" Height="4"/>
             </StackPanel>
-            <TextBlock Classes="Mono" FontSize="10" MinWidth="46" TextAlignment="Right"
+            <TextBlock Classes="Mono" FontSize="11" MinWidth="46" TextAlignment="Right"
                        VerticalAlignment="Center" Text="{Binding Transport.MasterDbText}"
-                       Foreground="{DynamicResource Brush.TextSecondary}"/>
+                       Foreground="{DynamicResource Brush.TextPrimary}"/>
           </StackPanel>
         </Border>
       </Grid>
     </Border>
 
-    <!-- Status bar (22): plain text on the gutter under the islands — no bar, no rule. -->
-    <Border DockPanel.Dock="Bottom" Background="Transparent"
-            Height="22" Padding="16,0,16,4">
+    <!-- Status line (22): caption text on the ground, a seam above it. -->
+    <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.BgApp}"
+            BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,1,0,0"
+            Height="22" Padding="16,0">
       <Grid ColumnDefinitions="*,Auto,Auto,Auto">
         <TextBlock Classes="Caption" VerticalAlignment="Center" Text="{Binding StatusText}"/>
         <!-- Settings → Downloads job (MainWindow.Downloads.cs): it keeps running after Settings closes. -->
@@ -420,7 +400,7 @@
                        Value="{Binding BackgroundProgress}"
                        IsIndeterminate="{Binding BackgroundIndeterminate}"
                        Foreground="{DynamicResource Brush.Accent}"
-                       Background="{DynamicResource Brush.BorderDefault}"/>
+                       Background="{DynamicResource Brush.BgSunken}"/>
         </StackPanel>
         <TextBlock Grid.Column="3" Classes="Caption Mono"
                    VerticalAlignment="Center" Text="{Binding EngineInfo}"/>
@@ -430,52 +410,53 @@
 
     <!-- Main area (fills) over a resizable bottom Detail panel, split by a
          draggable horizontal GridSplitter. -->
-    <Grid x:Name="BodyGrid" Background="{DynamicResource Brush.Gutter}">
+    <Grid x:Name="BodyGrid" Background="{DynamicResource Brush.Seam}">
       <Grid.RowDefinitions>
         <RowDefinition Height="*" MinHeight="120"/>
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="0"/>
       </Grid.RowDefinitions>
 
-      <!-- Left browser + main area (fills). Browser and arrangement are both islands:
-           they float on the app ground with an even 12px gutter, so the splitter between them
-           carries no line and takes no space of its own — it is a transparent grab strip laid
-           over that gutter (negative margin; MinWidth=0 overrides the theme's 6px floor). -->
+      <!-- Left browser + main area (fills). Both are docked panels that meet on a 1px seam
+           (the grid's seam-coloured ground showing through a 1px margin). The splitter takes
+           no space of its own — it is a transparent 6px grab strip laid over the seam
+           (negative margins; MinWidth=0 overrides the theme's 6px floor). -->
       <Grid x:Name="BrowserGrid" Grid.Row="0">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="344" MinWidth="160" MaxWidth="480"/>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
-        <app:BrowserView x:Name="Browser" Grid.Column="0" Margin="12,12,12,12"/>
-        <GridSplitter x:Name="BrowserSplitter" Grid.Column="1" Width="12" MinWidth="0" Margin="-12,0,0,0"
+        <app:BrowserView x:Name="Browser" Grid.Column="0" Margin="0,0,1,0"/>
+        <GridSplitter x:Name="BrowserSplitter" Grid.Column="1" Width="6" MinWidth="0" Margin="-4,0,-2,0"
                       Background="Transparent" ResizeDirection="Columns"/>
         <Panel x:Name="MainContent" Grid.Column="2">
-          <app:ArrangementView x:Name="Timeline" Margin="0,12,12,12"/>
+          <app:ArrangementView x:Name="Timeline"/>
         </Panel>
       </Grid>
 
       <!-- Drag handle to resize the Detail panel (only shown when it is open). Like the
-           browser splitter it lies over the arrangement's 12px bottom gutter instead of
-           adding its own height. -->
+           browser splitter it is a 6px strip laid over the seam instead of adding height. -->
       <GridSplitter x:Name="DetailSplitter"
                     Grid.Row="1"
-                    Height="12" MinHeight="0" Margin="0,-12,0,0"
+                    Height="6" MinHeight="0" Margin="0,-3,0,-3"
                     IsVisible="False"
                     HorizontalAlignment="Stretch" ResizeDirection="Rows"
                     Background="Transparent"/>
 
       <!-- Detail panel: Devices chain / Clip (piano roll) / Mixer for the selected track.
-           An island like the browser and the arrangement: it floats on the gutter with the
-           same even margin and rounded edge, so the window reads as three panels. -->
-      <Border x:Name="DetailPanel" Grid.Row="2" Margin="12,0,12,12" IsVisible="False" ClipToBounds="True"
-              Background="{DynamicResource Brush.Panel}" BorderBrush="{DynamicResource Brush.BorderDefault}"
-              BorderThickness="1" CornerRadius="{StaticResource Radius.Panel}">
+           Docked under the canvas on a seam, like the browser beside it. -->
+      <Border x:Name="DetailPanel" Grid.Row="2" Margin="0,1,0,0" IsVisible="False" ClipToBounds="True"
+              Background="{DynamicResource Brush.BgApp}" BorderThickness="0"
+              CornerRadius="{StaticResource Radius.Docked}">
         <DockPanel>
-          <!-- Header: mode tabs · track chip (routing/PDC) · Freeze · | · pop out · close -->
-          <Grid DockPanel.Dock="Top" Height="32" Margin="8,6,10,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+          <!-- Panel toolbar (32, seam under it): mode tabs · track chip (routing/PDC) ·
+               Freeze · | · pop out · close -->
+          <Border DockPanel.Dock="Top" Height="32" Background="{DynamicResource Brush.Panel}"
+                  BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,0,0,1">
+          <Grid Margin="8,0,6,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
             <Border Classes="segmented" VerticalAlignment="Center">
-              <StackPanel Orientation="Horizontal" Spacing="2">
+              <StackPanel Orientation="Horizontal" Spacing="1">
                 <ToggleButton x:Name="DetailDevicesBtn" Classes="seg" Content="Devices" Click="OnDetailDevices"/>
                 <ToggleButton x:Name="DetailPatternBtn" Classes="seg" Content="Pattern" IsEnabled="False"
                               ToolTip.Tip="Step the selected MIDI clip on a Drum Rack track"
@@ -486,40 +467,38 @@
             </Border>
             <ContentControl x:Name="DetailChipHost" Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center"/>
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-              <Button x:Name="FreezeBtn" Classes="ghost" Height="22" Padding="9,0" BorderThickness="1" BorderBrush="{DynamicResource Brush.BorderDefault}" VerticalAlignment="Center"
+              <Button x:Name="FreezeBtn" Height="22" Padding="9,0" VerticalAlignment="Center"
                       Click="OnFreezeClick"
                       ToolTip.Tip="Freeze the track to audio to free CPU (right-click to flatten)">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <app:Glyph x:Name="FreezeIcon" Kind="Freeze" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                  <TextBlock x:Name="FreezeLabel" Text="Freeze" FontSize="11" VerticalAlignment="Center"
+                  <TextBlock x:Name="FreezeLabel" Text="Freeze" FontSize="12" VerticalAlignment="Center"
                              Foreground="{DynamicResource Brush.TextSecondary}"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="LiveFreezeBtn" Classes="ghost" Height="22" Padding="9,0" BorderThickness="1" BorderBrush="{DynamicResource Brush.BorderDefault}" VerticalAlignment="Center"
+              <Button x:Name="LiveFreezeBtn" Height="22" Padding="9,0" VerticalAlignment="Center"
                       IsVisible="False" Click="OnLiveFreezeClick"
                       ToolTip.Tip="Bounce to a linked audio track below and put the source to sleep">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                  <Path Width="14" Height="14" Stretch="None" StrokeThickness="1.4"
-                        Stroke="{DynamicResource Brush.TextSecondary}" VerticalAlignment="Center"
-                        Data="{x:Static app:NotaIcons.ChainLink}"/>
-                  <TextBlock Text="Live Freeze" FontSize="11" VerticalAlignment="Center"
+                  <app:Glyph Kind="ChainLink" Size="14" Foreground="{DynamicResource Brush.TextSecondary}"/>
+                  <TextBlock Text="Live freeze" FontSize="12" VerticalAlignment="Center"
                              Foreground="{DynamicResource Brush.TextSecondary}"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="EditBtn" Classes="ghost" Height="22" Padding="9,0" BorderThickness="1" BorderBrush="{DynamicResource Brush.BorderDefault}" VerticalAlignment="Center"
+              <Button x:Name="EditBtn" Height="22" Padding="9,0" VerticalAlignment="Center"
                       IsVisible="False" Click="OnEditClick"
                       ToolTip.Tip="Wake the frozen source to edit it (right-click to unfreeze or flatten)">
                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                   <app:Glyph x:Name="EditGlyph" Kind="Edit" Foreground="{DynamicResource Brush.AccentBright}"/>
-                  <TextBlock Text="Edit" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
+                  <TextBlock Text="Edit" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
                 </StackPanel>
               </Button>
-              <Button x:Name="DoneBtn" Classes="ghost" Height="22" Padding="9,0" BorderThickness="1" BorderBrush="{DynamicResource Brush.BorderDefault}" VerticalAlignment="Center"
+              <Button x:Name="DoneBtn" Height="22" Padding="9,0" VerticalAlignment="Center"
                       IsVisible="False" Click="OnDoneClick"
                       ToolTip.Tip="Re-freeze the source and put it back to sleep">
                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                   <app:Glyph x:Name="DoneGlyph" Kind="Check" Foreground="{DynamicResource Brush.AccentBright}"/>
-                  <TextBlock Text="Done" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
+                  <TextBlock Text="Done" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
                 </StackPanel>
               </Button>
               <Button x:Name="DiscardBtn" Classes="ghost" Height="22" Padding="6,0" VerticalAlignment="Center"
@@ -528,8 +507,8 @@
                 <app:Glyph x:Name="DiscardGlyph" Kind="Cross" Foreground="{DynamicResource Brush.TextTertiary}"/>
               </Button>
             </StackPanel>
-            <Border Grid.Column="3" Width="1" Height="16" Margin="12,0,6,0" VerticalAlignment="Center"
-                    Background="{DynamicResource Brush.Hairline}"/>
+            <Border Grid.Column="3" Width="1" Height="16" Margin="10,0,6,0" VerticalAlignment="Center"
+                    Background="{DynamicResource Brush.Rule}"/>
             <Button x:Name="DetailPopOut" Grid.Column="4" Classes="ghost" Height="22" Padding="6,0"
                     Foreground="{DynamicResource Brush.TextTertiary}" Click="OnToggleDetailWindow"
                     ToolTip.Tip="Open devices and clip in a separate window">
@@ -540,6 +519,7 @@
               <app:Glyph x:Name="CloseDetailGlyph" Kind="Close"/>
             </Button>
           </Grid>
+          </Border>
           <ContentControl x:Name="DetailBody"/>
         </DockPanel>
       </Border>

@@ -73,7 +73,7 @@ internal sealed class DeviceWindow : NotaWindow
     public DeviceWindow(string name, string context, string badge, Func<Action<Action>, DeviceWindowPage> build,
         DeviceWindowBypass? bypass = null, Func<string>? status = null) : base(BarH)
     {
-        _name = name; _context = context; _badge = badge.ToUpperInvariant();
+        _name = name; _context = context; _badge = NotaText.Label(badge);
         _build = build; _bypass = bypass; _status = status;
         Title = context.Length > 0 ? $"{name} · {context}" : name;
         SizeToContent = SizeToContent.WidthAndHeight;
@@ -253,10 +253,10 @@ internal sealed class DeviceWindow : NotaWindow
         var tag = new Border
         {
             Height = 18, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
-            Background = NotaPalette.AccentSubtle, BorderBrush = NotaPalette.BorderBrass,
+            Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.Rule,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8),
             IsHitTestVisible = false, IsVisible = false,
-            Child = Caps(MonoText(9, NotaPalette.AccentHover), "BYPASSED"),
+            Child = Caps(MonoText(9, NotaPalette.TextSecondary), "Bypassed"),
         };
         _bypassTag = tag;
         return new Border
@@ -325,8 +325,7 @@ internal sealed class DeviceWindow : NotaWindow
 
     private static TextBlock Caps(TextBlock tb, string text)
     {
-        tb.Text = text;
-        tb.LetterSpacing = tb.FontSize * 0.14;
+        tb.Text = NotaText.Label(text);
         return tb;
     }
 }

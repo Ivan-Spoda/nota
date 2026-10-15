@@ -7,7 +7,7 @@
 //    jumps), 0.5 dB steps with a 0 dB detent; Shift / Ctrl / ⌘ for fine 0.1 dB steps;
 //    double-click resets (0 dB, and the kill off).
 //  · Eq3Graph — the response window: the output spectrum (engine FFT) behind, each band's own
-//    curve thin in its hue, the sum in brass, the two crossovers as dashed lines with handles
+//    curve thin in its hue, the sum in neutral ink, the two crossovers as dashed lines with handles
 //    along the top that drag left / right (the low/mid one held to at most half the mid/high
 //    one). A drag anywhere else in a band's zone rides that band's gain up / down; double-click
 //    a handle or a zone to reset it.
@@ -28,10 +28,10 @@ internal static class Eq3Math
     public const double FMin = 20, FMax = 20000;
     public static readonly string[] Names = { "LOW", "MID", "HIGH" };
 
-    /// <summary>The band hues: rose, brass, teal — the strips, the graph labels and the band curves.</summary>
-    public static SolidColorBrush Hue(int band) => band switch { 0 => NotaPalette.Rose, 1 => NotaPalette.Accent, _ => NotaPalette.Teal };
+    /// <summary>The band hues: rose, neutral ink, teal — the strips, the graph labels and the band curves.</summary>
+    public static SolidColorBrush Hue(int band) => band switch { 0 => NotaPalette.Rose, 1 => NotaPalette.VizInk, _ => NotaPalette.Teal };
 
-    /// <summary>The band curve's ink on the graph: the mid curve stays neutral so the brass sum reads.</summary>
+    /// <summary>The band curve's ink on the graph: the mid curve stays dimmer so the neutral sum reads.</summary>
     public static SolidColorBrush CurveInk(int band) => band switch { 0 => NotaPalette.Rose, 1 => NotaPalette.TextSecondary, _ => NotaPalette.Teal };
 
     public static double X(double f) => Math.Log(Math.Clamp(f, FMin, FMax) / FMin) / Math.Log(FMax / FMin);
@@ -84,7 +84,7 @@ internal sealed class Eq3Fader : Control
     private double _db, _top = 6, _bottom = -24;
     private bool _killed, _drag, _hover;
     private double _startY, _startDb;
-    private IBrush _hue = NotaPalette.Accent;
+    private IBrush _hue = NotaPalette.VizInk;
 
     public event Action? GestureBegin;
     public event Action? GestureEnd;
@@ -217,7 +217,7 @@ internal sealed class Eq3Graph : Control
     private Rect Handle(int which, out FormattedText text)
     {
         double f = which == 0 ? _f1 : _f2;
-        text = new FormattedText(Eq3Math.Hz(f), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, 7, NotaPalette.AccentBright);
+        text = new FormattedText(Eq3Math.Hz(f), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, 7, NotaPalette.TextSecondary);
         double w = text.Width + 10, x = Eq3Math.X(f) * Bounds.Width;
         x = Math.Clamp(x - w / 2, 1, Math.Max(1, Bounds.Width - w - 1));
         return new Rect(Math.Round(x), 16, Math.Round(w), 13);
@@ -380,7 +380,7 @@ internal sealed class Eq3Graph : Control
         ctx.DrawGeometry(null, NotaGraph.PrimaryPen, sum);
 
         // Crossovers: dashed lines and their handles.
-        var dash = new Pen(NotaPalette.BorderBrass, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
+        var dash = new Pen(NotaPalette.BorderStrong, 1) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
         foreach (double f in new[] { _f1, _f2 })
         {
             double x = Math.Round(Eq3Math.X(f) * w) + 0.5;
@@ -396,7 +396,7 @@ internal sealed class Eq3Graph : Control
         var lw = new double[3];
         for (int b = 0; b < 3; b++)
         {
-            names[b] = new FormattedText(Eq3Math.Names[b], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansBold, 7, Eq3Math.Hue(b));
+            names[b] = new FormattedText(NotaText.Label(Eq3Math.Names[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 7, Eq3Math.Hue(b));
             vals[b] = new FormattedText(_kill[b] ? "kill" : Eq3Math.Db(_db[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                 NotaFonts.Mono, 7, _kill[b] ? NotaPalette.TextTertiary : NotaPalette.TextPrimary);
             lw[b] = names[b].Width + 4 + vals[b].Width;
@@ -416,7 +416,7 @@ internal sealed class Eq3Graph : Control
         {
             var rect = Handle(i, out var text);
             bool hot = _drag == i || _hover == i;
-            ctx.DrawRectangle(hot ? NotaPalette.Accent : NotaPalette.SurfaceCard, new Pen(NotaPalette.Accent, 1), rect.Deflate(0.5), 3, 3);
+            ctx.DrawRectangle(hot ? NotaPalette.Accent : NotaPalette.SurfaceCard, new Pen(hot ? NotaPalette.Accent : NotaPalette.BorderStrong, 1), rect.Deflate(0.5), 3, 3);
             if (hot) text.SetForegroundBrush(NotaPalette.TextOnAccent);
             ctx.DrawText(text, new Point(rect.X + 5, rect.Y + (rect.Height - text.Height) / 2));
         }

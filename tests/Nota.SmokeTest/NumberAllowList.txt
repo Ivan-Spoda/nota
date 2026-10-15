@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+#
+# Minus-sign ratchet for DesignTokenCheck.RunNumbers (spec 012 T008).
+#
+# View literals that show a negative number with a hyphen-minus ("-12") instead of U+2212,
+# as of the day the check landed. A line may only be removed: a new offender fails, and so
+# does a line that no longer matches anything.
+#
+# Format: path (from src/managed) <TAB> the literal exactly as written <TAB> # reason

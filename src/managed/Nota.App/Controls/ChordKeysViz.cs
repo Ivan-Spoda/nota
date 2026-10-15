@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Nota Chord RESULT keyboard (almanac mockups 1a / 1b): three octaves from the C at or below
+// Nota Chord result keyboard (almanac mockups 1a / 1b): three octaves from the C at or below
 // the chord's lowest note — 21 white keys with the black keys over them. A sounding note is
-// lit: the played key Brass Light, an added note Brass Deep. With Keep root off the root is
-// only outlined in brass. The owner drives the strum animation by passing the notes lit so
+// lit (live state, so accent): the played key bright accent, an added note a deeper accent.
+// With Keep root off the root is only outlined in accent. The owner drives the strum animation by passing the notes lit so
 // far each tick; Set() repaints only when something changed.
 
 using System;
@@ -21,7 +21,7 @@ internal sealed class ChordKeysViz : Control
     private static readonly IBrush WellEdge = NotaPalette.GraphBorder;
     private static readonly IBrush WhiteKey = NotaPalette.MiniKeyWhite;
     private static readonly IBrush BlackKey = NotaPalette.KeyBlack;
-    internal static readonly IBrush Added = NotaPalette.Wash(NotaPalette.Accent, 0xC8);   // Brass Deep in Graphite (≈ #B8862E), clearly lighter than Played in Paper
+    internal static readonly IBrush Added = NotaPalette.Wash(NotaPalette.Accent, 0xC8);   // a deeper accent, clearly apart from Played in both appearances
     private static readonly IBrush Played = NotaPalette.AccentBright;
     private static readonly IBrush Label = NotaPalette.TextAxis;
     private static readonly IPen RootRing = new Pen(NotaPalette.Accent, 1);

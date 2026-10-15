@@ -2,13 +2,13 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Auto Filter card views (besides the response curve):
-//  • AfFader     — the SHAPE column's vertical faders (FRQ / RES): the set value as a filled
-//                  well with a handle, plus a thin marker where modulation has it now;
+//  • AfFader     — the Shape column's vertical faders (Frq / Res): the set value as a filled
+//                  well with a handle (accent while dragged), plus a thin marker where modulation has it now;
 //  • AfEnvView   — the Envelope tab's window: the input envelope (teal) and the cutoff it
-//                  drives (brass) over the last few hundred ms, with the base cutoff dashed;
+//                  drives (neutral ink) over the last few hundred ms, with the base cutoff dashed;
 //                  drag up / down for the amount;
 //  • AfLfoView   — the LFO tab's window: the LFO's cutoff motion over two bars (or a few
-//                  cycles in free time), raw shape dashed teal, the smoothed motion in brass,
+//                  cycles in free time), raw shape dashed teal, the smoothed motion in neutral ink,
 //                  a playhead dot at the live phase; drag up / down for the amount, sideways
 //                  for the start phase.
 
@@ -25,7 +25,7 @@ internal sealed class AfFader : Control
     private double _v, _live = double.NaN;
     private bool _drag;
 
-    public IBrush Ink { get; init; } = NotaPalette.Accent;
+    public IBrush Ink { get; init; } = NotaPalette.VizInk;
     public double Default { get; set; } = double.NaN;
     public bool Dragging => _drag;
 
@@ -87,7 +87,7 @@ internal sealed class AfFader : Control
         }
         ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), rect, r, r);
         double hy = Math.Clamp(y, 1.5, h - 2.5);
-        ctx.DrawRectangle(Ink, null, new Rect(1.5, hy - 1, w - 3, 2), 1, 1);
+        ctx.DrawRectangle(_drag ? NotaPalette.Accent : Ink, null, new Rect(1.5, hy - 1, w - 3, 2), 1, 1);
     }
 }
 
@@ -193,7 +193,7 @@ internal sealed class AfEnvView : AfWindowBase
 
         NotaGraph.Title(ctx, frame, "Cutoff over time");
         string pk = NotaNum.Hz(_peakHz);
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, pk, NotaPalette.AccentBright);
+        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, pk, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         NotaGraph.Legend(ctx, w - 5, 16, ("input", NotaPalette.TealBright, NotaGraph.Mark.Line));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "0");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, _winText);
@@ -290,7 +290,7 @@ internal sealed class AfLfoView : AfWindowBase
         }
 
         NotaGraph.Title(ctx, frame, _title);
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _amt, NotaPalette.AccentBright);
+        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _amt, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         if (_morphText.Length > 0)
         {
             var t = NotaGraph.AxisText(_morphText, NotaPalette.TealBright);

@@ -47,7 +47,7 @@ public sealed partial class ArrangementView
     {
         var label = new TextBlock
         {
-            Text = "OVERVIEW", Classes = { "SectionLabel" },
+            Text = "Overview", Classes = { "SectionLabel" },
             VerticalAlignment = VerticalAlignment.Center,
         };
         _overviewRange = new TextBlock

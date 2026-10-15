@@ -281,8 +281,8 @@ public sealed class PaletteSearch
 
     public static string GroupLabel(PaletteKind k) => k switch
     {
-        PaletteKind.Action => "ACTIONS", PaletteKind.Track => "TRACKS", PaletteKind.Device => "DEVICES",
-        PaletteKind.Preset => "PRESETS", _ => "MODULAR",
+        PaletteKind.Action => "Actions", PaletteKind.Track => "Tracks", PaletteKind.Device => "Devices",
+        PaletteKind.Preset => "Presets", _ => "Modular",
     };
 
     // CP-8: an unavailable action is shown only when the query names it.
@@ -367,14 +367,14 @@ public sealed class PaletteSearch
             var recent = (_usage?.Recent ?? []).Select(_index.Find).Where(Ok).Select(it => it!).ToList();
             if (recent.Count > 0)
             {
-                res.Rows.Add(new PaletteRow("RECENT", default));
+                res.Rows.Add(new PaletteRow("Recent", default));
                 foreach (var it in recent) { AddItem(res, Make(it)); seen.Add(it.Id); }
             }
             var sug = (suggested ?? []).Select(_index.Find).Where(it => Ok(it) && !seen.Contains(it!.Id)).Select(it => it!)
                 .Where(it => it.Kind != PaletteKind.Action || availability is null || availability(it).Ok).ToList();
             if (sug.Count > 0)
             {
-                res.Rows.Add(new PaletteRow("SUGGESTED · " + OriginLabel(ctx.Origin).ToUpperInvariant(), default));
+                res.Rows.Add(new PaletteRow("Suggested · " + OriginLabel(ctx.Origin), default));
                 foreach (var it in sug) AddItem(res, Make(it));
             }
             return;

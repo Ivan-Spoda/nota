@@ -4,7 +4,7 @@
 // The custom-drawn view of the Nota Reverb card: the decay-tail window. The impulse flashes
 // at the pre-delay (teal), the early reflections light one after another, then the RT60
 // curve draws itself and fades — a loop while the reverb is sounding, a still picture when
-// it is not. Frozen, the tail is a held line under a brass frame. It is also a control:
+// it is not. Frozen, the tail is a held line under an accent frame. It is also a control:
 // drag the pre-delay marker to set the pre-delay, drag anywhere else to lengthen or shorten
 // the decay; double-click either to reset. It draws what the card hands it and owns no
 // engine state.
@@ -151,8 +151,8 @@ internal sealed class ReverbTailView : Control
             f.LineTo(new Point(x1, bot));
             f.EndFigure(true);
         }
-        ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.Accent, 0x12), null, fill);
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x55), 1.4, lineJoin: PenLineJoin.Round), full);
+        ctx.DrawGeometry(NotaPalette.Wash(NotaPalette.VizInk, 0x12), null, fill);
+        ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0x55), 1.4, lineJoin: PenLineJoin.Round), full);
 
         // The bright stroke draws itself over the first half of the loop, then fades a little.
         double reach = _freeze || !live ? 1 : Math.Clamp(ph / 0.52, 0, 1);
@@ -168,14 +168,14 @@ internal sealed class ReverbTailView : Control
                 for (double x = preX; x <= xEnd + 0.1; x += 2) g.LineTo(new Point(Math.Min(x, xEnd), YAt(Math.Min(x, xEnd))));
             }
             using (ctx.PushOpacity(tailOp))
-                ctx.DrawGeometry(null, new Pen(NotaPalette.Accent, 1.8, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), bright);
+                ctx.DrawGeometry(null, new Pen(live ? NotaPalette.Accent : NotaPalette.VizInk, 1.8, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), bright);
         }
 
         // Where the tail has fallen 60 dB — the decay the knob names.
         if (!_freeze)
         {
             double rx = preX + _rt60 / AxisSec * (x1 - preX);
-            if (rx <= x1) ctx.DrawEllipse(NotaPalette.AccentBright, null, new Point(rx, bot), 2.2, 2.2);
+            if (rx <= x1) ctx.DrawEllipse(NotaPalette.VizInk, null, new Point(rx, bot), 2.2, 2.2);
         }
 
         // ---- the impulse at the pre-delay and the early reflections ----------------
@@ -202,9 +202,9 @@ internal sealed class ReverbTailView : Control
         }
 
         // ---- labels ------------------------------------------------------------------
-        var title = _freeze ? Text("TAIL HELD · no decay", NotaPalette.AccentBright) : Text("DECAY TAIL", NotaGraph.TitleInk);
+        var title = _freeze ? Text("Tail held · no decay", NotaPalette.AccentBright) : Text("Decay tail", NotaGraph.TitleInk);
         ctx.DrawText(title, new Point(x0 - 3, 3));
-        var rt = Text(_freeze ? "RT60 ∞" : NotaNum.F($"RT60 {_rt60:0.00} s"), NotaPalette.AccentBright);
+        var rt = Text(_freeze ? "RT60 ∞" : NotaNum.F($"RT60 {_rt60:0.00} s"), _freeze ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         ctx.DrawText(rt, new Point(x1 + 3 - rt.Width, 3));
         var pre = Text(NotaNum.F($"pre {_preMs:0} ms"), NotaPalette.TealBright);
         ctx.DrawText(pre, new Point(Math.Min(preX + 3, x1 - pre.Width - 24), h - pre.Height - 2));

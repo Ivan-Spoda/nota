@@ -92,7 +92,7 @@ internal sealed class FluxReactScope : Control
             }
         }
 
-        var lbl = new FormattedText("SIDECHAIN", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansBold,
+        var lbl = new FormattedText("Sidechain", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold,
             NotaType.KnobLabel, _live ? NotaPalette.TextTertiary : NotaPalette.TextDisabled);
         ctx.DrawText(lbl, new Point(6, 4));
         NotaGraph.Axis(ctx, plot, NotaGraph.Corner.TopRight, "env · transients · tilt", _live ? NotaPalette.TealBright : NotaPalette.TextAxis);
