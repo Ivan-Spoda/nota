@@ -95,6 +95,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   chain.
 
 ### Fixed
+- **One settings folder on Linux:** Nota kept its files in two folders, `~/.config/nota`
+  and `~/.config/Nota`; the audio and MIDI device choice and the plugin list went to the
+  second. Everything now lives in `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`), and on the
+  first launch Nota moves the files over from `~/.config/Nota` — nothing to set up again.
 - **Popping out the piano roll no longer crashes on Linux:** opening Devices / Clip in its
   own window could close Nota at once on Linux ("Attempt to call InvalidateArrange on wrong
   LayoutManager"). The editor's pending layout in the main window is now finished before it
