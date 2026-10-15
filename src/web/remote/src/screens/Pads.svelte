@@ -1,12 +1,13 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Pads: a 4×4 grid (8×2 in landscape, 8×4 on a tablet) of 16-note banks from C2, the
      bottom-left pad lowest, as on a hardware pad controller. A drum track names its pads. Velocity
-     comes from where the finger lands (higher is louder) unless Full vel. is on. A pad lights
-     brass under the finger at once, and in the track colour when the track plays it. -->
+     comes from where the finger lands (higher is louder) unless Full velocity is on. A pad lights
+     in the accent under the finger at once, and in the track colour when the track plays it. -->
 <script lang="ts">
   import { app } from '../lib/app.svelte';
   import type { Form } from '../lib/device.svelte';
   import { noteName } from '../lib/music';
+  import { look } from '../lib/theme.svelte';
 
   let { form }: { form: Form } = $props();
   const RATES = [{ n: '1/8', div: 2 }, { n: '1/16', div: 4 }, { n: '1/32', div: 8 }];
@@ -23,6 +24,7 @@
   const names = $derived(new Map((app.track?.pads ?? []).map(([n, name]) => [n, name])));
   const lit = $derived(new Set(app.lit));
   const color = $derived(app.track?.color ?? 'var(--accent)');
+  const colorInk = $derived(app.track ? look.inkOn(app.track.color) : 'var(--ink-on-accent)');
 
   // Rows run bottom-up: the first note of the bank sits bottom-left.
   const pads = $derived.by(() => {
@@ -101,7 +103,7 @@
         <button class="mono" class:on={app.prefs.bank === b.i} onclick={() => (app.prefs.bank = b.i)}>{b.name}</button>
       {/each}
     </div>
-    <button class="btn" class:on={app.prefs.fullVel} aria-pressed={app.prefs.fullVel} onclick={() => (app.prefs.fullVel = !app.prefs.fullVel)}>Full vel.</button>
+    <button class="btn" class:on={app.prefs.fullVel} aria-pressed={app.prefs.fullVel} onclick={() => (app.prefs.fullVel = !app.prefs.fullVel)}>Full velocity</button>
     <button class="btn rep" class:on={repeat} aria-pressed={repeat} onclick={() => (repeat = !repeat)}>
       Repeat
       <span class="rate mono" role="button" tabindex="0" aria-label="Repeat rate"
@@ -113,11 +115,11 @@
     {#each pads as note (note)}
       {@const on = down[note]}
       {@const playing = !on && lit.has(note)}
-      <button class="pad" class:on class:playing style:--tc={color}
+      <button class="pad" class:on class:playing style:--tc={color} style:--tc-ink={colorInk}
         onpointerdown={(e) => press(e, note)} onpointerup={release} onpointercancel={release} onpointerleave={release}
         aria-label={names.get(note) ?? noteName(note)}>
         <span class="num mono">{note - 35}</span>
-        <span class="label">
+        <span class="txt">
           <span class="name">{names.get(note) ?? noteName(note)}</span>
           <span class="note mono">{noteName(note)}</span>
         </span>
@@ -129,19 +131,19 @@
 <style>
   .pads { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
   .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .banks button { min-width: 42px; flex: none; font-size: 11px; font-weight: 500; }
+  .banks button { min-width: 42px; flex: none; font-size: 12px; }
   .rep { padding: 0 6px 0 10px; gap: 8px; }
-  .rate { height: 30px; display: flex; align-items: center; padding: 0 7px; border-radius: 3px; background: var(--well); font-size: 11px; color: var(--ink3); }
-  .rep.on .rate { color: var(--accent-bright); }
-  .grid { flex: 1; min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 8px; }
-  .pad { border-radius: 6px; background: var(--raised); border: 1px solid var(--border); box-shadow: inset 0 1px 0 rgba(255,255,255,.03); display: flex; flex-direction: column; justify-content: space-between; align-items: stretch; padding: 8px; min-height: 0; min-width: 0; overflow: hidden; text-align: left; touch-action: none; }
-  .num, .note { font-size: 10px; color: var(--ink5); }
-  .note { font-size: 9px; }
-  .label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-  .name { font-size: 12px; font-weight: 600; color: var(--ink1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rate { height: 30px; display: flex; align-items: center; padding: 0 7px; border-radius: 2px; background: var(--bg-sunken); font-size: 11px; color: var(--text-secondary); }
+  .rep.on .rate { color: var(--text-primary); }
+  .grid { flex: 1; min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 6px; }
+  /* Tiles: raised at rest; under the finger solid accent; played by the track solid in its colour — ink derived either way. */
+  .pad { border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; flex-direction: column; justify-content: space-between; align-items: stretch; padding: 8px; min-height: 0; min-width: 0; overflow: hidden; text-align: left; touch-action: none; }
+  .num, .note { font-size: 10px; color: var(--text-tertiary); }
+  .txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .name { font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   :global(.tablet) .name { font-size: 14px; }
-  .pad.playing { background: var(--tc); border-color: var(--tc); }
-  .pad.on { background: var(--accent); border-color: var(--accent); }
-  .pad.on *, .pad.playing * { color: var(--on-accent); }
-  .pad.playing * { color: #171613; }
+  .pad.playing { background: var(--tc); border-color: var(--tc); box-shadow: none; }
+  .pad.playing * { color: var(--tc-ink); }
+  .pad.on { background: var(--accent); border-color: var(--accent); box-shadow: none; }
+  .pad.on * { color: var(--ink-on-accent); }
 </style>

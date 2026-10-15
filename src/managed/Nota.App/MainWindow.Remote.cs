@@ -13,8 +13,8 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
-using Avalonia.Styling;
 using Microsoft.Extensions.DependencyInjection;
+using Nota.Application;
 using Nota.Remote;
 
 namespace Nota.App;
@@ -92,7 +92,39 @@ public partial class MainWindow : IRemoteHost
 
     string IRemoteHost.HostName => _remote?.Hub.HostName ?? Environment.MachineName;
 
-    bool IRemoteHost.DarkTheme => Avalonia.Application.Current?.ActualThemeVariant != ThemeVariant.Light;
+    // The phone wears the theme the window wears, or under Follow phone one of the user's two
+    // picks (spec 014). Built once per theme and once per change, so the hub's reference check
+    // costs nothing on the ticks in between.
+    private readonly Dictionary<string, RemoteTheme> _remoteThemes = new();
+    private RemoteAppearance? _remoteLook;
+    private (NotaColourTheme, AppearanceChoice)? _remoteLookFor;
+
+    RemoteAppearance IRemoteHost.Appearance
+    {
+        get
+        {
+            var key = (NotaPalette.Theme ?? NotaThemes.Default, NotaThemeService.Choice);
+            if (_remoteLook is null || !key.Equals(_remoteLookFor))
+            {
+                RemoteTheme Of(NotaColourTheme? t) => RemoteThemeOf(t ?? NotaThemes.Default);
+                _remoteLook = new RemoteAppearance(Of(key.Item1), Of(NotaThemes.Find(key.Item2.Dark)), Of(NotaThemes.Find(key.Item2.Light)),
+                    CssHex(NotaPalette.InkDark), CssHex(NotaPalette.InkLight));
+                _remoteLookFor = key;
+            }
+            return _remoteLook;
+        }
+    }
+
+    private RemoteTheme RemoteThemeOf(NotaColourTheme t)
+    {
+        if (!_remoteThemes.TryGetValue(t.Id, out var r))
+            _remoteThemes[t.Id] = r = new RemoteTheme(t.Id, t.Name, t.IsDark, Enumerable.ToDictionary(t.Colors, c => c.Key, c => CssHex(c.Value)));
+        return r;
+    }
+
+    // CSS order: #RRGGBB, or #RRGGBBAA when translucent (Avalonia writes #AARRGGBB).
+    private static string CssHex(Avalonia.Media.Color c) =>
+        c.A == 0xFF ? $"#{c.R:X2}{c.G:X2}{c.B:X2}" : $"#{c.R:X2}{c.G:X2}{c.B:X2}{c.A:X2}";
 
     string IRemoteHost.TrackColor(int trackId)
     {

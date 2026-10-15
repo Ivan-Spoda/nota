@@ -87,6 +87,8 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunIcons()) Check(ok, label);
     Console.WriteLine("-- design: browser --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunBrowser()) Check(ok, label);
+    Console.WriteLine("-- design: remote --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunRemote()) Check(ok, label);
 }
 
 // Opt-in plugin-scan check (M3-1): `--scan <path-to-nota-scanworker>`. Kept out

@@ -52,6 +52,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Studio Light follows the same system in light greys (see *Colour themes* above; your
   Dark / Light / System choice carries over). Every feature, shortcut and menu stays where
   it was, and projects open unchanged (track colours keep their place in the new palette).
+- **Nota Remote matches Nota:** the phone now wears the same colour theme as the
+  computer, and switches with it — pick another theme in Preferences → Appearance, or let
+  Follow system flip it, and the phone follows within a moment, without reloading or
+  cutting a held note. Under the phone's own **Follow phone** setting (⋯ → Theme) it wears
+  your In dark mode / In light mode themes as the phone itself turns dark or light. The
+  phone's screens take the Studio look too: neutral greys, orange only for what is playing,
+  held or switched on, mute amber, solo blue and arm red, sentence-case labels and nearly
+  square corners. A phone that has connected before opens straight in its last theme.
 - **View switcher as icons:** Arrangement, Session and Modular are now three small icon
   keys in the transport instead of words, freeing about 140 px. Hover one for its name.
   Every icon in the app now comes from one set, drawn at one line weight.

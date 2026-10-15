@@ -278,6 +278,11 @@ floating window (**View → Mixer**, ⌘M).
   permissions (play only / play and control) in **Settings → Remote**. Phone notes record like
   the computer keyboard's; knobs and XY axes map through MIDI Learn (XY and tilt per track);
   several phones play at once, each on its own track, with players' names on the tracks.
+- **Nota Remote in Nota's theme**: the phone wears the colour theme Nota wears and follows
+  every change live (including Follow system); **Follow phone** (⋯ → Theme) wears the
+  In dark mode / In light mode themes by the phone's own scheme. Its screens follow the
+  Studio look — one orange accent for what is live or chosen, semantic mute / solo / arm
+  colours, sentence-case labels — and a returning phone paints in its last theme at once.
 - **Nota Remote Keys — Expressive**: on a track whose instrument takes MPE, the phone's
   Keyboard and Scale modes can keep each finger on the note it struck: sliding sideways bends
   it (a key's width is its pitch step), the height on the key is its slide, and a screen that

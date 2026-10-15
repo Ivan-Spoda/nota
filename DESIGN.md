@@ -724,6 +724,27 @@ the mixer can live on a second screen. The command palette is the only in-window
 - **Titles are sentence case:** "Mixer", "Export audio", "Edit tags", "What's new in
   Nota", "Connect phone".
 
+### Nota Remote
+
+The phone page (`src/web/remote`) follows the same system (spec 014). It holds no colour
+value: Nota sends the theme it wears and the user's dark-mode and light-mode picks with all
+their tokens (the `theme` message), and the page sets each token as a custom property named
+after it — `BgApp` → `--bg-app`, `SurfaceRaised` → `--surface-raised` — plus the derived
+inks `--ink-on-accent` / `-mute` / `-solo` / `-record` / `-success` (`NotaPalette.ReadableInkOn`'s
+pair, which Nota sends). **Follow Nota** wears Nota's theme, **Follow phone** a pick by the
+phone's own scheme. Before Nota answers, the page wears the last theme it stored (a head
+script paints it before the app loads), or the Studio Dark fallback that `theme-plugin.ts`
+builds from the theme files at `npm run build`. Elevation is built the same way:
+`--bevel` (`ShadowBevel`), `--sunken` (`Rule`), `--popover` (`Seam` + `ShadowPopover`),
+`--scrim` (`ShadowModal`).
+
+Structure is Studio's — seams, the accent for live or chosen only, solid semantic fills with
+derived ink, sentence case, radii 0 / 1 / 2 / 3 — at phone sizes: touch targets stay
+36–56 px and words 11–16 px (the big position and the count-in larger). The phone's icons
+are inline SVG drawn with the shared stroke (1.5, round caps and joins), since `Glyph` is
+native. `npm run mock` serves the built page against a stand-in Nota with a demo project and
+the real theme messages, for screenshots without the desktop app.
+
 ## Enforced by tests
 
 `tests/Nota.SmokeTest/DesignTokenCheck*.cs` runs in the smoke test (the `-- design: … --`
@@ -745,6 +766,7 @@ sections) and fails the build on:
 | `RunIcons` | No path geometry outside `Controls/Glyph.cs`: no `Geometry.Parse` / `StreamGeometry.Parse` / `PathGeometry.Parse`, no axaml `Data="M…"`, no SVG path string. `IconAllowList.txt` is empty |
 | `RunBrowser` | Every built-in device sits in exactly one category of its own tab (`DeviceCategories.cs`); no category names a missing device or is empty; names in sentence case; 18 / 26 / 6 devices shelved |
 | `RunStudio` | Every `Radius.*` on the 0/1/2/3/4 scale; only `Shadow.Popover` / `Shadow.Modal` blurred, no literal `BoxShadow` in views; no positive `LetterSpacing` in the theme, `NotaType` tracking 0, no upper-casing in the shared label builders; knob arcs, slider fills and graph curves neutral at rest (`VizInk`); transport 44 · console 30 · seam 1; no Ember value in the Studio themes |
+| `RunRemote` | Nota Remote's page: no colour literal (hex, `rgb()`, `hsl()`) in its sources or `index.html`; the first-paint fallback built from the theme files; no letter-spacing, `uppercase`, `.toUpperCase()` in a component or `.caps`; radii 0 / 1 / 2 / 3 / 4 px or 50 %; every custom property it reads is a theme token or one it defines |
 
 When a check fails, fix the view — or, for a genuine exception, add it to the check's
 allow-list with a comment saying why. The ratchet lists in `tests/Nota.SmokeTest/`

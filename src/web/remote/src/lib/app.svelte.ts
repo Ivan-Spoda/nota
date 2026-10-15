@@ -5,6 +5,7 @@
 // own — the only state that needs the person is a forgotten device or an expired code.
 
 import type { Project, Transport, Mixer, Xy, Macros, Session, Learn, LinkState, Screen, Track } from './types';
+import { look } from './theme.svelte';
 
 const LS = 'nota-remote:';
 const store = {
@@ -120,11 +121,6 @@ export class App {
   }
 
   get canControl() { return this.proj?.access !== 'play'; }
-
-  get dark(): boolean {
-    if (this.prefs.theme === 'phone') return matchMedia('(prefers-color-scheme: dark)').matches;
-    return this.proj?.dark ?? true;
-  }
 
   // ---- connection ---------------------------------------------------------------
 
@@ -248,11 +244,13 @@ export class App {
         if (this.link === 'ok' || this.link === 'weak') this.link = avg > 50 ? 'weak' : 'ok';
         break;
       }
+      case 'theme': look.receive(m); break;
       case 'proj': {
         const first = !this.proj;
         const prevTrack = this.proj?.you;
         delete m.t;
         this.proj = m;
+        look.legacyDark = m.dark;
         store.set('track', String(m.you));
         store.set('follow', m.follow ? '1' : '0');
         if (first || prevTrack !== m.you) this.onTrackChanged(first);

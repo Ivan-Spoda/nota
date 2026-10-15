@@ -54,18 +54,18 @@
     clearTimeout(holdTimer);
     if (!held) ctl({ t: 'seek', v: sections[i][1] });
   }
-  const bpmText = $derived(app.tp.bpm.toFixed(app.tp.bpm % 1 ? 2 : 0));
+  const bpmText = $derived(app.tp.bpm.toFixed(2));
 </script>
 
 <div class="big {form}">
   <div class="top">
     <div class="pblock">
-      <span class="caps">Position</span>
+      <span class="label">Position</span>
       <span class="mono pos" class:rec={app.tp.rec}>{pos}</span>
     </div>
     <button class="tap" onclick={tap}>
       <span class="mono">{bpmText}</span>
-      <span class="caps">Tap tempo</span>
+      <span class="tl">Tap tempo</span>
     </button>
   </div>
   <div class="btns" style:grid-template-columns="repeat({form === 'phone' ? 3 : 6}, minmax(0, 1fr))">
@@ -84,12 +84,12 @@
   </div>
   {#if sections.length > 0}
     <div class="secs">
-      <span class="caps">Sections · tap to jump, hold to loop</span>
+      <span class="label">Sections · tap to jump, hold to loop</span>
       <div class="sgrid">
         {#each sections as s, i}
           <button class="sec" class:cur={current === i} class:looping={loopSec === i} onpointerdown={() => secDown(i)} onpointerup={() => secUp(i)} onpointercancel={() => clearTimeout(holdTimer)}>
             <span class="sn">{s[0]}</span>
-            <span class="mono si">{loopSec === i ? 'LOOPING' : `BAR ${Math.floor(s[1] / 4) + 1}`}</span>
+            <span class="si">{#if loopSec === i}Looping{:else}Bar <span class="mono">{Math.floor(s[1] / 4) + 1}</span>{/if}</span>
           </button>
         {/each}
       </div>
@@ -98,35 +98,38 @@
 </div>
 
 <style>
-  .big { position: absolute; inset: 0; z-index: 4; background: var(--app); display: flex; flex-direction: column; gap: 14px; padding: 12px; }
+  .big { position: absolute; inset: 0; z-index: 4; background: var(--bg-app); display: flex; flex-direction: column; gap: 14px; padding: 12px; }
   .phoneLand.big { padding: 8px 10px; gap: 10px; }
   .tablet.big { padding: 18px; }
   .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
   .pblock { display: flex; flex-direction: column; gap: 4px; }
-  .pos { font-size: 52px; font-weight: 500; line-height: 1; color: var(--ink1); }
+  .pos { font-size: 52px; line-height: 1; color: var(--text-primary); }
   .phoneLand .pos { font-size: 40px; }
   .tablet .pos { font-size: 88px; }
-  .pos.rec { color: var(--record-ink); }
-  .tap { height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0 16px; border-radius: 6px; background: var(--raised); border: 1px solid var(--border); }
-  .tap .mono { font-size: 18px; font-weight: 500; color: var(--ink1); }
-  .tap .caps { font-size: 9px; letter-spacing: .1em; }
-  .btns { flex: 1; min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 8px; }
-  .b { min-height: 0; border-radius: 8px; background: var(--raised); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--ink2); }
-  .b svg path { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-  .b.on { background: var(--accent-wash); border-color: var(--border-brass); color: var(--accent-bright); }
-  .b.dim { color: var(--ink6); }
+  .pos.rec { color: var(--record); }
+  .tap { height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0 16px; border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); }
+  .tap:active { background: var(--bg-sunken); box-shadow: none; }
+  .tap .mono { font-size: 18px; color: var(--text-primary); }
+  .tl { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+  .btns { flex: 1; min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 6px; }
+  /* Keys sized for a hand on a guitar neck. On: solid accent; Record on: solid record — derived ink. */
+  .b { min-height: 0; border-radius: 3px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--text-strong); transition: background-color var(--ease), color var(--ease); }
+  .b:active { background: var(--bg-sunken); box-shadow: none; }
+  .b svg path { fill: none; stroke: currentColor; stroke-width: 2; }
+  .b.on { background: var(--accent); border-color: var(--accent); box-shadow: none; color: var(--ink-on-accent); }
+  .b.dim { color: var(--text-faint); }
   .tri { width: 0; height: 0; border-left: 26px solid currentColor; border-top: 16px solid transparent; border-bottom: 16px solid transparent; margin-left: 6px; }
-  .sq { width: 26px; height: 26px; border-radius: 3px; background: currentColor; }
+  .sq { width: 26px; height: 26px; border-radius: 2px; background: currentColor; }
   .dot { width: 28px; height: 28px; border-radius: 50%; background: var(--record); }
-  .play.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-  .recb.on { background: var(--record-wash); border-color: var(--record); color: var(--record-ink); }
+  .recb.on { background: var(--record); border-color: var(--record); color: var(--ink-on-record); }
+  .recb.on .dot { background: var(--ink-on-record); }
   .secs { display: flex; flex-direction: column; gap: 6px; }
-  .sgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .sec { height: 52px; border-radius: 5px; background: var(--panel); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
-  .sec.cur { background: var(--raised); border-color: var(--border-strong); }
-  .sec.looping { background: var(--accent-wash); border-color: var(--border-brass); }
-  .sn { font-size: 13px; font-weight: 600; color: var(--ink1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 92%; }
-  .looping .sn { color: var(--accent-bright); }
-  .si { font-size: 9px; color: var(--ink5); }
-  .looping .si { color: var(--accent); }
+  .sgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  /* Sections: the playhead's one carries the accent tick; a looping one is the solid accent. */
+  .sec { height: 52px; position: relative; border-radius: 2px; background: var(--surface-raised); border: 1px solid var(--seam); box-shadow: var(--bevel); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  .sec.cur::before { content: ''; position: absolute; left: 6px; right: 6px; top: -1px; height: 2px; background: var(--accent); }
+  .sec.looping { background: var(--accent); border-color: var(--accent); box-shadow: none; }
+  .sn { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 92%; }
+  .si { font-size: 11px; color: var(--text-tertiary); }
+  .looping .sn, .looping .si { color: var(--ink-on-accent); }
 </style>

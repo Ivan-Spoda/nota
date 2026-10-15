@@ -10,23 +10,23 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nota-daw/nota/releases/latest"><img src="https://img.shields.io/badge/Download-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-D9A13F?style=for-the-badge" alt="Download for macOS, Windows and Linux"></a>
+  <a href="https://github.com/nota-daw/nota/releases/latest"><img src="https://img.shields.io/badge/Download-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-FF9F1C?style=for-the-badge" alt="Download for macOS, Windows and Linux"></a>
   &nbsp;
-  <a href="https://nota-daw.github.io/nota-site/"><img src="https://img.shields.io/badge/Website-2B2622?style=for-the-badge" alt="Website"></a>
+  <a href="https://nota-daw.github.io/nota-site/"><img src="https://img.shields.io/badge/Website-2B2D31?style=for-the-badge" alt="Website"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/nota-daw/nota/releases/latest"><img src="https://img.shields.io/github/v/release/nota-daw/nota?label=release&sort=semver&color=D9A13F" alt="Latest release"></a>
+  <a href="https://github.com/nota-daw/nota/releases/latest"><img src="https://img.shields.io/github/v/release/nota-daw/nota?label=release&sort=semver&color=FF9F1C" alt="Latest release"></a>
   <a href="https://github.com/nota-daw/nota/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/nota-daw/nota/release.yml?label=build" alt="Build status"></a>
-  <a href="https://github.com/nota-daw/nota/releases"><img src="https://img.shields.io/github/downloads/nota-daw/nota/total?color=D9A13F" alt="Downloads"></a>
-  <a href="LICENSES/"><img src="https://img.shields.io/badge/license-AGPL--3.0-D9A13F" alt="License: AGPL-3.0"></a>
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-D9A13F" alt="Platforms: macOS, Windows, Linux">
-  <a href="https://nota-daw.github.io/nota-docs/"><img src="https://img.shields.io/badge/docs-user%20manual-D9A13F" alt="Documentation"></a>
+  <a href="https://github.com/nota-daw/nota/releases"><img src="https://img.shields.io/github/downloads/nota-daw/nota/total?color=FF9F1C" alt="Downloads"></a>
+  <a href="LICENSES/"><img src="https://img.shields.io/badge/license-AGPL--3.0-FF9F1C" alt="License: AGPL-3.0"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-FF9F1C" alt="Platforms: macOS, Windows, Linux">
+  <a href="https://nota-daw.github.io/nota-docs/"><img src="https://img.shields.io/badge/docs-user%20manual-FF9F1C" alt="Documentation"></a>
   <a href="https://t.me/notadaw"><img src="https://img.shields.io/badge/Telegram-2CA5E0?logo=telegram&logoColor=white" alt="Telegram"></a>
   <a href="https://discord.gg/apf4Q2JKWk"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
-![Nota playing a song in the Arrangement view, with the piano roll open below](assets/screenshots/playback.gif)
+![Nota playing a song in the Arrangement view, with the selected track's devices open below](assets/screenshots/playback.webp)
 
 <p align="center">▶ <a href="https://www.youtube.com/watch?v=zmvKOCIm4ig"><b>Watch the demo with sound</b></a> (1:45, YouTube)</p>
 
@@ -43,6 +43,8 @@
   (Surge XT, Dexed, Dragonfly Reverb …) install in one click from Settings.
 - **Your phone is a controller.** Scan a QR code and play pads, keys and an XY pad, or ride
   the mixer — over Wi-Fi or USB, nothing to install.
+- **Easy on the eyes.** A calm Studio look: neutral greys, one orange accent for what is
+  playing or chosen. Dark or light, or the warm Ember themes, and your phone follows along.
 - **Works where you do.** The same app on macOS, Windows and Linux, on Intel/AMD and ARM.
 
 ## Demo
@@ -54,18 +56,19 @@
 <table>
   <tr>
     <td width="50%"><img src="assets/screenshots/arrangement.webp" alt="Arrangement view with a song and its device chain"><br><sub><b>Arrangement</b> — the song, with the selected track's devices below</sub></td>
-    <td width="50%"><img src="assets/screenshots/modular.webp" alt="Modular view: LFOs and math nodes patched into effects with cables"><br><sub><b>Modular</b> — patch LFOs and modulators onto any parameter</sub></td>
+    <td width="50%"><img src="assets/screenshots/modular.webp" alt="Modular view: a track's signal graph, from the instrument through its effects to the output"><br><sub><b>Modular</b> — patch LFOs and modulators onto any parameter</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="assets/screenshots/piano-roll.gif" alt="Drawing notes in the piano roll and applying a transform"><br><sub><b>Piano roll</b> — draw, then arpeggiate, strum or ornament in one click</sub></td>
-    <td width="50%"><img src="assets/screenshots/filter.gif" alt="Sweeping the cutoff of Nota Auto Filter over a live spectrum"><br><sub><b>Built-in devices</b> — every one draws what it does to the sound</sub></td>
+    <td width="50%"><img src="assets/screenshots/piano-roll.webp" alt="The piano roll following the playhead through a lead hook, with note velocities below"><br><sub><b>Piano roll</b> — draw, then arpeggiate, strum or ornament in one click</sub></td>
+    <td width="50%"><img src="assets/screenshots/filter.webp" alt="Sweeping the cutoff of Nota Auto Filter over a live spectrum"><br><sub><b>Built-in devices</b> — every one draws what it does to the sound</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="assets/screenshots/mixer.gif" alt="Mixer with faders and live meters"><br><sub><b>Mixer</b> — faders, sends and live meters</sub></td>
+    <td width="50%"><img src="assets/screenshots/mixer.webp" alt="Mixer with faders and live meters"><br><sub><b>Mixer</b> — faders, sends and live meters</sub></td>
     <td width="50%"><img src="assets/screenshots/plugin-downloads.webp" alt="Settings → Downloads: a catalogue of open-source plugins to install"><br><sub><b>Downloads</b> — 200+ free open-source plugins, one click to install</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="assets/screenshots/arrangement-light.webp" alt="Arrangement view in the light theme"><br><sub>…and a light theme, for daytime sessions.</sub></td>
+    <td width="50%"><img src="assets/screenshots/arrangement-light.webp" alt="Arrangement view in the Studio Light theme"><br><sub><b>Studio Light</b> — the same look in light greys, for daytime sessions</sub></td>
+    <td width="50%"><img src="assets/screenshots/appearance.webp" alt="Settings → Appearance: Dark, Light or Follow system, with the Studio and Ember colour themes as preview cards"><br><sub><b>Colour themes</b> — Studio or Ember, dark or light, or follow the system</sub></td>
   </tr>
 </table>
 
@@ -90,6 +93,9 @@ A quick digest — see [`FEATURES.md`](FEATURES.md) for the full, categorised li
   branch off from it.
 - **Export** — the master or stems to WAV (16/24-bit or 32-bit float), with true-peak
   normalize and dither.
+- **Colour themes** — **Studio Dark** (the default), **Studio Light**, **Ember Graphite** and
+  **Ember Paper**; pick one, or follow the system's dark / light mode. Nota Remote on your
+  phone wears the same theme.
 - **AI control (optional)** — a local MCP server lets an AI assistant such as Claude work
   in the open project. Off by default.
 

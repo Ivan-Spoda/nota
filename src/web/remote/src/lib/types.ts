@@ -16,8 +16,23 @@ export interface Track {
   pads?: [number, string][];
 }
 
+/** What Nota tells the phone about colour (specs/014 contracts/theme-message.md). */
+export interface ThemeMessage {
+  t: 'theme';
+  /** The theme Nota wears (Follow Nota). */
+  on: string;
+  /** The user's dark-mode and light-mode picks (Follow phone). */
+  dark: string;
+  light: string;
+  /** The dark and light ink text on a solid fill is chosen from. */
+  ink: [string, string];
+  /** Each theme named above, once: token → CSS colour. */
+  th: Record<string, { name: string; dark: boolean; c: Record<string, string> }>;
+}
+
 export interface Project {
   host: string;
+  /** Whether Nota's theme is dark — only read when Nota sends no theme (an older Nota). */
   dark: boolean;
   tracks: Track[];
   key: { root: number; minor: boolean; name: string } | null;

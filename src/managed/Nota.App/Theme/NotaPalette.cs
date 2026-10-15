@@ -141,14 +141,14 @@ internal static class NotaPalette
 
     private static readonly Dictionary<SolidColorBrush, SolidColorBrush> InkOnCache = new();
 
+    /// <summary>The two inks <see cref="ReadableInkOn"/> chooses between. Nota Remote is sent
+    /// them so the phone derives ink the same way (spec 014).</summary>
+    public static readonly Color InkDark = Color.FromRgb(0x17, 0x18, 0x1A), InkLight = Color.FromRgb(0xFF, 0xFF, 0xFF);
+
     /// <summary>Dark ink (#17181A) or white, whichever reads better on <paramref name="fill"/>
     /// (WCAG contrast ratio). For views that compute a fill at draw time.</summary>
-    public static Color ReadableInkOn(Color fill)
-    {
-        var dark = Color.FromRgb(0x17, 0x18, 0x1A);
-        var white = Color.FromRgb(0xFF, 0xFF, 0xFF);
-        return Contrast(dark, fill) >= Contrast(white, fill) ? dark : white;
-    }
+    public static Color ReadableInkOn(Color fill) =>
+        Contrast(InkDark, fill) >= Contrast(InkLight, fill) ? InkDark : InkLight;
 
     private static double Contrast(Color a, Color b)
     {
