@@ -268,7 +268,7 @@ public sealed class Eq8Curve : Control
             if (_gestFreq) _engine.EndAutomationWrite(_track, AutomationTarget.DeviceParam, _device, Eq8.P(_drag, Eq8.FreqF), "");
             if (_gestGain) _engine.EndAutomationWrite(_track, AutomationTarget.DeviceParam, _device, Eq8.P(_drag, Eq8.GainF), "");
         }
-        _drag = -1; _gestFreq = _gestGain = false;
+        _drag = -1; InvalidateVisual(); _gestFreq = _gestGain = false;
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
@@ -448,7 +448,8 @@ public sealed class Eq8Curve : Control
             bool bOn = BandOn(b), isSel = b == sel;
             var c = NodeAt(b);
             IBrush fill = !bOn ? NotaPalette.BorderStrong : isSel ? NotaPalette.AccentBright : ch[b] == Eq8.Side ? NotaPalette.TealBright : NotaPalette.TextSecondary;
-            IBrush num = bOn ? NotaPalette.TextOnAccent : NotaPalette.TextTertiary;
+            // The number takes ink derived from its own node (orange, teal or grey), so it reads on all of them.
+            IBrush num = bOn && fill is SolidColorBrush f ? NotaPalette.InkOn(f) : NotaPalette.TextTertiary;
             double r = NodeD / 2;
             ctx.DrawEllipse(fill, RingPen, c, r + 1, r + 1);
             if (bOn && ch[b] != Eq8.Side && Eq8.ChannelInk(ch[b]) is { } ring)   // Mid neutral, L / R rose

@@ -58,6 +58,13 @@ internal abstract class VtWindowBase : Control
         _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     protected static void Grid(DrawingContext ctx, double w, double h, int cols)
     {
         for (int i = 1; i < 4; i++) ctx.DrawLine(NotaGraph.GridPen, new Point(0, h * i / 4), new Point(w, h * i / 4));

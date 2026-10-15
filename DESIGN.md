@@ -120,6 +120,7 @@ Studio: WCAG where Studio meets it, Studio's own value where it does not.
 | T3.6 | Derived ink on the track and return colours | 3.0 |
 | T3.7 | The nine track colours, pairwise | ΔE ≥ 12 |
 | T3.8 | `Accent`, `Mute`, `Solo`, `Record`, pairwise | ΔE ≥ 15 |
+| T3.9 | `RecordInk` on `Record`, `SuccessInk` on `Success` | 4.5 |
 
 Track colours are not compared with state colours: solo blue is the Keys track blue by
 design. **Known gap:** in Studio Light the accent line on the ground (2.39) and faint ink
@@ -139,6 +140,7 @@ HSL lightness (hue kept) that passes the bar:
 | ember-graphite | `TextDisabled` | `#55514A` | `#646054` | T3.3 TextDisabled/Panel 2.36 < 2.5; T3.3 TextDisabled/SurfaceHover 2.31 < 2.5; T3.3 TextDisabled/SurfaceRaised 2.41 < 2.5 |
 | ember-graphite | `TextAxis` | `#4A463D` | `#65614F` | T3.3 TextAxis/BgApp 2.10 < 2.5; T3.3 TextAxis/Panel 2.38 < 2.5; T3.3 TextAxis/SurfaceHover 2.33 < 2.5; T3.3 TextAxis/SurfaceRaised 2.44 < 2.5 |
 | ember-graphite | `Record` | `#C25B44` | `#BE563E` | T3.5 Record 4.31 < 4.5 |
+| ember-graphite | `RecordInk` | `#F4E3DC` | `#FFFFFF` | T3.9 RecordInk/Record 3.67 < 4.5 |
 | ember-paper | `TextMuted` | `#746D5C` | `#625B50` | T3.1 TextMuted/BgApp 3.54 < 4.5 |
 | ember-paper | `TextTertiary` | `#8A8474` | `#7E786C` | T3.2 TextTertiary/BgApp 2.57 < 3.0 |
 | ember-paper | `TextFaint` | `#9E9786` | `#8D866F` | T3.3 TextFaint/BgApp 2.00 < 2.5 |
@@ -256,13 +258,14 @@ Fluent's `SystemAccentColor` ramps are retinted to the orange, so stock controls
 | Key | Role | Dark | Light | Use |
 |---|---|---|---|---|
 | `Brush.Record` | error | `#F06A6E` | `#B3262C` | Record and arm — solid when on |
-| `Brush.RecordInk` | — | `#FFFFFF` | `#FFFFFF` | The disc on an engaged record key |
+| `Brush.RecordInk` | — | `#17181A` | `#FFFFFF` | The disc on an engaged record key: dark on Dark's light red |
 | `Brush.Danger` | error | `#F06A6E` | `#B3262C` | Overload, clipping, error text |
 | `Brush.DangerBright` | — | `#F58F92` | `#9C1F24` | Overload readout text |
 | `Brush.Mute` | warning amber | `#F2B53C` | `#7A4F00` | Mute on |
 | `Brush.Warning` | warning amber | `#F2B53C` | `#7A4F00` | Meter −6…0 dB |
 | `Brush.Solo` | track blue | `#6A9FD8` | `#3F78B8` | Solo on |
 | `Brush.Success` | green | `#6CC673` | `#22692B` | Meter safe range, positive status; Play in Session |
+| `Brush.SuccessInk` | — | `#17181A` | `#FFFFFF` | The glyph on a green key (Session play) |
 | `Brush.SuccessDim` | green-dim | `#3F8A45` | `#79B880` | Transport input, metronome |
 
 `DangerHover` and `DangerSubtle` complete the error family; `NotaPalette` adds `DangerDeep`

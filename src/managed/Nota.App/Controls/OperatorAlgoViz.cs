@@ -184,6 +184,13 @@ internal sealed class OperatorRoutingViz : Control
         InvalidateVisual();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): drop the cable without rerouting.
+        if (_drag >= 0) { _drag = -1; InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     // Change one operator's target, then snap to the algorithm that best matches.
     private void TryReroute(int src, int newTgt)
     {

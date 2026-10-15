@@ -215,8 +215,22 @@ internal sealed class MosaicZoneMap : Control
             else if (_cycleNext >= 0) { _sel = _cycleNext; Selected?.Invoke(_sel); }
         }
         _cycleNext = -1;
-        _drag = Drag.None; _dragZone = -1;
+        _drag = Drag.None; InvalidateVisual(); _dragZone = -1;
         e.Pointer.Capture(null);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): release the held key, commit the
+        // zone as it stands and drop the accent (no click-to-cycle without a real release).
+        if (_keyHeld >= 0) { KeyUp?.Invoke(_keyHeld); _keysDown.Remove(_keyHeld); _keyHeld = -1; InvalidateVisual(); }
+        if (_drag != Drag.None)
+        {
+            if (_moved && _dragZone >= 0) Edited?.Invoke(_dragZone, _live.Klo, _live.Khi, _live.Vlo, _live.Vhi, true);
+            _cycleNext = -1;
+            _drag = Drag.None; InvalidateVisual(); _dragZone = -1;
+        }
+        base.OnPointerCaptureLost(e);
     }
 
     // ---- drawing -----------------------------------------------------------------------------
@@ -361,8 +375,14 @@ internal sealed class MosaicCurveView : Control
     {
         base.OnPointerReleased(e);
         if (!_drag) return;
-        _drag = false; End?.Invoke();
+        _drag = false; InvalidateVisual(); End?.Invoke();
         e.Pointer.Capture(null);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag) { _drag = false; InvalidateVisual(); End?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)

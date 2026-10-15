@@ -90,9 +90,16 @@ internal sealed class RhythmHitView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_dragging) return;
-        _dragging = false;
+        _dragging = false; InvalidateVisual();
         e.Pointer.Capture(null);
         DragEnd?.Invoke();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_dragging) { _dragging = false; InvalidateVisual(); DragEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
@@ -227,9 +234,15 @@ internal sealed class RhythmSampleView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (_drag < 0) return;
-        int d = _drag; _drag = -1;
+        int d = _drag; _drag = -1; InvalidateVisual();
         e.Pointer.Capture(null);
         DragEnd?.Invoke(d);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag >= 0) { int d = _drag; _drag = -1; InvalidateVisual(); DragEnd?.Invoke(d); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
@@ -368,6 +381,12 @@ internal sealed class RhythmStepStrip : Control
         if (_pressStep < 0) return;
         _pressStep = -1;
         e.Pointer.Capture(null);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_pressStep >= 0) { _pressStep = -1; InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)

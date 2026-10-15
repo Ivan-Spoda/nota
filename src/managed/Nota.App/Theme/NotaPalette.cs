@@ -340,6 +340,7 @@ internal static class NotaPalette
     public static readonly SolidColorBrush Record      = T(nameof(Record)); // Brush.Record — active recording, the only claim on red
     public static readonly SolidColorBrush RecordInk   = T(nameof(RecordInk)); // Brush.RecordInk — disc on an engaged record button
     public static readonly SolidColorBrush Success     = T(nameof(Success)); // Brush.Success — Signal, working meter zone
+    public static readonly SolidColorBrush SuccessInk  = T(nameof(SuccessInk)); // Brush.SuccessInk — ink on a Success fill (Session play)
     public static readonly SolidColorBrush SuccessDim  = T(nameof(SuccessDim)); // Brush.SuccessDim — transport input, metronome
     public static readonly SolidColorBrush Warning     = T(nameof(Warning)); // Brush.Warning — Caution, −6..0 dB
     // Track toggles: mute is amber, solo is blue, arm is Record. Each fills solid when on.
@@ -451,7 +452,7 @@ internal static class NotaPalette
         ["Brush.AccentDim"] = AccentDim,         ["Brush.AccentEdge"] = AccentEdge,
         ["Brush.AccentSubtle"] = AccentSubtle,
         ["Brush.Record"] = Record,               ["Brush.RecordInk"] = RecordInk,
-        ["Brush.Success"] = Success,
+        ["Brush.Success"] = Success, ["Brush.SuccessInk"] = SuccessInk,
         ["Brush.SuccessDim"] = SuccessDim,       ["Brush.Warning"] = Warning,
         ["Brush.Danger"] = Danger,               ["Brush.DangerHover"] = DangerHover,
         ["Brush.DangerBright"] = DangerBright,

@@ -226,7 +226,9 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             }
             host.PointerPressed += (_, e) => { springT?.Stop(); drag = true; if (pi >= 0) Begin(id); e.Pointer.Capture(host); From(e); };
             host.PointerMoved += (_, e) => { if (drag) From(e); };
-            host.PointerReleased += (_, e) => { if (drag) { drag = false; if (pi >= 0) End(id); e.Pointer.Capture(null); if (spring) Spring(); } };
+            void EndDrag() { drag = false; if (pi >= 0) End(id); if (spring) Spring(); }
+            host.PointerReleased += (_, e) => { if (drag) { EndDrag(); e.Pointer.Capture(null); } };
+            host.PointerCaptureLost += (_, _) => { if (drag) EndDrag(); };
             host.SizeChanged += (_, _) => Vis(G(id));
             var nm = new TextBlock { Text = NotaText.Label(name), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center };
             common.Add(() => { if (!drag) Vis(G(id)); bool moved = Math.Abs(G(id) - (spring ? 0.5f : 0f)) > 0.01f; nm.Foreground = moved ? TxtC : MutedC; });
@@ -572,7 +574,8 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             { bool drag = false; double y0 = 0; float v0 = 0;
               lenBox.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(lenBox).Properties.IsLeftButtonPressed) return; drag = true; y0 = e.GetPosition(lenBox).Y; v0 = G("seqlen"); Begin("seqlen"); e.Pointer.Capture(lenBox); e.Handled = true; };
               lenBox.PointerMoved += (_, e) => { if (!drag) return; float v = Math.Clamp(v0 + (float)(y0 - e.GetPosition(lenBox).Y) / 120f, 0, 1); v = (float)Math.Round(v * 15) / 15f; Raw("seqlen", v); Refresh(); };
-              lenBox.PointerReleased += (_, e) => { if (drag) { drag = false; End("seqlen"); e.Pointer.Capture(null); } }; }
+              lenBox.PointerReleased += (_, e) => { if (drag) { drag = false; End("seqlen"); e.Pointer.Capture(null); } };
+              lenBox.PointerCaptureLost += (_, _) => { if (drag) { drag = false; End("seqlen"); } }; }
             tabReadouts[3].Add(() => lenTxt.Text = $"{SeqLen()}");
             // legend = paint brushes
             string[] names = { "note", "ratchet", "tie", "rest" };
@@ -1004,6 +1007,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                     };
                     depBox.PointerMoved += (_, e) => { if (!drag) return; float v = Math.Clamp(v0 + (float)(y0 - e.GetPosition(depBox).Y) / 200f, 0, 1); Raw(AmtId(slot), v); dep.Text = $"{(v - 0.5f) * 200:+0;−0;0}"; };
                     depBox.PointerReleased += (_, e) => { if (drag) { drag = false; End(AmtId(slot)); e.Pointer.Capture(null); Refresh(); } };
+                    depBox.PointerCaptureLost += (_, _) => { if (drag) { drag = false; End(AmtId(slot)); Refresh(); } };
                     bottomHost.Children.Add(Row(4, new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Control, Background = tone, VerticalAlignment = VerticalAlignment.Center },
                         new TextBlock { Text = CableName(c), FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }, depBox));
                 }

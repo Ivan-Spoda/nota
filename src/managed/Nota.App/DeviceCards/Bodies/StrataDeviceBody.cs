@@ -109,6 +109,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
             dbTxts[i].PointerPressed += (_, e) => { drag = true; startY = e.GetPosition(dbTxts[iv]).Y; startDb = scope[7 + iv * 3]; e.Pointer.Capture(dbTxts[iv]); };
             dbTxts[i].PointerMoved += (_, e) => { if (drag) { double db = Math.Clamp(startDb + (startY - e.GetPosition(dbTxts[iv]).Y) * 0.15, -24, 12); Act(A_LayerGain, iv, (float)db); dbTxts[iv].Text = $"{db:+0.0;−0.0;0.0}"; } };
             dbTxts[i].PointerReleased += (_, e) => { drag = false; e.Pointer.Capture(null); };
+            dbTxts[i].PointerCaptureLost += (_, _) => drag = false;
             muteBtns[i] = new Border { Width = 16, Height = 14, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef, Background = Sunken, Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new TextBlock { Text = "M", FontSize = 8, FontWeight = FontWeight.Medium, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
             muteBtns[i].PointerPressed += (_, _) => { bool nowMuted = scope[8 + iv * 3] <= 0.5f; Act(A_LayerMute, iv, nowMuted ? 1f : 0f); };

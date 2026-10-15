@@ -162,6 +162,13 @@ internal sealed class PrismSpectrum : Control
         int d = _drag; _drag = -1; e.Pointer.Capture(null); DragEnded?.Invoke(d); InvalidateVisual();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag >= 0) { int d = _drag; _drag = -1; DragEnded?.Invoke(d); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
@@ -334,6 +341,12 @@ internal sealed class PrismTransfer : Control
         base.OnPointerReleased(e);
         if (_drag == 0) return;
         int d = _drag; _drag = 0; e.Pointer.Capture(null); DragEnded?.Invoke(d);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag != 0) { int d = _drag; _drag = 0; DragEnded?.Invoke(d); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)

@@ -45,6 +45,7 @@ public partial class MainWindow
         SetHost(win.Host, _mixer);
         _mixer.StripsChanged += Fit;
         _mixer.Refresh();
+        win.Opened += (_, _) => Fit();   // again once shown: only now is it on the owner's screen
         win.Show(this);
     }
 }

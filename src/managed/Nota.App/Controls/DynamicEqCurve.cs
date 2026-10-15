@@ -262,7 +262,7 @@ public sealed class DynamicEqCurve : Control
             if (_gestFreq) _engine.EndAutomationWrite(_track, AutomationTarget.DeviceParam, _device, DynEq.P(_drag, DynEq.FreqF), "");
             if (_gestGain) _engine.EndAutomationWrite(_track, AutomationTarget.DeviceParam, _device, DynEq.P(_drag, DynEq.GainF), "");
         }
-        _drag = -1; _gestFreq = _gestGain = false;
+        _drag = -1; InvalidateVisual(); _gestFreq = _gestGain = false;
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
@@ -465,7 +465,8 @@ public sealed class DynamicEqCurve : Control
             bool bOn = BandOn(b), isSel = b == sel, dimmed = solo >= 0 && !isSel;
             var c = NodeAt(b);
             IBrush fill = !bOn || dimmed ? NotaPalette.BorderStrong : isSel ? NotaPalette.AccentBright : NotaPalette.TextSecondary;
-            IBrush num = bOn && !dimmed ? NotaPalette.TextOnAccent : NotaPalette.TextTertiary;
+            // The number takes ink derived from its own node (orange, grey or dim), so it reads on all of them.
+            IBrush num = bOn && !dimmed && fill is SolidColorBrush f ? NotaPalette.InkOn(f) : NotaPalette.TextTertiary;
             double r = NodeD / 2;
             ctx.DrawEllipse(fill, RingPen, c, r + 1, r + 1);
             if (IsDyn(b) && on[b])

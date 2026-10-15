@@ -114,6 +114,13 @@ internal sealed class ThinScrollBar : Control
         InvalidateVisual();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the drag and drop the accent.
+        if (_dragging) { _dragging = false; InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     protected override void OnPointerExited(PointerEventArgs e)
     {
         if (_hot) { _hot = false; InvalidateVisual(); }

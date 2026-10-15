@@ -96,6 +96,18 @@ internal sealed class VoltMatrix : Control
         Changed?.Invoke();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_dragS >= 0)
+        {
+            _e.EndAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, Id(_dragS, _dragD));
+            _dragS = _dragD = -1; InvalidateVisual();
+            Changed?.Invoke();
+        }
+        base.OnPointerCaptureLost(e);
+    }
+
     private void Txt(DrawingContext ctx, string t, double x, double y, IBrush b, double size = 8, bool center = false)
     {
         var ft = new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, size, b);

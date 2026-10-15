@@ -162,7 +162,9 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             }
             host.PointerPressed += (_, e) => { springT?.Stop(); drag = true; if (pi >= 0) engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); e.Pointer.Capture(host); From(e); };
             host.PointerMoved += (_, e) => { if (drag) From(e); };
-            host.PointerReleased += (_, e) => { if (drag) { drag = false; if (pi >= 0) engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); e.Pointer.Capture(null); if (spring) Spring(); } };
+            void EndDrag() { drag = false; if (pi >= 0) engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); if (spring) Spring(); }
+            host.PointerReleased += (_, e) => { if (drag) { EndDrag(); e.Pointer.Capture(null); } };
+            host.PointerCaptureLost += (_, _) => { if (drag) EndDrag(); };
             host.SizeChanged += (_, _) => Vis(G(id));
             var valTxt = new TextBlock { FontSize = 7, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center };
             valTxt.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");

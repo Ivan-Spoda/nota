@@ -90,6 +90,13 @@ internal sealed class ReverbTailView : Control
         GestureEnd?.Invoke(_drag - 1); _drag = 0; e.Pointer.Capture(null);
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag != 0) { GestureEnd?.Invoke(_drag - 1); _drag = 0; InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     private void Apply(Point p)
     {
         var (x0, x1, top, bot) = Geo();

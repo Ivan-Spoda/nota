@@ -249,6 +249,7 @@
   <Style Selector="ToggleButton.danger:checked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Brush.Danger}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Danger}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Brush.RecordInk}"/>   <!-- beats the checked presenter's on-accent ink -->
   </Style>
   <Style Selector="ToggleButton.danger:checked">
     <Setter Property="Foreground" Value="{DynamicResource Brush.RecordInk}"/>
@@ -274,6 +275,7 @@
   <Style Selector="ToggleButton.tp-icon.rec:checked /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Brush.Record}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Record}"/>
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Brush.RecordInk}"/>   <!-- beats the checked presenter's on-accent ink -->
   </Style>
   <Style Selector="ToggleButton.tp-icon.rec:checked">
     <Setter Property="Foreground" Value="{DynamicResource Brush.RecordInk}"/>
@@ -303,10 +305,12 @@
   <Style Selector="Button.tp-play.playing.session">
     <Setter Property="Background" Value="{DynamicResource Brush.Success}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Success}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.SuccessInk}"/>
   </Style>
   <Style Selector="Button.tp-play.playing.session:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Brush.Success}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Success}"/>
+    <Setter Property="Foreground" Value="{DynamicResource Brush.SuccessInk}"/>
   </Style>
 
   <!-- Chips: raised keys like any button, a little tighter. -->

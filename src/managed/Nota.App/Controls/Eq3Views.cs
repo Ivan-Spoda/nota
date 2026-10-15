@@ -139,6 +139,13 @@ internal sealed class Eq3Fader : Control
         _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); InvalidateVisual();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;
@@ -307,6 +314,17 @@ internal sealed class Eq3Graph : Control
         e.Pointer.Capture(null);
         if (d < 2) XoverEnd?.Invoke(d); else GainEnd?.Invoke(d - 2);
         InvalidateVisual();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag >= 0)
+        {
+            int d = _drag; _drag = -1;
+            if (d < 2) XoverEnd?.Invoke(d); else GainEnd?.Invoke(d - 2);
+            InvalidateVisual();
+        }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)

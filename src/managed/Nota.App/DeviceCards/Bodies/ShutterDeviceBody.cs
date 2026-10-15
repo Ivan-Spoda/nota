@@ -546,6 +546,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             };
             host.PointerMoved += (_, e) => { if (drag) SetX(e.GetPosition(grid).X); };
             host.PointerReleased += (_, e) => { if (!drag) return; drag = false; e.Pointer.Capture(null); End(p); };
+            host.PointerCaptureLost += (_, _) => { if (!drag) return; drag = false; End(p); };
             grid.SizeChanged += (_, _) => Paint();
             readouts.Add(() => { if (!drag) Paint(); });
             Learn(host, p);

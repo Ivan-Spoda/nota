@@ -104,7 +104,14 @@ internal sealed class CompFader : Control
     {
         base.OnPointerReleased(e);
         if (!_drag) return;
-        _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke();
+        _drag = false; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
@@ -176,7 +183,13 @@ internal sealed class CompTransferView : Control
     {
         base.OnPointerReleased(e);
         if (!_drag) return;
-        _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke();
+        _drag = false; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
     private void Apply(Point p)
     {
@@ -464,6 +477,17 @@ internal sealed class CompKeyView : Control
         GestureEnd?.Invoke(_drag - 1);
         if (_qGesture) { GestureEnd?.Invoke(2); _qGesture = false; }
         _drag = 0; e.Pointer.Capture(null);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag != 0)
+        {
+            GestureEnd?.Invoke(_drag - 1);
+            if (_qGesture) { GestureEnd?.Invoke(2); _qGesture = false; }
+            _drag = 0; InvalidateVisual();
+        }
+        base.OnPointerCaptureLost(e);
     }
     private void Apply(Point p)
     {

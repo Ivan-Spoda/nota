@@ -425,6 +425,7 @@ internal static class MacroPanel
         };
         track.PointerMoved += (_, e) => { if (drag != 0) Apply(e.GetPosition(track).X); };
         track.PointerReleased += (_, e) => { if (drag != 0) { drag = 0; e.Pointer.Capture(null); ctx.NotifyChanged(); } };
+        track.PointerCaptureLost += (_, _) => { if (drag != 0) { drag = 0; ctx.NotifyChanged(); } };
         ToolTip.SetTip(track, "The range the macro sweeps: drag either end · the tick is where it is now");
 
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 5 };

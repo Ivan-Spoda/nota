@@ -110,6 +110,14 @@ internal static class BrowserCategoryTests
         yield return (!pvm.CategoriesOn(0).Contains(DeviceCategories.Other) && !pvm.CategoriesOn(2).Contains(DeviceCategories.Other),
             "no Other chip where nothing lands there");
 
+        // A rescan that removes the picked category's last device clears the pick with its chip.
+        pvm.SetCategoryFilter(1, DeviceCategories.Other);
+        plugins.Set("Ambience | VST3 | fx | Smart | Fx/Reverb", "Ana | VST3 | inst | Sonic | Instrument/Synth");
+        pvm.Rebuild();
+        yield return (pvm.CategoryFilter(1) == "" && !pvm.CategoriesOn(1).Contains(DeviceCategories.Other) && Devices(pvm.Effects).Count == 27
+                      && pvm.CategoryFilter(0) == "Synths",
+            "a rescan that empties the picked category clears the pick; other picks stay");
+
         // An existing settings file has no key: the chips are on (FR-003).
         var old = JsonSerializer.Deserialize<Settings>("{}")!;
         yield return (old.BrowserCategoryChips, "settings without the new key show the category chips");

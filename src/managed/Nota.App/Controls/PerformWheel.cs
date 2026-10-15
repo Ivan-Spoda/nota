@@ -80,10 +80,22 @@ internal sealed class PerformWheel : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_drag) return;
-        _drag = false;
+        _drag = false; InvalidateVisual();
         e.Pointer.Capture(null);
         if (Spring) Write(Default);
         GestureEnd?.Invoke();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): spring back, end the gesture and drop the accent.
+        if (_drag)
+        {
+            _drag = false; InvalidateVisual();
+            if (Spring) Write(Default);
+            GestureEnd?.Invoke();
+        }
+        base.OnPointerCaptureLost(e);
     }
 
     private void Write(double v)

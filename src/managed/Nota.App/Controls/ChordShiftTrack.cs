@@ -82,14 +82,14 @@ internal sealed class ChordShiftTrack : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_drag) return;
-        _drag = false;
+        _drag = false; InvalidateVisual();
         e.Pointer.Capture(null);
         GestureEnd?.Invoke();
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
-        if (_drag) { _drag = false; GestureEnd?.Invoke(); }
+        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
         base.OnPointerCaptureLost(e);
     }
 

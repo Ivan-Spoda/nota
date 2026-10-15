@@ -121,6 +121,9 @@ internal static class NotaThemeService
     private static void Invalidate(Visual v)
     {
         v.InvalidateVisual();
+        // An open popup's content lives in its own popup root, outside the window's visual
+        // tree — reach it through the popup, or an open ComboBox list stays in the old colours.
+        if (v is Avalonia.Controls.Primitives.Popup { IsOpen: true, Child: { } content }) Invalidate(content);
         foreach (var child in v.GetVisualChildren()) Invalidate(child);
     }
 }

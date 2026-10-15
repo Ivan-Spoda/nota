@@ -72,11 +72,11 @@ internal sealed class FluxVectorPad : Control
     }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
-        if (_drag) { _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); }
+        if (_drag) { _drag = false; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke(); }
     }
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
-        if (_drag) { _drag = false; GestureEnd?.Invoke(); }
+        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
     }
 
     private void Apply(Point p)

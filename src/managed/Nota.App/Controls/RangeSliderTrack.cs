@@ -61,7 +61,7 @@ internal sealed class RangeSliderTrack : Control
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (e.ClickCount == 2 && Reset is not null)
         {
-            if (_drag >= 0) { int d = _drag; _drag = -1; e.Pointer.Capture(null); GestureEnd?.Invoke(d); }
+            if (_drag >= 0) { int d = _drag; _drag = -1; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke(d); }
             Reset();
             e.Handled = true;
             return;
@@ -110,7 +110,7 @@ internal sealed class RangeSliderTrack : Control
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
-        if (_drag >= 0) { int d = _drag; _drag = -1; GestureEnd?.Invoke(d); }
+        if (_drag >= 0) { int d = _drag; _drag = -1; InvalidateVisual(); GestureEnd?.Invoke(d); }
         base.OnPointerCaptureLost(e);
     }
 

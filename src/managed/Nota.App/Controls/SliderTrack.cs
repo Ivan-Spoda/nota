@@ -82,7 +82,7 @@ internal sealed class SliderTrack : Control
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         if (e.ClickCount == 2 && Reset is not null)
         {
-            if (_drag) { _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); }
+            if (_drag) { _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); InvalidateVisual(); }
             Reset();
             e.Handled = true;
             return;
@@ -116,12 +116,13 @@ internal sealed class SliderTrack : Control
         _drag = false;
         e.Pointer.Capture(null);
         GestureEnd?.Invoke();
+        InvalidateVisual();   // a drag that ended off the control leaves no hover to repaint it
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         // Never leave an automation session dangling.
-        if (_drag) { _drag = false; GestureEnd?.Invoke(); }
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
         base.OnPointerCaptureLost(e);
     }
 

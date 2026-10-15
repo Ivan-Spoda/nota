@@ -467,6 +467,17 @@ internal static partial class DesignTokenCheck
         var tracked = Regex.Matches(theme, """<Setter Property="LetterSpacing" Value="(?<v>[0-9.]+)"/>""")
             .Where(m => double.Parse(m.Groups["v"].Value, inv) > 0).Count();
         yield return (tracked == 0, tracked == 0 ? "no tracked (letter-spaced) text class in the theme" : $"{tracked} text style(s) still set LetterSpacing");
+        // …nor do views: a positive LetterSpacing anywhere in the app is tracking by the back door.
+        // The one exception is data, not a label: the Remote pairing code, spaced to be read aloud.
+        var viewTracking = Directory.EnumerateFiles(app, "*.*", SearchOption.AllDirectories)
+            .Where(f => (f.EndsWith(".cs") || f.EndsWith(".axaml")) && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"LetterSpacing\s*=\s*""?(?<v>[0-9.]+)")
+                .Where(m => double.Parse(m.Groups["v"].Value, inv) > 0)
+                .Select(_ => Path.GetRelativePath(app, f)))
+            .Where(r => r.Replace('\\', '/') != "Remote/ConnectPhoneView.cs").Distinct().ToArray();
+        yield return (viewTracking.Length == 0,
+            viewTracking.Length == 0 ? "no view sets a positive LetterSpacing" : $"positive LetterSpacing in: {string.Join(", ", viewTracking)}");
         var fonts = File.ReadAllText(Path.Combine(app, "Theme/NotaFonts.cs"));
         var trackConsts = Regex.Matches(fonts, @"(?<n>\w+Tracking)\s*=\s*(?<v>[0-9.]+)").Where(m => double.Parse(m.Groups["v"].Value, inv) != 0).Select(m => m.Groups["n"].Value).ToArray();
         yield return (trackConsts.Length == 0, trackConsts.Length == 0 ? "NotaType tracking constants are 0" : $"tracking left in NotaType: {string.Join(", ", trackConsts)}");

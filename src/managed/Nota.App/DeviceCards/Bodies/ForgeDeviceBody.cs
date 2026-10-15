@@ -209,6 +209,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
                 Raw(OutP(s), ov + (oy - e.GetPosition(outBox).Y) / 120.0); Refresh();
             };
             outBox.PointerReleased += (_, e) => { if (od) { od = false; End(OutP(s)); e.Pointer.Capture(null); } };
+            outBox.PointerCaptureLost += (_, _) => { if (od) { od = false; End(OutP(s)); } };
             Learn(outBox, OutP(s));
             ToolTip.SetTip(outBox, $"Stage {s + 1} output, −12 … +12 dB — drag up / down, double-click resets");
 

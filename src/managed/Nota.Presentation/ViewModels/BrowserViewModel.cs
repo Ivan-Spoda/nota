@@ -406,6 +406,11 @@ public sealed partial class BrowserViewModel : ObservableObject
             (isInstrument ? _instrTree : _fxTree).Add(item);
         }
 
+        // A rescan can take away the picked category's last device (an uninstalled plug-in
+        // under Other): drop a pick whose chip is gone, or the tab stays empty with nothing to clear it.
+        for (int t = 0; t < _categoryFilter.Length; t++)
+            if (_categoryFilter[t].Length > 0 && !CategoriesOn(t).Contains(_categoryFilter[t])) _categoryFilter[t] = "";
+
         RebuildDeviceTabs();
         RebuildSamples();
         RebuildProjects();

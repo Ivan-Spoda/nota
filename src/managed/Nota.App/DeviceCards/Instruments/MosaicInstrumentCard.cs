@@ -298,6 +298,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 if (n != 0) { acc -= n; step(n); tb.Text = text(); Refresh(); }
             };
             b.PointerReleased += (_, e) => { if (!drag) return; drag = false; e.Pointer.Capture(null); done?.Invoke(); };
+            b.PointerCaptureLost += (_, _) => { if (!drag) return; drag = false; done?.Invoke(); };
             b.PointerWheelChanged += (_, e) => { step(e.Delta.Y > 0 ? 1 : -1); tb.Text = text(); done?.Invoke(); Refresh(); e.Handled = true; };
             readouts.Add(() => { if (!drag) tb.Text = text(); });
             if (tip is not null) ToolTip.SetTip(b, tip);

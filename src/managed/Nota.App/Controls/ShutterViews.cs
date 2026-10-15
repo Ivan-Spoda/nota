@@ -114,6 +114,13 @@ internal abstract class ShDragView : Control
         if (_drag < 0) return;
         int h = _drag; _drag = -1; e.Pointer.Capture(null); GestureEnd?.Invoke(h); InvalidateVisual();
     }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag >= 0) { int h = _drag; _drag = -1; GestureEnd?.Invoke(h); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
     protected virtual StandardCursorType CursorFor(int handle) => StandardCursorType.SizeNorthSouth;
 
     private void Move(Point p)
@@ -520,6 +527,12 @@ internal sealed class ShPatternView : Control
         base.OnPointerReleased(e);
         if (!_drag) return;
         _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); InvalidateVisual();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
     }
 
     private void Apply(Point p)

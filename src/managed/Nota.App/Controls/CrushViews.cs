@@ -108,6 +108,13 @@ internal sealed class CrQuantView : Control
         _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke(); InvalidateVisual();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     public override void Render(DrawingContext ctx)
     {
         double w = Bounds.Width, h = Bounds.Height;

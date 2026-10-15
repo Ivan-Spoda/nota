@@ -88,6 +88,13 @@ public sealed class ValueBar : Control
         if (_drag) GestureEnd?.Invoke();
         _drag = false;
         e.Pointer.Capture(null);
+        InvalidateVisual();   // a drag that ended off the control leaves no hover to repaint it
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
     }
 
     private void Apply(double v)

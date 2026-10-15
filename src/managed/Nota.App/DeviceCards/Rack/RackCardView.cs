@@ -124,6 +124,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); SetFromX(e.GetPosition(slot).X); };
         slot.PointerMoved += (_, e) => { if (drag) SetFromX(e.GetPosition(slot).X); };
         slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); } };
+        slot.PointerCaptureLost += (_, _) => drag = false;
         name.DoubleTapped += (_, _) => PromptRenameMacro(a, i, name);
         ValueEntry.Attach(val, () => E.PluginParamGet(T, adi, i), v => E.PluginParamSet(T, adi, i, (float)v),
             () => NotaNum.F($"{E.PluginParamGet(T, adi, i) * 100:0}"),
@@ -388,6 +389,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         gSlot.PointerPressed += (_, e) => { gd = true; e.Pointer.Capture(gSlot); GSet(e.GetPosition(gSlot).X); };
         gSlot.PointerMoved += (_, e) => { if (gd) GSet(e.GetPosition(gSlot).X); };
         gSlot.PointerReleased += (_, e) => { if (gd) { gd = false; e.Pointer.Capture(null); } };
+        gSlot.PointerCaptureLost += (_, _) => gd = false;
         _irTick.Add(() => { if (!gd) GUpd(); });
         var glideRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 4, Children = { IrCap("GLIDE"), WithCol(gSlot, 1), WithCol(glideVal, 2) } };
 
@@ -735,7 +737,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         void Apply(double x) { double f = Math.Clamp(x / Math.Max(1, track.Bounds.Width), 0, 1); if (drag == 1) fLo = Math.Min(f, fHi); else fHi = Math.Max(f, fLo); Upd(); }
         track.PointerPressed += (_, e) => { double x = e.GetPosition(track).X, w = track.Bounds.Width; drag = Math.Abs(x - fLo * w) <= Math.Abs(x - fHi * w) ? 1 : 2; e.Pointer.Capture(track); Apply(x); };
         track.PointerMoved += (_, e) => { if (drag != 0) Apply(e.GetPosition(track).X); };
-        track.PointerReleased += (_, e) => { if (drag != 0) { drag = 0; e.Pointer.Capture(null); a.SetMappingRange(mappingIndex, (float)(pMin + fLo * span), (float)(pMin + fHi * span)); _ctx.RequestRebuild(); } };
+        void EndDrag() { drag = 0; a.SetMappingRange(mappingIndex, (float)(pMin + fLo * span), (float)(pMin + fHi * span)); _ctx.RequestRebuild(); }
+        track.PointerReleased += (_, e) => { if (drag != 0) { EndDrag(); e.Pointer.Capture(null); } };
+        track.PointerCaptureLost += (_, _) => { if (drag != 0) EndDrag(); };
         _irTick.Add(Upd);
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6, Children = { name, WithCol(track, 1), WithCol(vals, 2) } };
         return new Border { Background = IrInset, BorderBrush = IrField, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(7, 4), Child = g };
@@ -948,6 +952,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         gSlot.PointerPressed += (_, e) => { gd = true; e.Pointer.Capture(gSlot); GSet(e.GetPosition(gSlot).X); };
         gSlot.PointerMoved += (_, e) => { if (gd) GSet(e.GetPosition(gSlot).X); };
         gSlot.PointerReleased += (_, e) => { if (gd) { gd = false; e.Pointer.Capture(null); } };
+        gSlot.PointerCaptureLost += (_, _) => gd = false;
         _irTick.Add(() => { if (!gd) GUpd(); });
         MidiLearn.Bind(gSlot, MidiTarget.RackVolume(T, di), "Rack Volume");
         var gainRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { IrCap("GAIN"), WithCol(gSlot, 1), WithCol(gainVal, 2) } };
@@ -1652,7 +1657,11 @@ internal sealed class RackZoneMap : Control
     }
     protected override void OnPointerMoved(PointerEventArgs e) { if (_drag >= 0) Apply(e.GetPosition(this).X); }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    { if (_drag >= 0) { RangeEdited?.Invoke(_drag, _lo[_drag], _hi[_drag]); _drag = -1; e.Pointer.Capture(null); } }
+    { if (_drag >= 0) { RangeEdited?.Invoke(_drag, _lo[_drag], _hi[_drag]); _drag = -1; InvalidateVisual(); e.Pointer.Capture(null); } }
+
+    // Capture taken away mid-drag (the window deactivates): commit the range as it stands and drop the accent.
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    { if (_drag >= 0) { RangeEdited?.Invoke(_drag, _lo[_drag], _hi[_drag]); _drag = -1; InvalidateVisual(); } base.OnPointerCaptureLost(e); }
 
     private void Apply(double x)
     {

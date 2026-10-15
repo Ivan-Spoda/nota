@@ -211,6 +211,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
                 Raw(Gain, v0); RefreshAll();
             };
             box.PointerReleased += (_, e) => { if (!drag) return; drag = false; e.Pointer.Capture(null); End(Gain); };
+            box.PointerCaptureLost += (_, _) => { if (!drag) return; drag = false; End(Gain); };
             readouts.Add(() =>
             {
                 double db = OutDb(P(Gain));

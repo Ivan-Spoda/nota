@@ -333,6 +333,9 @@ internal sealed class LensScopeView : Control
     protected override void OnPointerMoved(PointerEventArgs e) { if (_drag != 0) Apply(e.GetPosition(this)); }
     protected override void OnPointerReleased(PointerReleasedEventArgs e) { _drag = 0; e.Pointer.Capture(null); }
 
+    // Capture taken away mid-drag (the window deactivates): end the drag.
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) { if (_drag != 0) { _drag = 0; InvalidateVisual(); } base.OnPointerCaptureLost(e); }
+
     private void Apply(Point p)
     {
         double w = Bounds.Width, h = Bounds.Height;
@@ -607,7 +610,13 @@ internal sealed class LensVSlider : Control
     }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
-        if (_drag) { _drag = false; GestureEnd?.Invoke(); e.Pointer.Capture(null); }
+        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); e.Pointer.Capture(null); }
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {

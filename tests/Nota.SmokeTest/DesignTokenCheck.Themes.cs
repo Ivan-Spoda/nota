@@ -79,7 +79,7 @@ internal static partial class DesignTokenCheck
 
             var fails = Pairings(theme.Colors).Where(p => p.Value < p.Min - 1e-9).ToList();
             yield return (fails.Count == 0,
-                fails.Count == 0 ? $"{id}: every readability pairing holds (T3.1–T3.8)"
+                fails.Count == 0 ? $"{id}: every readability pairing holds (T3.1–T3.9)"
                     : $"{id}: {fails.Count} pairing(s) below the bar — " +
                       string.Join("; ", fails.Take(6).Select(f => $"{f.Id} {f.What} {f.Value:0.00} < {f.Min}")));
         }
@@ -136,6 +136,9 @@ internal static partial class DesignTokenCheck
         foreach (var s in new[] { "BgApp", "Panel", "BgSunken" }) yield return Cr("T3.4", "AccentBright", s, 2.3);
         foreach (var f in new[] { "Accent", "Mute", "Solo", "Record" })
             yield return new("T3.5", $"ink on {f}", Contrast(Ink(c[f]), c[f]), 4.5);
+        // The ink tokens the theme itself sets for text and glyphs on a status fill.
+        yield return Cr("T3.9", "RecordInk", "Record", 4.5);
+        yield return Cr("T3.9", "SuccessInk", "Success", 4.5);
         foreach (var f in Enumerable.Range(1, 9).Select(i => $"Track{i}").Append("ReturnA").Append("ReturnB"))
             yield return new("T3.6", $"ink on {f}", Contrast(Ink(c[f]), c[f]), 3.0);
         var tracks = Enumerable.Range(1, 9).Select(i => $"Track{i}").ToArray();

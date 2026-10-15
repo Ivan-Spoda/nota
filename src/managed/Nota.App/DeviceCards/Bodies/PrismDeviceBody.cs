@@ -189,6 +189,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             };
             host.PointerMoved += (_, e) => { if (drag) { Raw(p, (float)(v0 + (y0 - e.GetPosition(host).Y) / 140.0)); tb.Text = fmt(P(p)); } };
             host.PointerReleased += (_, e) => { if (drag) { drag = false; End(p); e.Pointer.Capture(null); } };
+            host.PointerCaptureLost += (_, _) => { if (drag) { drag = false; End(p); } };
             readouts.Add(() => { tb.Text = fmt(P(p)); tb.Foreground = color(); });
             Learn(host, p);
             return host;

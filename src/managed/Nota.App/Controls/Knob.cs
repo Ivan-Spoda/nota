@@ -168,6 +168,13 @@ public sealed class Knob : Control
         InvalidateVisual();
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
+        base.OnPointerCaptureLost(e);
+    }
+
     // Under the pointer the knob is live: its arc takes the accent (120ms is the button
     // fade; a dial repaints on the spot, which reads the same at this size).
     private bool _hover;

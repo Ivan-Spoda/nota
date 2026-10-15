@@ -537,6 +537,7 @@ public partial class MainWindow : Window
         }
         finally { Engine.EndUndoGroup(); }
         Timeline.Refresh();
+        Timeline.RevealTrack(trackId);   // scrolled into view, not left below the pinned returns
         if (anchorTrackId > 0) Timeline.Select(trackId, -1);   // show where it landed
         _session?.Refresh();
         if (_modular?.IsVisible == true) _modular.Refresh();   // new track shows in the graph/sidebar

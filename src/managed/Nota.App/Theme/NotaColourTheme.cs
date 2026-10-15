@@ -110,13 +110,19 @@ internal static class NotaThemes
         {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            if (!root.TryGetProperty("formatVersion", out var fv) || fv.ValueKind != JsonValueKind.Number || fv.GetInt32() != 1)
+            if (root.ValueKind != JsonValueKind.Object) return Fail("the file must hold one JSON object", out error);
+            if (!root.TryGetProperty("formatVersion", out var fv) || fv.ValueKind != JsonValueKind.Number
+                || !fv.TryGetInt32(out var version) || version != 1)
                 return Fail("formatVersion must be 1", out error);
-            var id = root.TryGetProperty("id", out var i) ? i.GetString() ?? "" : "";
+            // Metadata is read only when it is a string: a number or object here fails this
+            // theme with a reason instead of throwing out of the loader.
+            static string Str(JsonElement root, string key)
+                => root.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+            var id = Str(root, "id");
             if (!IdPattern.IsMatch(id) || id == "system") return Fail($"invalid id '{id}'", out error);
-            var name = root.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+            var name = Str(root, "name");
             if (name.Length is < 1 or > 40) return Fail("name must be 1–40 characters", out error);
-            var kindText = root.TryGetProperty("kind", out var k) ? k.GetString() : null;
+            var kindText = Str(root, "kind");
             NotaThemeKind kind;
             if (kindText == "dark") kind = NotaThemeKind.Dark;
             else if (kindText == "light") kind = NotaThemeKind.Light;
@@ -141,6 +147,12 @@ internal static class NotaThemes
         catch (JsonException e)
         {
             return Fail("not valid JSON: " + e.Message, out error);
+        }
+        catch (Exception e) when (e is InvalidOperationException or FormatException)
+        {
+            // A JSON value of the wrong kind somewhere the checks above don't look: fail this
+            // theme with a reason (the loader logs and skips it) rather than throw out of startup.
+            return Fail("unexpected value: " + e.Message, out error);
         }
     }
 

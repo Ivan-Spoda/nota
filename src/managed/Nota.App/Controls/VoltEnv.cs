@@ -79,7 +79,11 @@ namespace Nota.App;
         }
         protected override void OnPointerMoved(PointerEventArgs e) { if (_drag >= 0) Apply(e.GetPosition(this)); }
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
-        { if (_drag >= 0) { Gest(false); _drag = -1; e.Pointer.Capture(null); } }
+        { if (_drag >= 0) { Gest(false); _drag = -1; InvalidateVisual(); e.Pointer.Capture(null); } }
+
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+        { if (_drag >= 0) { Gest(false); _drag = -1; InvalidateVisual(); } base.OnPointerCaptureLost(e); }
 
         private void Gest(bool begin)
         {

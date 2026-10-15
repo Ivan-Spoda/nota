@@ -361,6 +361,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             RefreshAll();
         };
         ceilBox.PointerReleased += (_, e) => { if (cd) { cd = false; End(Ceiling); e.Pointer.Capture(null); } };
+        ceilBox.PointerCaptureLost += (_, _) => { if (cd) { cd = false; End(Ceiling); } };
         Learn(ceilBox, Ceiling);
         ToolTip.SetTip(ceilBox, "Ceiling, −6 … 0\u2009dBTP — drag up / down (Shift for fine steps), double-click resets to −1.0");
         readouts.Add(() =>

@@ -111,9 +111,16 @@ internal sealed class SamplerWaveView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (_drag < 0) return;
-        int h = _drag; _drag = -1;
+        int h = _drag; _drag = -1; InvalidateVisual();
         e.Pointer.Capture(null);
         DragEnd?.Invoke(h);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag >= 0) { int h = _drag; _drag = -1; InvalidateVisual(); DragEnd?.Invoke(h); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
@@ -355,8 +362,19 @@ internal sealed class SamplerEnvView : Control
         if (_drag < 0) return;
         DragEnd?.Invoke(Ids[_drag]);
         if (_drag == 1) DragEnd?.Invoke("sustain");
-        _drag = -1;
+        _drag = -1; InvalidateVisual();
         e.Pointer.Capture(null);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag >= 0)
+        {
+            DragEnd?.Invoke(Ids[_drag]);
+            if (_drag == 1) DragEnd?.Invoke("sustain");
+            _drag = -1; InvalidateVisual();
+        }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)
@@ -474,9 +492,15 @@ internal sealed class SamplerFilterView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_drag) return;
-        _drag = false;
+        _drag = false; InvalidateVisual();
         e.Pointer.Capture(null);
         DragEnd?.Invoke();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        if (_drag) { _drag = false; InvalidateVisual(); DragEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
 
     public override void Render(DrawingContext ctx)

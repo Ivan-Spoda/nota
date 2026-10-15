@@ -260,6 +260,7 @@ public sealed class ModularView : UserControl
     private void RefreshSidebar()
     {
         _sidebarPanel.IsVisible = !_global;   // collapses in Global view (islands are the tracks)
+        _emptyHint.IsVisible = !_global && _trackId <= 0;   // the hint is Track view's; Global has islands
         if (_global) return;
         _sidebar.Children.Clear();
         int n = _engine.TrackCount;
@@ -268,7 +269,6 @@ public sealed class ModularView : UserControl
                 _sidebar.Children.Add(TrackRow(ti.Id, ti));
         if (_sidebar.Children.Count == 0)
             _sidebar.Children.Add(new TextBlock { Text = "No tracks yet", Classes = { "Caption" }, Margin = new Thickness(10, 8) });
-        _emptyHint.IsVisible = !_global && _trackId <= 0;
     }
 
     private Control TrackRow(int trackId, NotaTrackInfo ti)

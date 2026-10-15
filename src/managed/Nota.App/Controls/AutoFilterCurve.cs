@@ -124,9 +124,16 @@ internal sealed class AutoFilterCurve : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         if (!_drag) return;
-        _drag = false;
+        _drag = false; InvalidateVisual();
         GestureEnd?.Invoke();
         e.Pointer.Capture(null);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        // Capture taken away mid-drag (the window deactivates): end the gesture and drop the accent.
+        if (_drag) { _drag = false; InvalidateVisual(); GestureEnd?.Invoke(); }
+        base.OnPointerCaptureLost(e);
     }
 
     private void Apply(Point p)

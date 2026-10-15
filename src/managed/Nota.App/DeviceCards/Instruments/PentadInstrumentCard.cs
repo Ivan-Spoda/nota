@@ -206,7 +206,9 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             }
             host.PointerPressed += (_, e) => { springT?.Stop(); drag = true; if (pi >= 0) engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); e.Pointer.Capture(host); From(e); };
             host.PointerMoved += (_, e) => { if (drag) From(e); };
-            host.PointerReleased += (_, e) => { if (drag) { drag = false; if (pi >= 0) engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); e.Pointer.Capture(null); if (spring) Spring(); } };
+            void EndDrag() { drag = false; if (pi >= 0) engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); if (spring) Spring(); }
+            host.PointerReleased += (_, e) => { if (drag) { EndDrag(); e.Pointer.Capture(null); } };
+            host.PointerCaptureLost += (_, _) => { if (drag) EndDrag(); };
             host.SizeChanged += (_, _) => Vis(G(id));
             var nm = new TextBlock { Text = NotaText.Label(name), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center };
             readouts.Add(() => { if (!drag) Vis(G(id)); bool moved = Math.Abs(G(id) - (spring ? 0.5f : 0f)) > 0.01f; nm.Foreground = moved ? TxtC : MutedC; });

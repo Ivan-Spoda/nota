@@ -200,7 +200,7 @@
             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Cursor="Hand" Background="Transparent"
                         PointerPressed="OnTogglePositionDisplay"
                         ToolTip.Tip="Switch between bars and time">
-              <TextBlock Classes="Readout" Text="{Binding Transport.PositionText}" FontSize="14" LetterSpacing="0.28"
+              <TextBlock Classes="Readout" Text="{Binding Transport.PositionText}" FontSize="14"
                          MinWidth="72" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
               <TextBlock Classes="CellLabel" Text="{Binding Transport.PositionUnitText}" VerticalAlignment="Center"/>
             </StackPanel>

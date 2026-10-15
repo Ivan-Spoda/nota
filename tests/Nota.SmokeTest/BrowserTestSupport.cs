@@ -57,10 +57,12 @@ internal sealed class FakeBrowserLibrary : IBrowserLibrary
     public event Action? Changed { add { } remove { } }
 }
 
-/// <summary>A fixed list of scanned plug-ins, each described the way the plug-in host does:
-/// "Name | Format | inst|fx | Vendor | Category".</summary>
-internal sealed class FakePluginCatalog(params string[] descriptions) : IPluginCatalog
+/// <summary>A list of scanned plug-ins, each described the way the plug-in host does:
+/// "Name | Format | inst|fx | Vendor | Category". <see cref="Set"/> stands in for a rescan.</summary>
+internal sealed class FakePluginCatalog(params string[] initial) : IPluginCatalog
 {
+    private string[] descriptions = initial;
+    public void Set(params string[] list) => descriptions = list;
     public int Scan(string workerPath) => descriptions.Length;
     public int Count => descriptions.Length;
     public string? Description(int index) => index >= 0 && index < descriptions.Length ? descriptions[index] : null;
