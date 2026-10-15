@@ -189,14 +189,14 @@ what gets in and how.
 
 The audio engine and DSP are a portable C++20 core; the UI is .NET 10 / Avalonia 12 (C#);
 plugin hosting runs through JUCE, isolated in its own module so the engine core stays
-JUCE-free; InnoSetup 7/6 and PowerShell 7 for build project + installer by script (Windows only).
+JUCE-free.
 
 ```bash
 git clone --recurse-submodules https://github.com/nota-daw/nota.git
 cd nota
 scripts/build.sh            # Build on macOS.
 scripts/build-linux.sh      # Build on Linux.
-scripts/build-win.ps1       # Build on Windows. (Use PowerShell 7 for build via "package-win.ps1").
+scripts/build-win.ps1       # Build on Windows.
 dotnet run --project src/managed/Nota.App
 ```
 
