@@ -248,15 +248,20 @@ void Engine::poll() {
             sampleAutomationWritesAt(transport_.uiPositionBeats());
     }
 
+    // Loop record replace (#29): read the audio thread's mark before draining, so every note of
+    // an earlier pass queued ahead of it is in this batch.
+    const int32_t replaceUpTo = replaceUpTo_.load(std::memory_order_acquire);
     RecordedNote rn;
     std::vector<RecordedNote> batch;
     while (recorded_.pop(rn)) batch.push_back(rn);
     // Expression after the notes: a note's points were all queued before its note-off was.
     collectRecordedExpr();
-    if (batch.empty()) return;
+    const bool replacePending = replaceUpTo > appliedReplaceUpTo_ && recordSessionScene_ < 0;
+    if (batch.empty() && !replacePending) return;
 
     // Session-slot recording (M5-4): notes are already loop-local; append into the slot.
     if (recordSessionScene_ >= 0 && recordSessionTrackId_ > 0) {
+        if (batch.empty()) return;
         auto st = findTrackAuthoring(recordSessionTrackId_);
         if (!st || recordSessionScene_ >= static_cast<int32_t>(st->sessionSlots.size())) return;
         auto nt = cloneTrack(*st);
@@ -280,6 +285,10 @@ void Engine::poll() {
     auto nt = cloneTrack(*t);
     MidiClip& clip = nt->midiClips[recordClipIndex_];
     for (auto& r : batch) {
+        if (r.pass < replaceUpTo) {   // its pass was already replaced: drop it (and its curves)
+            Note gone; attachRecordedExpr(gone, r.pitch, r.startBeat);
+            continue;
+        }
         // A note that began before the take's clip (played on the count-in, or a key held
         // when Record was pressed, #56) moves the clip's left edge back to it, keeping every
         // note where it is. Clips can't start before 1.1, so a note older than that keeps
@@ -299,10 +308,32 @@ void Engine::poll() {
         n.velocity = r.velocity;
         attachRecordedExpr(n, r.pitch, r.startBeat);
         clip.notes.push_back(n);
+        takeNotes_.push_back({ r.pitch, r.startBeat, r.pass });
         // Grow the clip so freshly recorded notes fall inside it (gating in
         // renderInstrumentRaw drops notes past lengthBeats).
         const double end = n.startBeat + n.lengthBeats;
         if (end > clip.lengthBeats) clip.lengthBeats = end;
+    }
+    // Replace: remove the notes this take recorded on earlier passes — matched by pitch and
+    // absolute start, so notes the clip held before the take (or the user drew) stay.
+    if (replacePending) {
+        auto& notes = clip.notes;
+        for (size_t i = 0; i < notes.size();) {
+            const double abs = clip.startBeat + notes[i].startBeat;
+            auto it = std::find_if(takeNotes_.begin(), takeNotes_.end(), [&](const TakeNote& k) {
+                return k.pass < replaceUpTo && k.pitch == notes[i].pitch && std::fabs(k.absStart - abs) < 1e-6;
+            });
+            if (it == takeNotes_.end()) { ++i; continue; }
+            takeNotes_.erase(it);
+            // It may be sounding right now (an earlier pass playing back): release its voice.
+            Command c; c.type = CommandType::ReleaseNote; c.i0 = recordTrackId_; c.i1 = notes[i].pitch;
+            commands_.push(c);
+            notes.erase(notes.begin() + static_cast<std::ptrdiff_t>(i));
+        }
+        takeNotes_.erase(std::remove_if(takeNotes_.begin(), takeNotes_.end(),
+                                        [&](const TakeNote& k) { return k.pass < replaceUpTo; }),
+                         takeNotes_.end());
+        appliedReplaceUpTo_ = replaceUpTo;
     }
     republishWithTrackRaw(recordTrackId_, nt); // grows the live take, not a new undo step
 }
@@ -416,6 +447,12 @@ void Engine::drainCommands() {
             case CommandType::SetTimeSignature: transport_.setTimeSignature(c.i0, c.i1); break;
             case CommandType::SetLoop:          transport_.setLoop(c.i0 != 0, c.d0, c.d1); break;
             case CommandType::SetMetronome:     transport_.setMetronome(c.i0 != 0); break;
+            case CommandType::ReleaseNote:
+                if (c.i1 >= 0 && c.i1 < 128) {
+                    if (releaseTrack_ != c.i0) { releaseTrack_ = c.i0; for (auto& w : releasePitches_) w = 0; }
+                    releasePitches_[c.i1 >> 5] |= 1u << (c.i1 & 31);
+                }
+                break;
             case CommandType::Seek:
                 seekedWhileRolling_ |= transport_.isPlaying();   // a jump mid-playback, not Stop→Seek→Play
                 transport_.seekBeats(c.d0); seekedThisBlock_ = true; break;
@@ -473,6 +510,12 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     routedSeedPending_ = takeStarted && !slot;   // routed notes held now join the take (captureRoutedNotes)
     if (rec != prevRecording_)
         for (int i = 0; i < 128; ++i) { pendingActive_[i] = false; recRoutedActive_[i] = false; }
+    if (takeStarted) {   // a new take: pass 0, the loop record mode as set now
+        recordPass_ = 0;
+        passTriggered_ = false;
+        passReplace_ = loopRecordReplace_.load(std::memory_order_relaxed);
+        replaceUpTo_.store(0, std::memory_order_release);
+    }
     prevRecording_ = rec;
     // Every live event plays at offset 0 and the render sorts offs ahead of ons at one
     // offset, so a pitch's on and off landing in the same block (a quick tap, a finger
@@ -514,10 +557,11 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
                 pendingActive_[e.pitch] = true;
                 pendingStart_[e.pitch] = nowBeat;
                 pendingVel_[e.pitch] = e.velocity;
+                if (!slot) triggerPassReplace();
             } else if (pendingActive_[e.pitch]) {
                 double len = nowBeat - pendingStart_[e.pitch];
                 if (slot && len < 0.0) len += slotLen; // wrapped past the loop end
-                RecordedNote rn{e.pitch, pendingStart_[e.pitch], len, pendingVel_[e.pitch]};
+                RecordedNote rn{e.pitch, pendingStart_[e.pitch], len, pendingVel_[e.pitch], recordPass_};
                 recorded_.push(rn);
                 pendingActive_[e.pitch] = false;
             }
@@ -585,8 +629,9 @@ void Engine::captureRoutedNotes(const MidiEv* evs, int n, double blockStart, dou
             recRoutedActive_[p] = true;
             recRoutedStart_[p] = beat;
             recRoutedVel_[p] = evs[k].vel;
+            if (!recordSlotPlayer_.load(std::memory_order_relaxed)) triggerPassReplace();
         } else if (recRoutedActive_[p]) {
-            recorded_.push(RecordedNote{p, recRoutedStart_[p], std::max(0.0, beat - recRoutedStart_[p]), recRoutedVel_[p]});
+            recorded_.push(RecordedNote{p, recRoutedStart_[p], std::max(0.0, beat - recRoutedStart_[p]), recRoutedVel_[p], recordPass_});
             recRoutedActive_[p] = false;
         }
     }
@@ -633,6 +678,10 @@ int Engine::gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
                 if (hasVel) vel *= std::clamp(clip.velocityEnvelope.valueAt(note.startBeat), 0.0f, 1.0f);
                 if (clipActive && onS >= blockStart && onS < blockStart + frames && n < 1024)
                     evs[n++] = {static_cast<int32_t>(onS - blockStart), true, note.pitch, vel, static_cast<float>((offS - onS) / spb)};
+                // Loop seam: a note still sounding at the loop end releases here, ahead of any
+                // chase re-trigger at the same offset (offs sort first).
+                if (seamOffs_ && onS < seamEndSamples_ && offS >= seamEndSamples_ && n < 1024)
+                    evs[n++] = {0, false, note.pitch, 0.0f};
                 // Chase: a note already held at the jump point starts sounding right here.
                 if (chaseNotes_ && clipActive && onS < blockStart && offS > blockStart && n < 1024)
                     evs[n++] = {0, true, note.pitch, vel};
@@ -644,6 +693,14 @@ int Engine::gatherInstrumentNotes(Track& t, MidiEv* evs, int n, int32_t frames,
                                    frames, spb, xev, *xn, kMaxBlockExpr);   // curve timed from the true start
             }
         }
+    }
+    // Notes a loop record replace removed from this track's take: release them (once), unless
+    // the player is holding that key live.
+    if (t.id() == releaseTrack_) {
+        for (int p = 0; p < 128 && n < 1024; ++p)
+            if ((releasePitches_[p >> 5] >> (p & 31)) & 1u && !liveDown_[p]) evs[n++] = {0, false, p, 0.0f};
+        for (auto& w : releasePitches_) w = 0;
+        releaseTrack_ = -1;
     }
     // Live notes reach a track when it's armed, or when it's the audition target
     // (so clicking a rack/drum pad plays it without arming/recording).
@@ -1063,6 +1120,42 @@ static inline bool sessionActiveOf(const Track& t) {
     return t.sessionPlayer && t.sessionPlayer->playing.load(std::memory_order_relaxed) >= 0;
 }
 
+// The transport loop just wrapped (audio thread, #29). MIDI FX keep their pattern and pending
+// offs across the seam instead of being reset. A take recording into the Arrangement splits each
+// note held across the seam: the part played so far ends at the loop end, and the note carries
+// on from the loop start (a key pressed just before the seam — a head under 1/64 beat — moves
+// to the loop start whole). A Session slot take times notes on its own loop clock: untouched.
+void Engine::onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat) {
+    const double jump = loopStartBeat - loopEndBeat;
+    if (g) for (auto& tptr : g->tracks)
+        if (tptr && tptr->instrument && !sessionActiveOf(*tptr))
+            for (auto& md : tptr->midiEffects) if (md) md->timeJump(jump);
+
+    if (!recording_.load(std::memory_order_relaxed) || recordSlotPlayer_.load(std::memory_order_acquire)) return;
+    constexpr double kMinHead = 1.0 / 64.0;
+    auto split = [&](int32_t pitch, double& start, float vel) {
+        const double head = loopEndBeat - start;
+        if (head >= kMinHead) recorded_.push(RecordedNote{pitch, start, head, vel, recordPass_});
+        start = loopStartBeat;
+    };
+    for (int p = 0; p < 128; ++p) if (pendingActive_[p]) split(p, pendingStart_[p], pendingVel_[p]);
+    for (int p = 0; p < 128; ++p) if (recRoutedActive_[p]) split(p, recRoutedStart_[p], recRoutedVel_[p]);
+    // A new pass of the take: the continuations above belong to it (they don't trigger a
+    // replace — only a fresh note does), and it takes the loop record mode set right now.
+    ++recordPass_;
+    passTriggered_ = false;
+    passReplace_ = loopRecordReplace_.load(std::memory_order_relaxed);
+}
+
+// Replace mode: the first fresh note of a pass after the first removes the take's earlier
+// passes. Published once per pass; collectRecorded reads it before draining recorded_, so every
+// earlier-pass note queued before it is in hand.
+void Engine::triggerPassReplace() {
+    if (!passReplace_ || passTriggered_ || recordPass_ <= 0) return;
+    passTriggered_ = true;
+    replaceUpTo_.store(recordPass_, std::memory_order_release);
+}
+
 void Engine::processBlock(float* out, int32_t numFrames) {
     drainCommands();
     for (int32_t i = 0; i < numFrames * 2; ++i) out[i] = 0.0f;
@@ -1102,8 +1195,12 @@ void Engine::processBlock(float* out, int32_t numFrames) {
     while (done < numFrames) {
         if (playing && transport_.isLooping()
             && transport_.playheadSamples() >= transport_.loopEndSamples() - 0.5) {
+            // No voice flush here: clip notes crossing the loop end get note-offs in the next
+            // segment (seamOffs_), so live-held keys keep sounding and tails ring out (#29).
+            seamEndSamples_ = transport_.playheadSamples();
             transport_.wrapToLoopStart();
-            flushArrangementVoices();
+            if (spb > 0.0) onLoopWrap(g, transport_.loopStartSamples() / spb, seamEndSamples_ / spb);
+            seamOffs_ = true;
             chase = true;
             if (nLoopSeams < 16) loopSeams[nLoopSeams++] = done;   // declick this seam below
         }
@@ -1120,7 +1217,7 @@ void Engine::processBlock(float* out, int32_t numFrames) {
         const double segStart = transport_.playheadSamples();
         chaseNotes_ = chase;
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, segStart, playing, spb);
-        chaseNotes_ = chase = false;
+        chaseNotes_ = chase = seamOffs_ = false;
         bool countInDone = false;
         if (playing) renderMetronome(out + done * 2, seg, segStart);
         else if (countInActive_) countInDone = renderCountIn(out + done * 2, seg, spb);

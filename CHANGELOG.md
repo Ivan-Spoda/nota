@@ -23,6 +23,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Fixed
+- **Notes no longer cut off at the loop seam** (nota-daw/nota#29): when the loop jumps
+  back to its start, a key you're holding keeps sounding and release tails (pads, strings)
+  ring out. Before, every voice was cut at the seam. A clip note running past the loop end
+  now releases there, and an arpeggiator keeps its pattern and held keys going across the
+  seam instead of starting over. Recording in a loop, a note held across the seam is stored
+  as two notes, one up to the loop end and one from the loop start. Before, it was saved
+  as a short blip.
 - **Undo covers device knobs** (nota-daw/nota#30): turning a knob, flipping a switch or
   typing a value on an effect, a MIDI effect, an instrument or a plug-in is now one undo
   step, in order with note and clip edits — before, ⌘Z skipped it and undid the edit before.
@@ -34,6 +41,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   moves them into the project file on the next save.
 
 ### Added
+- **Loop recording: Overdub or Replace** (nota-daw/nota#29): when you record MIDI in a loop,
+  choose whether each pass adds to the take (**Overdub**, as before) or replaces it
+  (**Replace**). In Replace mode, the first note you play on a new pass clears the earlier
+  passes, so playing a phrase again until it's right leaves only the latest take instead of
+  stacked copies. A pass you don't play on keeps the take, and notes that were already in the
+  clip stay. Switch with the Overdub / Replace cell next to Loop in the transport,
+  ⌘⇧R / Ctrl+Shift+R, or the Transport menu. A switch applies from the next pass, and Nota
+  remembers your choice. MCP: `set_loop_record_mode`, and `get_transport` reports the mode.
 - **MCP `list_sections` and `set_sections`**: read and replace the arrangement's sections.
 - **See MIDI notes while you record** (nota-daw/nota#56): a note now shows up in the take
   the moment the key goes down and grows with the playhead while the key is held, instead
