@@ -23,6 +23,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **An on/off switch on instrument cards** (nota-daw/nota#148): every instrument in the
+  Devices panel (built-in synths and samplers, Instrument and Drum Racks, hosted plug-ins)
+  now has the same switch as the effects. Off silences the instrument without muting the
+  track or deleting anything: it fades out over a few milliseconds and then uses no CPU,
+  while the MIDI effects before it and the audio effects after it keep their settings (a
+  reverb tail rings out). Back on, it plays from the next note. The switch is saved with
+  the project and kept when the track is duplicated; the AI assistant reaches it through
+  `set_device_bypass` with device index -1.
 - **Double-click the loop brace to turn the loop off and on** (nota-daw/nota#59): in the
   arrangement ruler, a double-click on the loop region switches looping off without losing
   the region. It stays in the ruler in grey, and another double-click turns it back on. A
