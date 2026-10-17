@@ -82,6 +82,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Fixed
+- **A tempo set over MCP shows in the transport bar and is saved**: `set_tempo` (and
+  anything driving it, such as a hardware controller) changed the tempo you hear, but the
+  BPM field kept the old number, and saving, autosave and export used that stale tempo, so
+  a reopened project came back at the wrong speed. The transport bar now follows the
+  engine's tempo, and dragging the field never snaps back while the engine catches up.
 - **Un-warped audio clips follow the tempo as you change it**: an un-warped clip keeps its
   length in seconds, so a new tempo makes it longer or shorter in bars. Changing the tempo
   in the transport bar now shows that at once, while you drag, so a clip can be lined up
