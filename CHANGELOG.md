@@ -82,6 +82,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Fixed
+- **Session recording counts in** (nota-daw/nota#158): recording into a Session slot (or a
+  scene) with the transport stopped now plays the metronome count-in first, with the slot
+  blinking "Rec in…", and the take starts when it ends. A note you start during the count-in
+  and still hold when the take begins is kept, from the take's start. Stop cancels the
+  count-in and leaves the slot empty, with no undo step. With the transport already
+  running, nothing changes: the take starts on the launch quantization.
 - **No more benign IBus errors in the system log on Linux** (nota-daw/nota#36): with the
   IBus input method (Linux Mint with Cinnamon, some Ubuntu and Fedora setups), the system
   log filled up with `[IME] Error while destroying the context` entries — a harmless D-Bus
