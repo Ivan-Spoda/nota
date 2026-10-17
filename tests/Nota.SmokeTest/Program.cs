@@ -8685,6 +8685,38 @@ Check(engine.SessionAudioRecordSelfTest(), "session audio slot captures + loops 
     }
 }
 
+// -- Export range start (#102): a Custom range that doesn't start at 1.1 renders from
+// its start, and the bounce puts the user's loop region back afterwards. ---------
+{
+    using var re = new NotaEngine();
+    re.SetBpm(120); re.SetTimeSignature(4, 4);
+    string sine = Path.Combine(Path.GetTempPath(), $"nota-sine-{Guid.NewGuid():N}.wav");
+    Nota.SmokeTest.WavWriter.WriteSine(sine, 2.0, 440.0, 48000);   // 2 s = 4 beats at 120
+    int rTrk = re.AddAudioTrack();
+    re.AddAudioClip(rTrk, sine, 8.0);                              // bar 3 to bar 4
+    re.SetMetronome(false); re.SetLoop(true, 4.0, 12.0);
+    string late = Path.Combine(Path.GetTempPath(), $"nota-range-{Guid.NewGuid():N}.wav");
+    string early = late.Replace(".wav", ".early.wav");
+    try
+    {
+        new AudioExporter().ExportMaster(re, new ExportRequest(late, 4.0, 120, 48000, WavBitDepth.Pcm24,
+                                                               RestoreLoop: true, RestoreMetronome: false, StartBeats: 8.0));
+        new AudioExporter().ExportMaster(re, new ExportRequest(early, 4.0, 120, 48000, WavBitDepth.Pcm24,
+                                                               RestoreLoop: true, RestoreMetronome: false));
+        var lateMono = NotaEngine.DecodeMono(late, 10.0, out _);
+        var earlyMono = NotaEngine.DecodeMono(early, 10.0, out _);
+        Check(lateMono is not null && Math.Abs(lateMono.Length - 96000) <= 8 && MonoRms(lateMono) > 0.1f,
+              $"export from beat 8 renders the clip there ({lateMono?.Length} frames, rms {(lateMono is null ? 0 : MonoRms(lateMono)):F3})");
+        Check(earlyMono is not null && MonoRms(earlyMono) < 1e-4f, "export from beat 0 over the same length is silent");
+        Check(re.LoopEnabled && Math.Abs(re.LoopStart - 4.0) < 1e-9 && Math.Abs(re.LoopEnd - 12.0) < 1e-9,
+              $"export puts the loop region back ({re.LoopStart}–{re.LoopEnd})");
+    }
+    finally
+    {
+        try { File.Delete(sine); File.Delete(late); File.Delete(early); } catch { }
+    }
+}
+
 // -- M7: MP3 master export — CBR size, duration, decodes audible --------------
 {
     using var me = new NotaEngine();
@@ -9322,6 +9354,36 @@ Console.WriteLine("-- M9-A1: parameter automation core --");
             && Math.Abs(me2.CvLinkDepth(t2.Id, 0) - 0.5f) < 1e-3
             && me2.CvLinkMode(t2.Id, 0) == 1;
         Check(ok, "CV modulation round-trips through save/load (v18)");
+        try { System.IO.Directory.Delete(pdir, true); } catch { }
+    }
+
+    // A Math node's gain spans 0..2 (#92): above 1.0 it sticks, scales the input and survives
+    // save/load, while an LFO's depth stays clamped to 0..1.
+    {
+        using var me = new NotaEngine();
+        int mt = me.AddInstrumentTrack();
+        int mac = me.ModulatorAdd(mt, 4);            // Macro, value 0.4
+        me.ModulatorSet(mt, mac, 4, 0.4f);
+        int mth = me.ModulatorAdd(mt, 5);            // Math
+        me.ModulatorSet(mt, mth, 0, 4);              // op Scale: a × gain + offset
+        me.ModulatorSet(mt, mth, 10, mac);           // input A
+        me.ModulatorSet(mt, mth, 4, 1.5f);           // gain
+        int lfo = me.ModulatorAdd(mt, 0);
+        me.ModulatorSet(mt, lfo, 4, 1.5f);
+        Check(Math.Abs(me.ModulatorGet(mt, mth, 4) - 1.5f) < 1e-3, "Math gain keeps 1.5 (range 0..2)");
+        Check(Math.Abs(me.ModulatorGet(mt, lfo, 4) - 1.0f) < 1e-3, "LFO depth still clamps to 1.0");
+        me.ModulatorSet(mt, mth, 4, 3f);
+        Check(Math.Abs(me.ModulatorGet(mt, mth, 4) - 2.0f) < 1e-3, "Math gain clamps to 2.0");
+        me.ModulatorSet(mt, mth, 4, 1.5f);
+        var w = new System.Collections.Generic.List<string>();
+        var doc = ProjectService.Capture(me, new TransportState(120, 1, false, false), w);
+        string pdir = Path.Combine(Path.GetTempPath(), "nota-math-gain-" + Guid.NewGuid().ToString("N"));
+        ProjectService.Save(doc, pdir, me);
+        using var me2 = new NotaEngine();
+        ProjectService.Apply(ProjectService.Load(pdir), me2, pdir);
+        bool ok = me2.TryGetTrackInfo(0, out var t2) && me2.ModulatorCount(t2.Id) == 3
+                  && Math.Abs(me2.ModulatorGet(t2.Id, me2.ModulatorIdAt(t2.Id, 1), 4) - 1.5f) < 1e-3;
+        Check(ok, "Math gain 1.5 round-trips through save/load");
         try { System.IO.Directory.Delete(pdir, true); } catch { }
     }
 }

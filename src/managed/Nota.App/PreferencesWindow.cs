@@ -944,8 +944,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         }
     }
 
-    // Bars / Solid for the arrangement's audio-clip waveforms. Saving fires Settings.Changed,
-    // which the main window applies to the lanes at once.
+    // Bars / Solid for the arrangement's audio-clip waveforms and the browser preview. Saving
+    // fires Settings.Changed, which the lanes and the preview apply at once.
     private static Control WaveformPicker()
     {
         var settings = App.Services.GetRequiredService<ISettingsService>();
@@ -1055,7 +1055,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                 TopRow("Colour theme", ThemePicker()),
                 Row("", Caption("Themes change colours only. Follow system switches between your dark-mode and light-mode theme with the OS appearance.")),
                 Row("Waveform", WaveformPicker()),
-                Row("", Caption("How audio clips draw on the arrangement: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel."))),
+                Row("", Caption("How audio clips draw on the arrangement, and samples in the browser's preview: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel."))),
             Section("AI control (MCP)", 12, enable, details));
     }
 
@@ -1240,12 +1240,14 @@ public sealed partial class PreferencesWindow : NotaWindow
         void Render()
         {
             groups.Children.Clear();
-            var q = _shortcutFilter.Trim();
+            // Each word must appear in the row's action, its keys or its group's title, so
+            // "keyboard" finds the whole "Play notes (computer keyboard)" group (#40).
+            var words = _shortcutFilter.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             foreach (var (title, rows) in ShortcutGroups)
             {
-                var shown = rows.Where(r => q.Length == 0
-                                            || MenuKit.Keys(r.Action).Contains(q, StringComparison.OrdinalIgnoreCase)
-                                            || MenuKit.Keys(r.Key).Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+                var shown = rows.Where(r => words.All(w => title.Contains(w, StringComparison.OrdinalIgnoreCase)
+                                                           || MenuKit.Keys(r.Action).Contains(w, StringComparison.OrdinalIgnoreCase)
+                                                           || MenuKit.Keys(r.Key).Contains(w, StringComparison.OrdinalIgnoreCase))).ToList();
                 if (shown.Count == 0) continue;
                 var head = new StackPanel
                 {
