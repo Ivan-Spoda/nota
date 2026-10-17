@@ -16,6 +16,9 @@ public sealed partial class DeviceChainView
     private Control InstrumentCard()
     {
         int kind = _engine.TrackInstrumentKind(_trackId);
+        // Folded: just the strip, whatever the instrument (no body is built), with the
+        // instrument's on/off switch on top like any other device's.
+        if (_engine.DeviceFolded(_trackId, -1)) return FoldedStrip(ChainKind.Instrument, -1, _engine.DeviceName(_trackId, -1), bypassable: true, _engine.DeviceBypassed(_trackId, -1));
         if (kind == 3) return InstrumentRackCard();
         if (kind == 4) return DrumRackCard();
         if (kind == -1) return PluginCardFor(ChainKind.Instrument, -1, 1);   // hosted VST3 / AU

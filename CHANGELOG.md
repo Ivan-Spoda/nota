@@ -23,6 +23,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Fold a device into a narrow strip** (nota-daw/nota#147): double-click a device's header
+  (or choose Fold in its right-click menu) and the card collapses into a 28 px strip with its
+  name, rotated, and its on/off switch, so a long chain fits the Devices panel. Double-click
+  the strip to open it again. A folded device still selects, drags to a new slot and opens its
+  menu; it works for audio effects, MIDI effects, plug-ins and the instrument. The fold is
+  saved with the project (format v23) and follows the device when it is moved or its
+  deletion is undone.
 - **An on/off switch on instrument cards** (nota-daw/nota#148): every instrument in the
   Devices panel (built-in synths and samplers, Instrument and Drum Racks, hosted plug-ins)
   now has the same switch as the effects. Off silences the instrument without muting the
