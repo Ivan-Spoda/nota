@@ -454,7 +454,7 @@ track count and closes with Escape.
 ## Built-in devices
 
 Every built-in device uses the same 700×260 shell with a shared header: on/bypass dot,
-name, subtitle, preset picker, **A/B comparison** (parameter snapshots), stereo meter,
+name, subtitle, preset picker (with **Init** to return to every default), **A/B comparison** (parameter snapshots), stereo meter,
 voice count (on synths), move arrows, delete, and the ⠿ drag handle. All support factory
 and user presets, automation, persistence and cloning. Instrument cards (built-in, racks
 and hosted plug-ins) have the same on/off switch as effects: off silences the instrument
@@ -1029,7 +1029,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   on Windows and Linux — hides the title bar and its separator so the workspace fills the
   screen edge to edge; leaving full screen brings the bar back. Maximized keeps the bar.
 - **What's New** — a window showing changelog entries newer than `LastSeenVersion`, once
-  after the first launch on a new version.
+  after the first launch on a new version; any time from Help ▸ What's New or the version
+  number in the status bar.
 - **Self-update** — the start screen's banner announces a newer GitHub release. **Update**
   downloads the build for this platform (with progress, checked against the release's
   sha256). **Restart now** installs it and relaunches, and **Later** installs it on quit.

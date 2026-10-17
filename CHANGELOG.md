@@ -23,6 +23,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Release notes from the status bar** (nota-daw/nota#127): the version number at the
+  bottom right of the main window, next to the sample rate, is now a button: click it to
+  open What's New for the installed version (it never starts an update). Escape closes What's
+  New. The status bar now always shows the app version; before, it showed nothing at launch
+  and the engine's version after an audio device change.
+- **Back to Init from any preset** (nota-daw/nota#57): the preset list on a built-in
+  instrument or effect card (and its right-click Preset menu) now starts with **Init**,
+  which puts every parameter back to its default, as on a freshly added device. The card
+  size and a loaded sample stay. ‹ › step through Init too: past the last preset comes Init,
+  then the first again. Devices whose factory list already has its own "Init" preset keep
+  just that one.
 - **Fold a device into a narrow strip** (nota-daw/nota#147): double-click a device's header
   (or choose Fold in its right-click menu) and the card collapses into a 28 px strip with its
   name, rotated, and its on/off switch, so a long chain fits the Devices panel. Double-click
@@ -71,6 +82,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Fixed
+- **Send faders stay in step everywhere** (nota-daw/nota#138): turning a Send knob on a
+  track's Sends card in the Devices panel now moves that send's fader in the Session mixer
+  and the Mixer window at once, and the other way round. Automation of a send shows on all
+  three too. Before, the other controls kept the old value until the view was rebuilt.
 - **The clip editor shows the playhead of a playing Session clip** (nota-daw/nota#137):
   open a launched slot and the piano roll's cursor, or the Drum Rack step grid's lit
   column, now follows the slot as it loops. Before, only Arrangement clips showed one.
