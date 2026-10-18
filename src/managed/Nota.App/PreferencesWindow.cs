@@ -1095,12 +1095,16 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         ("Transport", new[]
         {
-            ("Space", "Play / Stop"),
+            ("Space", "Play / Stop · Stop goes back to where playback started"),
+            ("⇧Space", "Play / pause · the playhead stays put and Play carries on from there"),
             ("Return", "Stop (again → back to the start) · in the Session grid it launches the selection"),
             ("⌘R", "Record"),
             ("⌘M", "Metronome"),
             ("⌘L", "Loop on / off · loop the selected clips or time range"),
             ("Double-click loop brace", "Loop on / off in the ruler · the region stays, greyed out while off"),
+            ("Drag loop edge · drag loop brace", "Resize that end of the loop region · move the whole region · ⌥ off the grid"),
+            ("Right-click ruler", "Loop on / off · loop the selection · clear the loop region"),
+            ("P", "Show playhead · scroll the Arrangement to it without moving it · picks up a paused Follow"),
             ("⌘⇧R", "Loop recording: Overdub (every pass adds) / Replace (keep the latest pass)"),
         }),
         ("Arrangement & editing", new[]
@@ -1275,7 +1279,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new StackPanel { Spacing = 18, Children = { SearchField(filter, 320), groups } };
     }
 
-    private static readonly HashSet<string> NamedKeys = new(StringComparer.Ordinal) { "Space", "Return", "Delete", "Tab", "Esc", "PgUp", "PgDn", "⌘Return", "⌥Return", "⇧Return", "⇧Tab" };
+    private static readonly HashSet<string> NamedKeys = new(StringComparer.Ordinal) { "Space", "Return", "Delete", "Tab", "Esc", "PgUp", "PgDn", "⌘Return", "⌥Return", "⇧Return", "⇧Tab", "⇧Space" };
 
     // A token that names a key: no lower-case letters (⌘⇧Z, ←, A, 0), or a named key.
     private static bool IsKeyToken(string t) => NamedKeys.Contains(t) || !t.Any(char.IsLower);
