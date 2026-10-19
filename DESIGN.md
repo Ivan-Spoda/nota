@@ -448,7 +448,9 @@ Builders live in `DeviceCardKit`; controls in `Controls/`. Reuse before writing 
 ### Interaction contract
 
 - **Vertical drag**, up increases, full range over ~140 px; Shift (or Ctrl/⌘) is fine.
-  Cursor `ns-resize`. A click never jumps the value. No horizontal drag anywhere.
+  Cursor `ns-resize`. A click never jumps the value. The one horizontal drag is a horizontal
+  slider (`SliderTrack`) along its own axis: right increases, the handle follows the pointer,
+  cursor `ew-resize`; a vertical drag still works on it as on a knob.
 - **Double-click** restores the default where one is supplied.
 - **Left button only** — right-click bubbles to the CV-modulate / MIDI Learn menu.
 - **`GestureBegin` / `GestureEnd`** bracket `BeginAutomationWrite` / `EndAutomationWrite`.
@@ -555,6 +557,9 @@ All live in one **graph window** (`Controls/NotaGraph.cs`):
 Every built-in device is a **700 × 260** card (`DeviceCardKit.CardH`, width from
 `IDeviceBody.Width`): panel body, radius 3, a 1 px seam frame. A selected card carries a
 1.5 px accent ring outside its frame.
+Width exceptions: the parameter stubs and the generic "Open GUI" card are narrow; Nota Bass and
+Nota Physical keep their wider layouts; **Nota Volt is 790** since it took over Nota Synth and
+Nota Bass (specs/026) and its Osc rows carry Shape and Pulse Width.
 
 - **Header 22** (`HeaderH`, built by `DeviceChainView.Shell.cs` `BuildCardShell`): a
   raised strip with the `Shadow.Raised` bevel and a seam under it, in **fixed slots, left to

@@ -177,6 +177,7 @@ public sealed partial class DeviceChainView : UserControl
         int kind = _engine.TrackDeviceBuiltinKind(_trackId, index);
         bool bypassed = _engine.DeviceBypassed(_trackId, index);
         string name = _engine.DeviceName(_trackId, index);
+        if (_engine.DeviceFolded(_trackId, index)) return FoldedStrip(ChainKind.Effect, index, name, bypassable: true, bypassed);   // built-in or plug-in
 
         Control body;
         double width;
@@ -236,6 +237,13 @@ public sealed partial class DeviceChainView : UserControl
             var knob = new Knob(_engine.GetTrackSend(_trackId, bus), 1.0) { Accent = true, Default = 0 };
             int b = bus;
             knob.ValueChanged += v => { _engine.SetTrackSend(_trackId, b, (float)v); value.Text = Pct((float)v); };
+            // Follow the Session / Mixer send faders and automation (#138).
+            _deviceLiveRefreshers.Add(() =>
+            {
+                if (knob.Dragging) return;
+                float v = _engine.GetTrackSend(_trackId, b);
+                if (Math.Abs(v - knob.Value) > 1e-3) { knob.Value = v; value.Text = Pct(v); }
+            });
             knobs.Children.Add(KnobCell($"Send {letter}", knob, value));
             shown++;
         }

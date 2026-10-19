@@ -36,6 +36,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_destroy")]
     internal static partial void Destroy(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_set_data_dir", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult SetDataDir(string path);
+
+    [LibraryImport(Lib, EntryPoint = "nota_get_data_dir")]
+    internal static partial IntPtr GetDataDir();
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_start")]
     internal static partial NotaResult Start(IntPtr engine);
 
@@ -80,6 +86,12 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_transport_count_in_beats")]
     internal static partial double CountInBeats(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_transport_set_loop_record_mode")]
+    internal static partial NotaResult SetLoopRecordMode(IntPtr engine, int mode);
+
+    [LibraryImport(Lib, EntryPoint = "nota_transport_loop_record_mode")]
+    internal static partial int LoopRecordMode(IntPtr engine);
 
     [LibraryImport(Lib, EntryPoint = "nota_transport_set_metronome")]
     internal static partial NotaResult SetMetronome(IntPtr engine, int enabled);
@@ -129,6 +141,18 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_note_expression")]
     internal static partial NotaResult TrackNoteExpression(IntPtr engine, int trackId, int pitch, int dim, float value);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_controller")]
+    internal static partial NotaResult Controller(IntPtr engine, int ctl, float value);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_controller")]
+    internal static partial NotaResult TrackController(IntPtr engine, int trackId, int ctl, float value);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_delivered_controller")]
+    internal static partial float TrackDeliveredController(IntPtr engine, int trackId, int ctl);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_midi_ctl_selftest")]
+    internal static partial int MidiCtlSelfTest(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_set_audition_track")]
     internal static partial void SetAuditionTrack(IntPtr engine, int trackId);
 
@@ -155,6 +179,10 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_audio_record_peaks")]
     internal static partial int AudioRecordPeaks(IntPtr engine, [Out] float[] outMinMax, int maxPoints);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_record_held_notes")]
+    internal static partial int RecordHeldNotes(IntPtr engine, [Out] NotaRecordHeldNote[] outNotes, int maxN,
+                                                out int trackId, out int sessionScene, out double nowBeat);
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_poll")]
     internal static partial NotaResult Poll(IntPtr engine);
@@ -185,6 +213,24 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_pan_law")]
     internal static partial int PanLaw(IntPtr engine);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal readonly record struct NotaSection(double StartBeat, double LengthBeats, IntPtr Name);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_section_count")]
+    internal static partial int SectionCount(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_section_start")]
+    internal static partial double SectionStart(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_section_length")]
+    internal static partial double SectionLength(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_section_name")]
+    internal static partial IntPtr SectionName(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_sections")]
+    internal static partial NotaResult SetSections(IntPtr engine, [In] NotaSection[] sections, int count, int checkpoint);
 
     [LibraryImport(Lib, EntryPoint = "nota_mix_gesture_begin")]
     internal static partial int MixGestureBegin(IntPtr engine, [In] MixTarget[] targets, int count);

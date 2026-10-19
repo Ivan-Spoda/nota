@@ -653,6 +653,16 @@ NotaResult nota_clip_set_notes_live(NotaEngine* e, int32_t track_id, int32_t cli
 int32_t nota_engine_live_held_notes(const NotaEngine* e, int32_t* out, int32_t max_n) {
     return e ? CENG(e)->liveHeldNotes(out, max_n) : 0;
 }
+int32_t nota_engine_record_held_notes(const NotaEngine* e, NotaRecordHeldNote* out, int32_t max_n,
+                                      int32_t* track_id, int32_t* session_scene, double* now_beat) {
+    if (!e) {
+        if (track_id) *track_id = 0;
+        if (session_scene) *session_scene = -1;
+        if (now_beat) *now_beat = 0.0;
+        return 0;
+    }
+    return CENG(e)->recordHeldNotes(out, max_n, track_id, session_scene, now_beat);
+}
 int32_t nota_clip_get_notes(const NotaEngine* e, int32_t track_id, int32_t clip_index,
                             NotaNoteData* out, int32_t max_notes) {
     if (!e || !out || max_notes <= 0) return 0;
@@ -691,6 +701,17 @@ int64_t nota_sample_read(const NotaEngine* e, int64_t sample_id, float* out, int
 }
 int32_t nota_track_sampler_info(const NotaEngine* e, int32_t track_id, NotaSamplerInfo* out) {
     return (e && CENG(e)->samplerInfo(track_id, out)) ? 1 : 0;
+}
+
+int32_t nota_midi_clip_ctl_list(const NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t* out_ctls, int32_t cap) {
+    return e ? CENG(e)->ctlList(track_id, false, clip_index, out_ctls, cap) : 0;
+}
+int32_t nota_midi_clip_ctl_get(const NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t ctl, NotaAutomationPoint* out, int32_t cap) {
+    return e ? CENG(e)->ctlGet(track_id, false, clip_index, ctl, out, cap) : 0;
+}
+NotaResult nota_midi_clip_ctl_set(NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t ctl, const NotaAutomationPoint* pts, int32_t count) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->ctlSet(track_id, false, clip_index, ctl, pts, count) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
 
 } // extern "C"

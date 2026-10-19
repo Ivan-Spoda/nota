@@ -207,6 +207,18 @@ NOTA_API const char* nota_engine_version(void);
 NOTA_API NotaEngine* nota_engine_create(void);
 NOTA_API void        nota_engine_destroy(NotaEngine* engine);
 
+/* --- Per-user data directory --------------------------------------------
+ * Where audio.json / midi.json, the plugin catalog (plugins.xml) and scan
+ * paths live. Set once at startup from the managed side (NotaPaths.DataDir)
+ * before creating the engine or touching device config; NULL or "" clears the
+ * override. The engine never infers platform paths itself — besides the
+ * override only NOTA_DATA_DIR (tests) is honoured; unset means persistence is
+ * off (loads return defaults, saves are skipped). The directory is created
+ * best-effort. get returns the effective directory ("" when unset), UTF-8,
+ * owned by the engine, valid until the next call. */
+NOTA_API NotaResult  nota_set_data_dir(const char* path_utf8);
+NOTA_API const char* nota_get_data_dir(void);
+
 /* Open the default CoreAudio output device and start the audio thread. */
 NOTA_API NotaResult nota_engine_start(NotaEngine* engine);
 
@@ -430,7 +442,9 @@ NOTA_API int32_t nota_engine_automation_device_remap_selftest(NotaEngine* engine
  * gesture; latch != 0 means a hardware/MIDI control, which keeps writing past the
  * release until the transport stops. With record off, touching a parameter that
  * already carries automation overrides its lane until re-enable. For a
- * PluginParam target pass param_id; otherwise param_id may be NULL/empty. */
+ * PluginParam target pass param_id; otherwise param_id may be NULL/empty.
+ * An unlatched begin/end on a parameter target (device, MIDI-effect or plugin param) is
+ * also that parameter's value-undo gesture (specs/016): one undo step for what changed. */
 NOTA_API void    nota_engine_set_automation_record(NotaEngine* engine, int32_t on);
 NOTA_API int32_t nota_engine_automation_record(const NotaEngine* engine);
 NOTA_API void    nota_track_begin_automation_write(NotaEngine* engine, int32_t track_id,
@@ -456,6 +470,12 @@ NOTA_API NotaResult nota_transport_stop(NotaEngine* engine);
 NOTA_API NotaResult nota_transport_play_count_in(NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_count_in(NotaEngine* engine, int32_t bars);
 NOTA_API double     nota_transport_count_in_beats(const NotaEngine* engine);
+/* Loop record mode for MIDI recorded into the Arrangement with the loop on:
+ * 0 = overdub (every pass adds to the take), 1 = replace (the first new note of a
+ * pass removes what earlier passes of this take recorded). App preference; takes
+ * effect from the next pass. Session slot recording is unaffected. */
+NOTA_API NotaResult nota_transport_set_loop_record_mode(NotaEngine* engine, int32_t mode);
+NOTA_API int32_t    nota_transport_loop_record_mode(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_bpm(NotaEngine* engine, double bpm);
 NOTA_API double     nota_transport_bpm(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_time_signature(NotaEngine* engine, int32_t num, int32_t denom);
@@ -756,13 +776,47 @@ NOTA_API NotaResult nota_engine_note_off(NotaEngine* engine, int32_t pitch);
 NOTA_API NotaResult nota_track_note_on(NotaEngine* engine, int32_t track_id, int32_t pitch, float velocity);
 NOTA_API NotaResult nota_track_note_off(NotaEngine* engine, int32_t track_id, int32_t pitch);
 /* Per-note expression (MPE) for live notes: dim 0 = pitch bend in semitones, 1 = pressure
- * 0..1, 2 = slide (CC74 timbre) 0..1 with 0.5 neutral, 3 = sustain pedal (CC64) 0/1 —
+ * 0..1, 2 = slide (CC74 timbre) 0..1 with 0.5 neutral, 3 = sustain pedal (CC64) 0..1 (down at >= 0.5) —
  * instrument-wide only (pitch -1). pitch -1 addresses the whole instrument; its bend is
  * the wheel normalized -1..+1 (the synth applies its own range).
  * A note-on resets the note's expression; send it after the note-on. The engine_ form
  * reaches the tracks live notes reach; the track_ form one track (Nota Remote). */
 NOTA_API NotaResult nota_engine_note_expression(NotaEngine* engine, int32_t pitch, int32_t dim, float value);
 NOTA_API NotaResult nota_track_note_expression(NotaEngine* engine, int32_t track_id, int32_t pitch, int32_t dim, float value);
+
+/* ---- MIDI controllers (specs/020) ----------------------------------------
+ * Instrument-wide controllers, one id space: ctl 0..127 = that CC, NOTA_CTL_PITCH_WHEEL,
+ * NOTA_CTL_CHANNEL_PRESSURE. Values are normalised: a CC 0..1 (data / 127; CC64-69 are
+ * switches, on at >= 0.5), the wheel -1..+1 (centre 0), pressure 0..1. Data entry / RPN /
+ * NRPN (6, 38, 96-101) and channel mode (120-127) are reserved: refused everywhere.
+ * The instrument-wide expression above (pitch -1, dim 0..3) is the wheel / pressure / CC74 /
+ * CC64 of this space. */
+#define NOTA_CTL_PITCH_WHEEL       128
+#define NOTA_CTL_CHANNEL_PRESSURE  129
+#define NOTA_CTL_COUNT             130
+/* Live controller input, like note_on: the engine_ form reaches the tracks live notes reach,
+ * the track_ form one track. Plays now and is recorded into the take when it records. Safe
+ * from any thread. */
+NOTA_API NotaResult nota_engine_controller(NotaEngine* engine, int32_t ctl, float value);
+NOTA_API NotaResult nota_track_controller(NotaEngine* engine, int32_t track_id, int32_t ctl, float value);
+/* The last value the engine delivered to the track's instrument for `ctl` (live, clip or
+ * automation), NaN when none since the instrument was created. A read for tests and meters. */
+NOTA_API float      nota_track_delivered_controller(const NotaEngine* engine, int32_t track_id, int32_t ctl);
+/* A MIDI clip's controller curves (clip-local beats; may start before 0 like a pickup note).
+ * list fills the ctls holding data (ascending) and returns their count (out may be NULL).
+ * get(out=NULL) returns the point count. set replaces the curve (count 0 removes it; points
+ * in any order, the last one given per beat kept); one undo step, plays from the next block. */
+NOTA_API int32_t    nota_midi_clip_ctl_list(const NotaEngine* engine, int32_t track_id, int32_t clip_index, int32_t* out_ctls, int32_t cap);
+NOTA_API int32_t    nota_midi_clip_ctl_get(const NotaEngine* engine, int32_t track_id, int32_t clip_index, int32_t ctl, NotaAutomationPoint* out, int32_t cap);
+NOTA_API NotaResult nota_midi_clip_ctl_set(NotaEngine* engine, int32_t track_id, int32_t clip_index, int32_t ctl, const NotaAutomationPoint* pts, int32_t count);
+/* The same for a Session slot's clip (beats in [0, slot length)). */
+NOTA_API int32_t    nota_session_ctl_list(const NotaEngine* engine, int32_t track_id, int32_t scene, int32_t* out_ctls, int32_t cap);
+NOTA_API int32_t    nota_session_ctl_get(const NotaEngine* engine, int32_t track_id, int32_t scene, int32_t ctl, NotaAutomationPoint* out, int32_t cap);
+NOTA_API NotaResult nota_session_ctl_set(NotaEngine* engine, int32_t track_id, int32_t scene, int32_t ctl, const NotaAutomationPoint* pts, int32_t count);
+/* Device-free self-test of controller curves: value at a beat (switch + linear), split / slice,
+ * chase and end-of-clip release on the playback wire, the recording fold (overdub touched
+ * range). 0 = pass, else the number of the first failed check. */
+NOTA_API int32_t    nota_engine_midi_ctl_selftest(NotaEngine* engine);
 /* Audition target: live notes also reach this track even when unarmed (rack/drum
  * pad preview). Pass -1 to clear. */
 NOTA_API void       nota_engine_set_audition_track(NotaEngine* engine, int32_t track_id);
@@ -784,16 +838,36 @@ NOTA_API int32_t    nota_engine_master_track_id(const NotaEngine* engine);
 /* Live min/max peaks (interleaved, out_min_max[2*max_points]) over the in-progress
  * capture buffer so the take draws a growing waveform. Returns buckets written. */
 NOTA_API int32_t    nota_engine_audio_record_peaks(const NotaEngine* engine, float* out_min_max, int32_t max_points);
+/* One note held into the in-progress MIDI take (live-recording preview). */
+typedef struct NotaRecordHeldNote {
+    int32_t pitch;        /* 0..127 */
+    int32_t source;       /* 0 live input (keyboard, MIDI, Remote), 1 routed MIDI ("MIDI In") */
+    double  start_beat;   /* arrangement: absolute timeline beat, may precede the take's clip
+                             and be < 0 (played on the count-in before 1.1);
+                             Session: slot-local beat */
+    float   velocity;     /* 0..1 */
+} NotaRecordHeldNote;
+/* Notes currently held into the in-progress MIDI take — keys down that will be written
+ * into the take on release — for drawing them growing. Copies up to max_n entries and
+ * returns the count (0 when no MIDI take is recording or nothing is held; out may be NULL
+ * to query it). Optional outputs: *track_id the take's track (0 = none), *session_scene
+ * the Session scene being recorded (-1 = arrangement take), *now_beat the capture clock
+ * (the held notes' right edge; runs during the count-in too, in start_beat's coordinates).
+ * Lock-free; call from the UI thread. */
+NOTA_API int32_t    nota_engine_record_held_notes(const NotaEngine* engine,
+                                                  NotaRecordHeldNote* out, int32_t max_n,
+                                                  int32_t* track_id, int32_t* session_scene,
+                                                  double* now_beat);
 /* Message-thread pump: materialises recorded notes into clips and drains engine
  * events. Call periodically from the UI (e.g. the position timer). */
 NOTA_API NotaResult nota_engine_poll(NotaEngine* engine);
 
 /* ---- Undo / redo (M6-6) -------------------------------------------------- */
 /* Undo/redo of structural edits (tracks, clips, notes, device chains, session
- * slots) — restores a retained Graph snapshot — and of volume / pan / master volume
- * steps made through mix gestures (009). Returns NOTA_OK if a step was applied,
- * NOTA_ERR_UNKNOWN if there was nothing to undo/redo. Mute, solo, sends, bypass,
- * device params and the transport are not covered. */
+ * slots, arrangement sections) — restores a retained Graph snapshot — and of volume /
+ * pan / master volume (009) and device-parameter (016) steps made through value
+ * gestures. Returns NOTA_OK if a step was applied, NOTA_ERR_UNKNOWN if there was nothing
+ * to undo/redo. Mute, solo, sends, bypass and the transport are not covered. */
 NOTA_API NotaResult nota_engine_undo(NotaEngine* engine);
 NOTA_API NotaResult nota_engine_redo(NotaEngine* engine);
 NOTA_API int32_t    nota_engine_can_undo(const NotaEngine* engine);
@@ -807,8 +881,9 @@ NOTA_API void       nota_engine_undo_group_end(NotaEngine* engine);
  * closed. Message thread only. No-op for a null engine. */
 NOTA_API void       nota_engine_clear_undo_history(NotaEngine* engine);
 
-/* ---- Mix undo (009) ------------------------------------------------------ */
-/* Volume / pan / master volume changes become undo steps through gestures. A gesture
+/* ---- Value undo (009, 016) ----------------------------------------------- */
+/* Volume / pan / master volume and device-parameter changes become undo steps through
+ * gestures. A gesture
  * records its targets' values at begin and, at end, pushes ONE undo step with the values
  * that changed (none changed → no step). If a structural checkpoint was pushed during the
  * gesture (automation recording) the step merges into it. The plain setters never record:
@@ -816,13 +891,18 @@ NOTA_API void       nota_engine_clear_undo_history(NotaEngine* engine);
 #define NOTA_MIX_TRACK_VOLUME  0
 #define NOTA_MIX_TRACK_PAN     1
 #define NOTA_MIX_MASTER_VOLUME 2
+#define NOTA_MIX_DEVICE_PARAM      3   /* audio effect: device_index = chain position */
+#define NOTA_MIX_MIDI_DEVICE_PARAM 4   /* MIDI effect: device_index = MIDI-FX chain position */
+#define NOTA_MIX_PLUGIN_PARAM      5   /* normalized 0..1; device_index -1 = the instrument */
 
 typedef struct NotaMixTarget {
-    int32_t kind;      /* NOTA_MIX_* */
-    int32_t track_id;  /* ignored for NOTA_MIX_MASTER_VOLUME */
+    int32_t kind;          /* NOTA_MIX_* */
+    int32_t track_id;      /* ignored for NOTA_MIX_MASTER_VOLUME; the master chain = master id */
+    int32_t device_index;  /* parameter kinds only (-1 otherwise) */
+    int32_t param_index;   /* parameter kinds only (-1 otherwise) */
 } NotaMixTarget;
 
-/* Returns a handle > 0, or 0 if no target is valid. */
+/* Returns a handle > 0, or 0 if no target is valid (a missing track, device or param). */
 NOTA_API int32_t nota_mix_gesture_begin(NotaEngine* engine, const NotaMixTarget* targets, int32_t count);
 /* Ends the gesture; unknown / already-ended handles are ignored. */
 NOTA_API void    nota_mix_gesture_end(NotaEngine* engine, int32_t handle);
@@ -869,6 +949,26 @@ NOTA_API NotaResult nota_engine_set_pan_law(NotaEngine* engine, int32_t law, int
 
 /* Current law (authoring graph). NOTA_PAN_LAW_BALANCE for a null engine. */
 NOTA_API int32_t    nota_engine_pan_law(const NotaEngine* engine);
+
+/* ---- Arrangement sections (016) ----------------------------------------- */
+/* Named spans of arrangement time (Intro / Verse / Drop), project-level data in the graph
+ * snapshot: undo/redo restore them, a reset (load / new) clears them. Sorted by start. */
+typedef struct NotaSection {
+    double      start_beat;
+    double      length_beats;
+    const char* name_utf8;     /* NULL = "" */
+} NotaSection;
+
+NOTA_API int32_t     nota_engine_section_count(const NotaEngine* engine);
+/* Out-of-range index: 0.0 / 0.0 / "". The name stays valid until the next edit. */
+NOTA_API double      nota_engine_section_start(const NotaEngine* engine, int32_t index);
+NOTA_API double      nota_engine_section_length(const NotaEngine* engine, int32_t index);
+NOTA_API const char* nota_engine_section_name(const NotaEngine* engine, int32_t index);
+/* Replace the list: sorted by start, entries with length <= 0 dropped, start clamped to
+ * >= 0. checkpoint = 1: one undo step (user edit; an identical list makes none); 0: no
+ * undo entry (project load). count 0 clears. Message thread only. */
+NOTA_API NotaResult  nota_engine_set_sections(NotaEngine* engine, const NotaSection* sections,
+                                              int32_t count, int32_t checkpoint);
 
 /* ---- Project load (M7-6) ------------------------------------------------- */
 /* Clear the session to an empty project: stop transport, drop all tracks,
@@ -1296,6 +1396,9 @@ NOTA_API float       nota_midi_effect_get_param(const NotaEngine* engine, int32_
 NOTA_API NotaResult  nota_midi_effect_set_param(NotaEngine* engine, int32_t track_id, int32_t index, int32_t param_index, float value);
 NOTA_API void        nota_midi_effect_set_bypassed(NotaEngine* engine, int32_t track_id, int32_t index, int32_t bypassed);
 NOTA_API int32_t     nota_midi_effect_bypassed(const NotaEngine* engine, int32_t track_id, int32_t index);
+/* Fold (specs/022): as nota_track_set_device_folded, for a MIDI effect. */
+NOTA_API void        nota_midi_effect_set_folded(NotaEngine* engine, int32_t track_id, int32_t index, int32_t folded);
+NOTA_API int32_t     nota_midi_effect_folded(const NotaEngine* engine, int32_t track_id, int32_t index);
 /* Live IN/OUT of the last note-on a MIDI effect remapped (Nota Scale readout); -1 = none. */
 NOTA_API int32_t     nota_midi_effect_last_in(const NotaEngine* engine, int32_t track_id, int32_t index);
 NOTA_API int32_t     nota_midi_effect_last_out(const NotaEngine* engine, int32_t track_id, int32_t index);
@@ -1389,7 +1492,7 @@ NOTA_API int32_t     nota_fx_selftest(void);
  * plus 8 macros. It lives on an instrument track; the calls below address into
  * it by (track_id, chain, dev, param). Rack-internal edits publish the rack's own
  * snapshot (thread-safe) and are outside engine undo in v1. Chain instruments are
- * built-in (kind 0=Synth, 2=Physical); chain devices are built-in (0..4). Chain
+ * built-in (kind 6=Volt by default, 2=Physical, …); chain devices are built-in (0..4). Chain
  * instrument params ride the normalized 0..1 plugin-param surface; chain device
  * params are native floats in [min,max]. Boolean queries return 1/0. */
 NOTA_API int32_t     nota_engine_add_instrument_rack_track(NotaEngine* engine);
@@ -1603,9 +1706,18 @@ NOTA_API NotaResult nota_plugin_set_state(NotaEngine* engine, int32_t track_id, 
                                           const uint8_t* data, int32_t size);
 
 /* Device bypass (M3-6, FR-37). When bypassed, the effect is skipped in the
- * render chain (buffer passes through untouched). */
+ * render chain (buffer passes through untouched). device_index -1 is the track's
+ * instrument (#148): switched off, it fades out over one block, releases its voices
+ * and is no longer rendered; its MIDI effects and audio effects keep running. */
 NOTA_API NotaResult nota_track_set_device_bypassed(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t bypassed);
 NOTA_API int32_t    nota_track_device_bypassed(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+
+/* Device fold (specs/022): a view flag the Devices panel draws as a narrow strip. Saved with
+ * the project, never read by the audio thread. Kept on the device, so it follows moves and
+ * undo/redo. device_index -1 = the track's instrument. Out of range: set is a no-op, get
+ * returns 0. Message thread. */
+NOTA_API void       nota_track_set_device_folded(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t folded);
+NOTA_API int32_t    nota_track_device_folded(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 
 /* Plugin delay compensation (M3-7, FR-38). Total reported latency of a track's
  * chain (instrument + effects), in samples; the engine delays other tracks to

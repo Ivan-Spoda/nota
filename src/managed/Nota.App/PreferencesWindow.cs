@@ -944,8 +944,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         }
     }
 
-    // Bars / Solid for the arrangement's audio-clip waveforms. Saving fires Settings.Changed,
-    // which the main window applies to the lanes at once.
+    // Bars / Solid for the arrangement's audio-clip waveforms and the browser preview. Saving
+    // fires Settings.Changed, which the lanes and the preview apply at once.
     private static Control WaveformPicker()
     {
         var settings = App.Services.GetRequiredService<ISettingsService>();
@@ -1055,7 +1055,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                 TopRow("Colour theme", ThemePicker()),
                 Row("", Caption("Themes change colours only. Follow system switches between your dark-mode and light-mode theme with the OS appearance.")),
                 Row("Waveform", WaveformPicker()),
-                Row("", Caption("How audio clips draw on the arrangement: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel."))),
+                Row("", Caption("How audio clips draw on the arrangement, and samples in the browser's preview: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel."))),
             Section("AI control (MCP)", 12, enable, details));
     }
 
@@ -1095,11 +1095,17 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         ("Transport", new[]
         {
-            ("Space", "Play / Stop"),
+            ("Space", "Play / Stop · Stop goes back to where playback started"),
+            ("⇧Space", "Play / pause · the playhead stays put and Play carries on from there"),
             ("Return", "Stop (again → back to the start) · in the Session grid it launches the selection"),
             ("⌘R", "Record"),
             ("⌘M", "Metronome"),
             ("⌘L", "Loop on / off · loop the selected clips or time range"),
+            ("Double-click loop brace", "Loop on / off in the ruler · the region stays, greyed out while off"),
+            ("Drag loop edge · drag loop brace", "Resize that end of the loop region · move the whole region · ⌥ off the grid"),
+            ("Right-click ruler", "Loop on / off · loop the selection · clear the loop region"),
+            ("P", "Show playhead · scroll the Arrangement to it without moving it · picks up a paused Follow"),
+            ("⌘⇧R", "Loop recording: Overdub (every pass adds) / Replace (keep the latest pass)"),
         }),
         ("Arrangement & editing", new[]
         {
@@ -1164,10 +1170,17 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste notes · paste lands on the originals"),
             ("Esc", "Deselect · moved or pasted notes replace the notes under them"),
             ("Delete", "Delete the selected notes"),
+            ("Double-click empty grid", "Add a note with the length and velocity of the last note touched · on a note, delete it"),
             ("Drag note edge", "Change the note's start or end"),
+            ("Click · drag the ruler", "Move the playhead there · drag to scrub, snapped to the grid"),
             ("Drag velocity stem", "Set velocity · selected notes move together · ⇧ adds a note"),
             ("Drag in the Bend / Pres / Slide lane", "Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it"),
             ("Double-click in an MPE lane", "Add a point · on a point, delete it · right-click to clear the curve"),
+            ("⌘⌥ + wheel", "Zoom rows (vertical zoom)"),
+            ("Click a key", "Play it on the track's instrument · ⇧-drag glides through the keys · ⌘-click selects every note of that pitch"),
+            ("Drag on the keys", "Zoom rows · down taller, up shorter"),
+            ("⌥ + pinch", "Zoom rows (trackpad)"),
+            ("⇧F", "Fit to notes"),
         }),
         ("Play notes (computer keyboard)", new[]
         {
@@ -1197,6 +1210,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("Mouse", new[]
         {
             ("Double-click clip", "Open in the clip editor"),
+            ("Double-click a browser instrument", "Swap it onto the selected instrument track · clips and effects stay · no track selected starts one"),
+            ("⌥ + double-click a browser instrument", "Always start a new track with it"),
             ("Right-click the metronome", "Count-in before Play / Record: off · 1 · 2 · 4 bars"),
             ("Drag an audio clip's ADSR handle", "Shape attack · decay + sustain · release (top corners and the dot on hover) · double-click resets the stage"),
             ("⇧-click track header", "Add the track to the selection · again to remove it"),
@@ -1219,6 +1234,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag an audio clip out of the Arrangement", "Take it as a sample: drop on a pad, a Grain, a Rhythm voice, a Session slot — the clip stays put"),
             ("Drag clip + ⌥", "Position freely, ignoring the grid for this drag (the magnet in the transport latches the same thing)"),
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
+            ("Drag slider", "Left / right (or up / down) changes the value · hold ⌘ or ⇧ for fine steps"),
             ("Double-click knob", "Reset the value to its default"),
             ("Double-click a slider's value", "Type a value (units like k, ms, dB, L / R work) · Return sets it, Esc cancels"),
             ("Drag jack → jack", "Patch a cable in Nota Consort · ⌥-click a jack to pull its cables"),
@@ -1235,12 +1251,14 @@ public sealed partial class PreferencesWindow : NotaWindow
         void Render()
         {
             groups.Children.Clear();
-            var q = _shortcutFilter.Trim();
+            // Each word must appear in the row's action, its keys or its group's title, so
+            // "keyboard" finds the whole "Play notes (computer keyboard)" group (#40).
+            var words = _shortcutFilter.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             foreach (var (title, rows) in ShortcutGroups)
             {
-                var shown = rows.Where(r => q.Length == 0
-                                            || MenuKit.Keys(r.Action).Contains(q, StringComparison.OrdinalIgnoreCase)
-                                            || MenuKit.Keys(r.Key).Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+                var shown = rows.Where(r => words.All(w => title.Contains(w, StringComparison.OrdinalIgnoreCase)
+                                                           || MenuKit.Keys(r.Action).Contains(w, StringComparison.OrdinalIgnoreCase)
+                                                           || MenuKit.Keys(r.Key).Contains(w, StringComparison.OrdinalIgnoreCase))).ToList();
                 if (shown.Count == 0) continue;
                 var head = new StackPanel
                 {
@@ -1261,7 +1279,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new StackPanel { Spacing = 18, Children = { SearchField(filter, 320), groups } };
     }
 
-    private static readonly HashSet<string> NamedKeys = new(StringComparer.Ordinal) { "Space", "Return", "Delete", "Tab", "Esc", "PgUp", "PgDn", "⌘Return", "⌥Return", "⇧Return", "⇧Tab" };
+    private static readonly HashSet<string> NamedKeys = new(StringComparer.Ordinal) { "Space", "Return", "Delete", "Tab", "Esc", "PgUp", "PgDn", "⌘Return", "⌥Return", "⇧Return", "⇧Tab", "⇧Space" };
 
     // A token that names a key: no lower-case letters (⌘⇧Z, ←, A, 0), or a named key.
     private static bool IsKeyToken(string t) => NamedKeys.Contains(t) || !t.Any(char.IsLower);

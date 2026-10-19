@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Nota.Application;
 
 namespace Nota.Infrastructure;
 
@@ -30,7 +31,9 @@ public sealed class ProjectService
     /// per-segment curvature (automationPoint.curve). v5 adds audio-clip pitch + warp
     /// (pitchSemitones / warpEnabled / warpMode / warpBeats). v6 adds warp markers.</summary>
     /// v18 (Phase 3) adds CV modulation: per-track LFO modulators + CV links to device params.
-    public const int CurrentFormatVersion = 21;
+    /// v22 (specs/020) adds MIDI controller curves on MIDI clips and Session slot clips.
+    /// v23 (specs/022) adds the Devices-panel fold on devices, MIDI effects and instruments.
+    public const int CurrentFormatVersion = 23;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -73,6 +76,8 @@ public sealed class ProjectService
                 PanLaw = engine.PanLaw == PanLaw.Stereo ? "stereo" : "balance",
                 PanLawLegacy = transport.PanLawLegacy,
             },
+            // Always written ([] when none), so a load can tell "no sections" from "older file".
+            Sections = engine.Sections.Select(s => new SectionDto { Start = s.StartBeat, Length = s.LengthBeats, Name = s.Name }).ToList(),
         };
 
         int trackCount = engine.TrackCount;
@@ -158,6 +163,8 @@ public sealed class ProjectService
                 // React source (Nota Flux): store as a doc index, resolved on load.
                 int instScSrc = engine.InstrumentSidechainSource(ti.Id);
                 instDto.SidechainSource = instScSrc >= 0 && idToIndex.TryGetValue(instScSrc, out var isi) ? isi : -1;
+                instDto.Folded = engine.DeviceFolded(ti.Id, -1);
+                instDto.Bypassed = engine.DeviceBypassed(ti.Id, -1);
                 t.Instrument = instDto;
             }
 
@@ -165,7 +172,7 @@ public sealed class ProjectService
             int midiCount = engine.TrackMidiEffectCount(ti.Id);
             for (int m = 0; m < midiCount; m++)
             {
-                var mdev = new MidiDeviceDto { Kind = engine.MidiEffectKind(ti.Id, m), Bypassed = engine.MidiEffectBypassed(ti.Id, m) };
+                var mdev = new MidiDeviceDto { Kind = engine.MidiEffectKind(ti.Id, m), Bypassed = engine.MidiEffectBypassed(ti.Id, m), Folded = engine.MidiEffectFolded(ti.Id, m) };
                 int pc = engine.MidiEffectParamCount(ti.Id, m);
                 mdev.Params = new float[pc];
                 for (int p = 0; p < pc; p++) mdev.Params[p] = engine.MidiEffectGetParam(ti.Id, m, p);
@@ -199,6 +206,7 @@ public sealed class ProjectService
                         Notes = ToDtos(engine, engine.GetClipNotes(ti.Id, c)),
                         VelocityEnvelope = vel.Length > 0 ? System.Array.ConvertAll(vel, p => new AutomationPointDto(p)) : null,
                         VolumeEnvelope = vol.Length > 0 ? System.Array.ConvertAll(vol, p => new AutomationPointDto(p)) : null,
+                        Controllers = CaptureControllers(engine.GetMidiClipControllers(ti.Id, c), ctl => engine.GetMidiClipController(ti.Id, c, ctl)),
                     });
                 }
             }
@@ -231,6 +239,7 @@ public sealed class ProjectService
                         Scene = s,
                         LengthBeats = engine.SessionSlotLength(ti.Id, s),
                         Notes = ToDtos(engine, engine.GetSessionNotes(ti.Id, s)),
+                        Controllers = CaptureControllers(engine.GetSessionControllers(ti.Id, s), ctl => engine.GetSessionController(ti.Id, s, ctl)),
                     }));
                 }
                 else if (ti.Type == 0 && engine.TryGetSessionAudioSlot(ti.Id, s, out var sa))
@@ -342,7 +351,7 @@ public sealed class ProjectService
         for (int d = 0; d < deviceCount; d++)
         {
             int bk = engine.TrackDeviceBuiltinKind(trackId, d);
-            var dev = new DeviceDto { BuiltinKind = bk, Bypassed = engine.DeviceBypassed(trackId, d) };
+            var dev = new DeviceDto { BuiltinKind = bk, Bypassed = engine.DeviceBypassed(trackId, d), Folded = engine.DeviceFolded(trackId, d) };
             int scSrc = engine.DeviceSidechainSource(trackId, d);
             dev.SidechainSource = scSrc >= 0 && idToIndex.TryGetValue(scSrc, out var si) ? si : -1;
             dev.SidechainGain = engine.DeviceSidechainGain(trackId, d);
@@ -421,6 +430,7 @@ public sealed class ProjectService
                 }
             }
             if (d.Bypassed) engine.SetDeviceBypassed(trackId, di, true);
+            if (d.Folded) engine.SetDeviceFolded(trackId, di, true);
             if (d.SidechainSource >= 0) scDeferred.Add((trackId, di, d.SidechainSource));
             engine.SetDeviceSidechainGain(trackId, di, d.SidechainGain);
             engine.SetDeviceSidechainMix(trackId, di, d.SidechainMix);
@@ -443,6 +453,11 @@ public sealed class ProjectService
         // Pan law (specs/006) first, as the baseline rather than an undo step. A missing mixer
         // is a pre-v21 project: Balance, so the mix sounds as it was saved.
         engine.SetPanLaw(ParsePanLaw(doc.Mixer?.PanLaw, warnings), checkpoint: false);
+
+        // Arrangement sections (specs/016), also a baseline. A file from before they moved into
+        // the project keeps them in the bundle's sidecar.
+        var sections = doc.Sections ?? ReadLegacySections(bundleDir);
+        engine.SetSections(sections.Select(d => new SectionInfo(d.Start, d.Length, d.Name ?? "")).ToList(), checkpoint: false);
 
         // Restore the scene count before tracks so their session slots size to it (the doc may
         // hold more/fewer scenes than the fresh default after add/remove-scene edits).
@@ -478,8 +493,8 @@ public sealed class ProjectService
                         : engine.AddSamplerTrack(ResolveInBundle(bundleDir, sd.Sample), sd.RootNote, sd.Loop);
                     if (id <= 0)
                     {
-                        warnings.Add($"Couldn't reload sampler \"{sd.Sample}\" — using an empty Synth track.");
-                        id = engine.AddInstrumentTrack();
+                        warnings.Add($"Couldn't reload sampler \"{sd.Sample}\" — using an empty Volt track.");
+                        id = engine.AddVoltSynthTrack();
                     }
                     else
                     {
@@ -510,8 +525,8 @@ public sealed class ProjectService
                     id = idx >= 0 ? engine.AddPluginInstrumentTrack(idx) : 0;
                     if (id <= 0)
                     {
-                        warnings.Add($"Plugin instrument \"{pid}\" isn't installed — using an empty Synth track.");
-                        id = engine.AddInstrumentTrack();
+                        warnings.Add($"Plugin instrument \"{pid}\" isn't installed — using an empty Volt track.");
+                        id = engine.AddVoltSynthTrack();
                     }
                     else if (t.Instrument.State is { } stateRel)
                     {
@@ -578,6 +593,9 @@ public sealed class ProjectService
                 id = engine.AddAudioTrack();
             }
 
+            if (id > 0 && t.Instrument is { Folded: true }) engine.SetDeviceFolded(id, -1, true);
+            if (id > 0 && t.Instrument is { Bypassed: true })
+                engine.SetDeviceBypassed(id, -1, true);           // the instrument card's switch is off (#148)
             if (id > 0 && t.Instrument is { SidechainSource: >= 0 } insc)
                 instScDeferred.Add((id, insc.SidechainSource));   // wire React source once every track exists
             if (id > 0 && t.GroupId >= 0)
@@ -611,6 +629,7 @@ public sealed class ProjectService
                 if (m.Kind == 3 && m.Params.Length <= 11) PresetService.LengthLegacy(engine, id, mi);          // pre-Division Nota Length
                 if (m.Kind == 4 && m.Params.Length <= 7) PresetService.VelocityLegacy(engine, id, mi);         // pre-switch Nota Velocity
                 if (m.Bypassed) engine.SetMidiEffectBypassed(id, mi, true);
+                if (m.Folded) engine.SetMidiEffectFolded(id, mi, true);
                 if (m.CcDestDevice >= 0 && m.CcDestParam >= 0)
                 {
                     engine.SetMidiEffectCcDest(id, mi, m.CcDestDevice, m.CcDestParam);
@@ -631,6 +650,7 @@ public sealed class ProjectService
                     engine.SetMidiClipEnvelope(id, ci, MidiClipEnvelope.Velocity, System.Array.ConvertAll(ve, p => p.ToPoint()));
                 if (c.VolumeEnvelope is { Length: > 0 } vo)
                     engine.SetMidiClipEnvelope(id, ci, MidiClipEnvelope.Volume, System.Array.ConvertAll(vo, p => p.ToPoint()));
+                ApplyControllers(c.Controllers, warnings, (ctl, pts) => engine.SetMidiClipController(id, ci, ctl, pts));
             }
 
             foreach (var ac in t.AudioClips)
@@ -668,6 +688,7 @@ public sealed class ProjectService
                 {
                     engine.AddSessionMidiClip(id, sl.Scene, sl.LengthBeats);
                     if (sl.Notes.Length > 0) engine.SetSessionNotes(id, sl.Scene, ToNotes(engine, sl.Notes));
+                    ApplyControllers(sl.Controllers, warnings, (ctl, pts) => engine.SetSessionController(id, sl.Scene, ctl, pts));
                 }
                 ApplyClipProps(engine, id, sl);
             }
@@ -854,6 +875,20 @@ public sealed class ProjectService
 
         // Only now that the new manifest is in place: nothing on disk points at these any more.
         BundleContent.PruneUnreferenced(bundleDir, doc);
+        // The sections now live in the manifest; a leftover sidecar would only mislead an older build.
+        try { File.Delete(Path.Combine(bundleDir, LegacySectionsSidecar)); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+
+    /// <summary>Where builds before specs/016 kept the arrangement sections, next to the manifest.</summary>
+    public const string LegacySectionsSidecar = "sections.json";
+
+    // Sections of a project saved before they moved into the manifest (absent / corrupt → none).
+    private static List<SectionDto> ReadLegacySections(string bundleDir)
+    {
+        string path = Path.Combine(bundleDir, LegacySectionsSidecar);
+        if (!File.Exists(path)) return new();
+        try { return JsonSerializer.Deserialize<List<SectionDto>>(File.ReadAllText(path)) ?? new(); }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException) { return new(); }
     }
 
     /// <summary>Serializes just the manifest JSON (same options Save uses). Used by
@@ -1033,6 +1068,34 @@ public sealed class ProjectService
                 Color = sc.Color, Tempo = sc.Tempo, SigNum = sc.SigNum, SigDen = sc.SigDen,
                 Follow = sc.Follow ? 1 : 0, FollowBeats = sc.FollowBeats,
             });
+        }
+    }
+
+    // A clip's controller curves (specs/020); null when it has none, so older files stay alike.
+    private static ControllerCurveDto[]? CaptureControllers(int[] ctls, Func<int, AutomationPoint[]> get)
+    {
+        if (ctls.Length == 0) return null;
+        var list = new List<ControllerCurveDto>(ctls.Length);
+        foreach (int ctl in ctls)
+        {
+            var pts = get(ctl);
+            if (pts.Length > 0) list.Add(ControllerCurveDto.From(ctl, pts));
+        }
+        return list.Count > 0 ? list.ToArray() : null;
+    }
+
+    private static void ApplyControllers(ControllerCurveDto[]? curves, List<string> warnings, Action<int, AutomationPoint[]> set)
+    {
+        if (curves is null) return;
+        foreach (var cc in curves)
+        {
+            var pts = cc.ToPoints();
+            if (MidiController.IsReserved(cc.Ctl) || pts.Length == 0)
+            {
+                warnings.Add($"Skipped a clip's controller curve for an unsupported controller ({cc.Ctl}).");
+                continue;
+            }
+            set(cc.Ctl, pts);
         }
     }
 

@@ -89,7 +89,13 @@ public sealed partial class DeviceChainView
     {
         int n = Math.Min(p.Length, ParamCount(k, di));
         int view = k == ChainKind.Instrument ? Nota.Application.InstrumentView.Index(_engine, _trackId) : -1;   // A/B keeps the card size
-        for (int i = 0; i < n; i++) if (i != view) SetPr(k, di, i, p[i]);
+        // One undo step for the whole switch (specs/016).
+        var targets = new List<MixTarget>(n);
+        for (int i = 0; i < n; i++)
+            if (i != view)
+                targets.Add(k == ChainKind.Instrument ? MixTarget.PluginParam(_trackId, -1, i)
+                    : k == ChainKind.Midi ? MixTarget.MidiDeviceParam(_trackId, di, i) : MixTarget.DeviceParam(_trackId, di, i));
+        Nota.Application.Editing.MixEdit.Step(_engine, () => { for (int i = 0; i < n; i++) if (i != view) SetPr(k, di, i, p[i]); }, targets.ToArray());
     }
 
     internal readonly record struct ShellSpec(
@@ -102,9 +108,11 @@ public sealed partial class DeviceChainView
     /// <summary>A card's own preset list, in place of the factory presets for its kind — the
     /// Drum Rack's kits, which load pads rather than set parameters. <paramref name="Current"/>
     /// names the one the device holds now ("" when none fits); <paramref name="Apply"/> loads
-    /// one by id and returns a warning, or "".</summary>
+    /// one by id and returns a warning, or "". <paramref name="Init"/>, when given, puts the
+    /// device back as freshly added and returns a warning, or "": the list gets an Init entry.</summary>
     internal sealed record CardPresets(
-        IReadOnlyList<(string Id, string Name)> Items, Func<string> Current, Func<string, string> Apply);
+        IReadOnlyList<(string Id, string Name)> Items, Func<string> Current, Func<string, string> Apply,
+        Func<string>? Init = null);
 
     // Small tertiary caption / mono readout helpers.
     private static TextBlock Caps(string t, double fs = 9) => new() { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
@@ -157,13 +165,15 @@ public sealed partial class DeviceChainView
         if (s.Bypassable)
         {
             var bypass = new SwitchTrack { IsOn = !s.Bypassed, Cursor = new Cursor(StandardCursorType.Hand) };
-            ToolTip.SetTip(bypass, s.Bypassed ? "Bypassed — click to enable" : "Active — click to bypass");
+            ToolTip.SetTip(bypass, s.IsInstrument
+                ? (s.Bypassed ? "Off — click to turn the instrument on" : "On — click to turn the instrument off")
+                : (s.Bypassed ? "Bypassed — click to enable" : "Active — click to bypass"));
             bypass.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(bypass).Properties.IsLeftButtonPressed) return;
                 e.Handled = true;   // not a drag, not a selection click
                 if (s.Kind == ChainKind.Midi) _engine.SetMidiEffectBypassed(_trackId, di, !s.Bypassed);
-                else _engine.SetDeviceBypassed(_trackId, di, !s.Bypassed);
+                else _engine.SetDeviceBypassed(_trackId, s.IsInstrument ? -1 : di, !s.Bypassed);   // -1: the instrument (#148)
                 Rebuild(); Changed?.Invoke();
             };
             power.Child = bypass;
@@ -189,11 +199,12 @@ public sealed partial class DeviceChainView
             Cursor = s.CanMove && SelectableKind(s.Kind) ? new Cursor(StandardCursorType.SizeAll) : null,
         };
         headerBar.BindResource(Border.BoxShadowProperty, "Shadow.Raised");   // the raised strip's top bevel
-        if (!s.Utility) ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · right-click for A/B, move and delete" : "Right-click for more");
+        if (!s.Utility) ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · double-click to fold · right-click for A/B, move and delete" : "Double-click to fold · right-click for more");
 
         // Factory presets for this device (or the card's own list), and applying one in place.
         List<(string Id, string Name)> presets;
         Action<string> applyById;
+        Action? resetToInit = null;   // Init isn't a preset, it's every default (#57); an own list opts in (#165)
         if (s.Presets is { } own)
         {
             presets = own.Items.ToList();
@@ -207,6 +218,13 @@ public sealed partial class DeviceChainView
                 if (warn.Length > 0) StatusMessage?.Invoke(warn);
                 Changed?.Invoke();
             };
+            if (own.Init is { } init)
+                resetToInit = () =>
+                {
+                    string warn = init();
+                    if (warn.Length > 0) StatusMessage?.Invoke(warn);
+                    Changed?.Invoke();
+                };
         }
         else
         {
@@ -216,22 +234,36 @@ public sealed partial class DeviceChainView
                     .Select(p => (p.Id, p.DisplayName)).ToList()
                 : new List<(string Id, string Name)>();
             applyById = id => _factory.ApplyInPlace(_engine, id, _trackId, di);
+            // A device whose factory list already starts from its own "Init" preset needs no second one.
+            if (presets.Count > 0 && !presets.Any(p => p.Name == "Init"))
+                resetToInit = () =>
+                {
+                    string warn = _factory.ResetInPlace(_engine, _trackId, di, s.Kind == ChainKind.Midi);
+                    if (warn.Length > 0) StatusMessage?.Invoke(warn);
+                };
         }
         int curPreset = presets.FindIndex(p => p.Id == extra.PresetId);
+        bool atInit = curPreset < 0 && string.IsNullOrEmpty(extra.Preset);
         void ApplyPreset(int i) { var p = presets[i]; applyById(p.Id); extra.PresetId = p.Id; extra.Preset = p.Name; Rebuild(); }
+        void ApplyInit() { resetToInit!(); extra.PresetId = ""; extra.Preset = ""; Rebuild(); }
         void StepPreset(int dir)
         {
             int n = presets.Count; if (n == 0) return;
-            ApplyPreset(curPreset < 0 ? (dir > 0 ? 0 : n - 1) : ((curPreset + dir) % n + n) % n);
+            if (curPreset < 0) { ApplyPreset(dir > 0 ? 0 : n - 1); return; }   // from Init (or a preset not in the list)
+            int next = curPreset + dir;
+            // ‹ › walk Init → the presets → back to Init when there is an Init entry, else wrap.
+            if (resetToInit != null && (next < 0 || next >= n)) ApplyInit();
+            else ApplyPreset((next % n + n) % n);
         }
         // A compact (mini) card keeps the same picker — same list, same current preset — only narrower:
         // the preset belongs to the device, not to the card size.
         // The picker has its own centre slot: the badges' live voice count changes width
         // (Consort's "Duo 1/2" → "Poly 12/16") without moving it.
+        Control? picker = null;
         if (presets.Count > 0)
         {
-            var picker = PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
-                nameWidth: s.Compact ? 74 : 132);
+            picker = PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
+                nameWidth: s.Compact ? 74 : 132, init: resetToInit != null ? ApplyInit : null);
             Grid.SetColumn(picker, 1); headerGrid.Children.Add(picker);
         }
 
@@ -246,6 +278,12 @@ public sealed partial class DeviceChainView
                 var prev = new MenuItem { Header = "Previous preset", Icon = MenuKit.Icon(GlyphKind.ChevronLeft) }; prev.Click += (_, _) => StepPreset(-1);
                 var next = new MenuItem { Header = "Next preset", Icon = MenuKit.Icon(GlyphKind.ChevronRight) }; next.Click += (_, _) => StepPreset(+1);
                 menu.Items.Add(prev); menu.Items.Add(next); menu.Items.Add(new Separator());
+                if (resetToInit != null)
+                {
+                    var init = new MenuItem { Header = "Init", ToggleType = MenuItemToggleType.Radio, IsChecked = atInit };
+                    init.Click += (_, _) => ApplyInit();
+                    menu.Items.Add(init); menu.Items.Add(new Separator());
+                }
                 for (int i = 0; i < presets.Count; i++)
                 {
                     int iv = i;
@@ -292,6 +330,9 @@ public sealed partial class DeviceChainView
                 NotaDocs.Open(headerBar, NotaDocs.DevicePage(s.Kind, kind));
             };
             flyout.Items.Add(docs);
+            var fold = new MenuItem { Header = "Fold" };   // the header's double-click, findable
+            fold.Click += (_, _) => SetFolded(s.Kind, di, true);
+            flyout.Items.Add(fold);
             flyout.Items.Add(new Separator());
         }
 
@@ -300,7 +341,13 @@ public sealed partial class DeviceChainView
         {
             var pt = e.GetCurrentPoint(headerBar).Properties;
             if (pt.IsRightButtonPressed) { ShowDeviceContextMenu(headerBar, s.Kind, di, HeaderMenu); return; }
-            if (pt.IsLeftButtonPressed) SelectDevice(s.Kind, di);
+            if (!pt.IsLeftButtonPressed) return;
+            // A double-click on the header itself (not its picker, switch or accessories) folds
+            // the card into a strip (specs/022). ClickCount, not DoubleTapped: the first click
+            // selects and rebuilds the row, so the second lands on a new header.
+            if (e.ClickCount == 2 && !Within(e.Source, picker) && !Within(e.Source, power) && !Within(e.Source, s.HeaderExtra))
+            { e.Handled = true; SetFolded(s.Kind, di, true); return; }
+            SelectDevice(s.Kind, di);
         };
 
         DockPanel.SetDock(headerBar, Dock.Top);

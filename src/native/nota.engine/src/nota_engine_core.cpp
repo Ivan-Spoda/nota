@@ -9,8 +9,12 @@
 
 #include "nota_engine_internal.h"
 
+#include <cmath>
+#include <limits>
 #include <new>
 #include <string>
+
+#include "NotaConfigFile.h"
 
 // Injected by CMake from src/native/nota.engine/VERSION.
 #ifndef NOTA_VERSION_STRING
@@ -27,6 +31,24 @@ NotaEngine* nota_engine_create(void) {
 
 void nota_engine_destroy(NotaEngine* engine) {
     delete reinterpret_cast<Engine*>(engine);
+}
+
+NotaResult nota_set_data_dir(const char* path_utf8) {
+    // NULL / "" clears the override (persistence off unless NOTA_DATA_DIR is set).
+    // Called once at startup from the managed side; never on
+    // the audio thread (AR-6: create_directories does file I/O).
+    if (!path_utf8 || !*path_utf8) {
+        nota::cfgfile::setDataDirOverride({});
+        return NOTA_OK;
+    }
+    nota::cfgfile::setDataDirOverride(std::string(path_utf8));
+    return NOTA_OK;
+}
+
+const char* nota_get_data_dir(void) {
+    static std::string s; // owned by the engine, valid until the next call
+    s = nota::cfgfile::dataDir();
+    return s.c_str();
 }
 
 NotaResult nota_engine_start(NotaEngine* engine) {
@@ -122,6 +144,13 @@ NotaResult nota_transport_set_count_in(NotaEngine* e, int32_t bars) {
 double nota_transport_count_in_beats(const NotaEngine* e) {
     return e ? CENG(e)->countInBeatsRemaining() : 0.0;
 }
+NotaResult nota_transport_set_loop_record_mode(NotaEngine* e, int32_t mode) {
+    if (!e || mode < 0 || mode > 1) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setLoopRecordReplace(mode == 1); return NOTA_OK;
+}
+int32_t nota_transport_loop_record_mode(const NotaEngine* e) {
+    return e && CENG(e)->loopRecordReplace() ? 1 : 0;
+}
 NotaResult nota_transport_stop(NotaEngine* e) {
     if (!e) return NOTA_ERR_INVALID_ARG; ENG(e)->transportStop(); return NOTA_OK;
 }
@@ -195,6 +224,18 @@ NotaResult nota_track_note_expression(NotaEngine* e, int32_t track_id, int32_t p
     if (!e || pitch < -1 || pitch > 127 || dim < 0 || dim > 3 || (dim == 3 && pitch >= 0)) return NOTA_ERR_INVALID_ARG;
     ENG(e)->trackNoteExpression(track_id, pitch, dim, value); return NOTA_OK;
 }
+NotaResult nota_engine_controller(NotaEngine* e, int32_t ctl, float value) {
+    if (!e || nota::ctlIsReserved(ctl) || !std::isfinite(value)) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->controller(ctl, value); return NOTA_OK;
+}
+NotaResult nota_track_controller(NotaEngine* e, int32_t track_id, int32_t ctl, float value) {
+    if (!e || nota::ctlIsReserved(ctl) || !std::isfinite(value)) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->trackController(track_id, ctl, value); return NOTA_OK;
+}
+float nota_track_delivered_controller(const NotaEngine* e, int32_t track_id, int32_t ctl) {
+    return e ? CENG(e)->deliveredController(track_id, ctl) : std::numeric_limits<float>::quiet_NaN();
+}
+int32_t nota_engine_midi_ctl_selftest(NotaEngine* e) { return e ? ENG(e)->midiCtlSelfTest() : -1; }
 void nota_engine_set_audition_track(NotaEngine* e, int32_t track_id) {
     if (e) ENG(e)->setAuditionTrack(track_id);
 }
@@ -249,7 +290,7 @@ void nota_engine_undo_group_begin(NotaEngine* e) { if (e) ENG(e)->beginUndoGroup
 void nota_engine_undo_group_end(NotaEngine* e) { if (e) ENG(e)->endUndoGroup(); }
 void nota_engine_clear_undo_history(NotaEngine* e) { if (e) ENG(e)->clearUndoHistory(); }
 
-// ---- Mix undo (009) ---------------------------------------------------------
+// ---- Value undo (009, 016) -------------------------------------------------
 
 int32_t nota_mix_gesture_begin(NotaEngine* e, const NotaMixTarget* targets, int32_t count) {
     if (!e || !targets || count <= 0 || count > 64) return 0;
@@ -257,8 +298,8 @@ int32_t nota_mix_gesture_begin(NotaEngine* e, const NotaMixTarget* targets, int3
     int32_t n = 0;
     for (int32_t i = 0; i < count; ++i) {
         const int32_t k = targets[i].kind;
-        if (k < NOTA_MIX_TRACK_VOLUME || k > NOTA_MIX_MASTER_VOLUME) continue;
-        t[n++] = { static_cast<nota::MixKind>(k), targets[i].track_id };
+        if (k < NOTA_MIX_TRACK_VOLUME || k > NOTA_MIX_PLUGIN_PARAM) continue;
+        t[n++] = { static_cast<nota::MixKind>(k), targets[i].track_id, targets[i].device_index, targets[i].param_index };
     }
     return n > 0 ? ENG(e)->beginMixGesture(t, n) : 0;
 }
@@ -280,6 +321,29 @@ NotaResult nota_engine_set_pan_law(NotaEngine* e, int32_t law, int32_t checkpoin
 }
 int32_t nota_engine_pan_law(const NotaEngine* e) {
     return e ? static_cast<int32_t>(CENG(e)->panLaw()) : NOTA_PAN_LAW_BALANCE;
+}
+
+// ---- Arrangement sections (016) ----------------------------------------------
+
+int32_t nota_engine_section_count(const NotaEngine* e) {
+    return e ? static_cast<int32_t>(CENG(e)->sections().size()) : 0;
+}
+static const nota::Section* sectionAt(const NotaEngine* e, int32_t i) {
+    if (!e) return nullptr;
+    const auto& v = CENG(e)->sections();
+    return (i >= 0 && i < static_cast<int32_t>(v.size())) ? &v[static_cast<size_t>(i)] : nullptr;
+}
+double nota_engine_section_start(const NotaEngine* e, int32_t i) { auto* s = sectionAt(e, i); return s ? s->startBeat : 0.0; }
+double nota_engine_section_length(const NotaEngine* e, int32_t i) { auto* s = sectionAt(e, i); return s ? s->lengthBeats : 0.0; }
+const char* nota_engine_section_name(const NotaEngine* e, int32_t i) { auto* s = sectionAt(e, i); return s ? s->name.c_str() : ""; }
+NotaResult nota_engine_set_sections(NotaEngine* e, const NotaSection* sections, int32_t count, int32_t checkpoint) {
+    if (!e || count < 0 || (count > 0 && !sections)) return NOTA_ERR_INVALID_ARG;
+    std::vector<nota::Section> v;
+    v.reserve(static_cast<size_t>(count));
+    for (int32_t i = 0; i < count; ++i)
+        v.push_back({ sections[i].start_beat, sections[i].length_beats, sections[i].name_utf8 ? sections[i].name_utf8 : "" });
+    ENG(e)->setSections(std::move(v), checkpoint != 0);
+    return NOTA_OK;
 }
 
 // ---- Project reset (M7-6) -------------------------------------------------

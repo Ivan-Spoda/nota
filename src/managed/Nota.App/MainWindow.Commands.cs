@@ -77,6 +77,7 @@ public partial class MainWindow
         B("view.toggleOverview", () => OnMenuToggleOverview(this, e));
         B("view.toggleSections", () => OnMenuToggleSections(this, e));
         B("view.follow", () => OnMenuToggleFollow(this, e));
+        B("view.showPlayhead", ShowPlayhead);
         B("view.clipNames", () => OnMenuCycleClipNames(this, e));
         B("view.automation", () =>
         {
@@ -90,10 +91,12 @@ public partial class MainWindow
 
         // ---- Transport
         B("transport.playStop", () => _vm?.Transport.PlayStopCommand.Execute(null));
+        B("transport.playPause", () => _vm?.Transport.PlayPauseCommand.Execute(null));
         B("transport.stop", () => _vm?.Transport.StopCommand.Execute(null));
         B("transport.record", () => OnMenuRecord(this, e));
         B("transport.loop", () => OnMenuLoop(this, e));
         B("transport.metronome", () => OnMenuMetronome(this, e));
+        B("transport.loopRecordMode", () => { if (_vm is not null) _vm.Transport.LoopRecordReplace = !_vm.Transport.LoopRecordReplace; });
         B("transport.tapTempo", TapTempoBeat);
 
         // ---- Track
@@ -124,6 +127,7 @@ public partial class MainWindow
         B("roll.quantize", () => { if (_editorRoll is { } roll) { roll.Quantize(1.0); if (_vm is not null) _vm.StatusText = "Quantized notes"; } }, Roll);
         B("roll.octaveUp", () => _editorRoll?.TransposeBy(12), Roll);
         B("roll.octaveDown", () => _editorRoll?.TransposeBy(-12), Roll);
+        B("roll.fitNotes", () => _editorRoll?.FitToNotes(), Roll);
         B("roll.removeOutOfScale", () => _editorRoll?.RemoveOutOfScaleNotes(),
             c => Need(c.HasOpenMidiClip && _editorRoll?.HasOutOfScaleNotes == true, "No notes outside the scale"));
 

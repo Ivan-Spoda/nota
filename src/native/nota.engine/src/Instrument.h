@@ -8,11 +8,15 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "MidiController.h"
+#include "NoteExpression.h"
 #include "TransportInfo.h"
 
 namespace nota {
@@ -39,8 +43,52 @@ public:
     // True when noteExpression does something — the UI shows the MPE badge for it.
     virtual bool supportsMpe() const { return false; }
 
+    // An instrument-wide MIDI controller (specs/020, MidiController.h): ctl 0..127 a CC,
+    // kCtlPitchWheel, kCtlChannelPressure; value normalised (CC 0..1, wheel −1..+1). Applied
+    // like expression, at segment boundaries. Default: the controllers every built-in already
+    // understands go to the instrument-wide expression (wheel, pressure, CC74 slide, CC64
+    // sustain — which instruments read as down at >= 0.5); the rest are ignored. A hosted
+    // plug-in overrides this to receive every controller as the MIDI message itself.
+    // The last value the engine delivered per controller (NaN = none since creation), kept on
+    // the instrument because it outlives graph snapshots. Audio thread only: the stop reset
+    // and "send on change" read it.
+    // Relaxed atomics so a test / meter can read them from the message thread.
+    std::atomic<float> deliveredCtl[kCtlCount];
+    // Fold (specs/022): the Devices panel draws the instrument as a narrow strip. A view flag
+    // saved with the project; message thread only.
+    bool folded = false;
+    Instrument() { for (auto& v : deliveredCtl) v.store(std::numeric_limits<float>::quiet_NaN(), std::memory_order_relaxed); }
+    virtual void controller(int32_t ctl, float value) {
+        switch (ctl) {
+            case kCtlPitchWheel:      noteExpression(-1, ExprBend, value); break;
+            case kCtlChannelPressure: noteExpression(-1, ExprPressure, value); break;
+            case 74:                  noteExpression(-1, ExprSlide, value); break;
+            case kCtlSustain:         noteExpression(-1, ExprSustain, value); break;
+            default: break;
+        }
+    }
+
+    // The sustain pedal for instruments without a damper of their own (#99): while CC64 is
+    // down the engine holds back their note-offs and sends them when it comes up, and a
+    // re-struck held key is released right before it sounds again (Engine_Render.cpp,
+    // playEvents / deliverExpr). An instrument that models the pedal itself (Keys, Mosaic, a
+    // hosted plug-in) or ignores it on purpose (drums) returns true and is left alone.
+    virtual bool handlesSustain() const { return false; }
+    // The engine's damper state for this instrument. Audio thread only.
+    bool     pedalDown = false;
+    uint64_t pedalHeld[2] = { 0, 0 };   // released keys the pedal is holding, one bit per pitch
+
     // Add `frames` of interleaved stereo into `out`. Continues current voices.
     virtual void render(float* out, int32_t frames) = 0;
+
+    // The card's on/off switch (#148). Off = the engine stops rendering the instrument (it
+    // fades out over one block and releases its voices); its settings, the MIDI effects
+    // before it and the audio effects after it are untouched. Atomic: set from the message
+    // thread, read on the audio thread. offSettled is the audio thread's own note that the
+    // fade-out has run.
+    bool bypassed() const { return bypassed_.load(std::memory_order_relaxed); }
+    void setBypassed(bool b) { bypassed_.store(b, std::memory_order_relaxed); }
+    bool offSettled = false;
 
     // Musical transport for generative instruments (e.g. Nota Pendulum): the engine
     // calls this once per block before render() with the block's start beat,
@@ -135,6 +183,9 @@ public:
     // engine from `kind()`; hosted plugins re-instantiate here (fresh DSP instance +
     // copied state). Returns nullptr if the engine should handle it. Message thread.
     virtual std::shared_ptr<Instrument> clone() const { return nullptr; }
+
+private:
+    std::atomic<bool> bypassed_{false};
 };
 
 } // namespace nota

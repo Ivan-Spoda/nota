@@ -24,7 +24,7 @@ if [ "$(uname -s)" != "Linux" ]; then
 error: package-linux.sh builds a native Linux engine and must run on Linux.
        From macOS/Windows, run it inside a Linux container (single line — safe to paste):
 
-  docker run --rm -e CMAKE_BUILD_PARALLEL_LEVEL=2 -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'apt-get update -qq && apt-get install -y --no-install-recommends cmake ninja-build build-essential curl ca-certificates file squashfs-tools libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev && scripts/package-linux.sh'
+  docker run --rm -e CMAKE_BUILD_PARALLEL_LEVEL=2 -v "$PWD":/src -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash -c 'apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates gnupg && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y --no-install-recommends nodejs cmake ninja-build build-essential curl ca-certificates file squashfs-tools libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype6-dev libfontconfig1-dev && scripts/package-linux.sh'
 MSG
   exit 1
 fi
@@ -70,8 +70,17 @@ if [ -f "${CACHE}" ]; then
     rm -rf "${NATIVE}"
   fi
 fi
+# -static-libstdc++ -static-libgcc: the release container's toolset compiler
+# (gcc-toolset-14 in manylinux_2_28) carries a newer libstdc++ than the baseline
+# distro's (RHEL 8 ships GCC 8); linked dynamically the engine would demand the
+# newer one and stop loading on the user's machine. Statically linked it carries
+# no GLIBCXX_/CXXABI_ versioned references at all — scripts/check-glibc-floor.sh
+# verifies that. Harmless on newer local build hosts.
+STATIC_CXX_RT="-static-libstdc++ -static-libgcc"
 cmake -G Ninja -S src/native/nota.engine -B "${NATIVE}" \
-  -DCMAKE_BUILD_TYPE=Release >/dev/null
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_SHARED_LINKER_FLAGS="${STATIC_CXX_RT}" \
+  -DCMAKE_EXE_LINKER_FLAGS="${STATIC_CXX_RT}" >/dev/null
 cmake --build "${NATIVE}" >/dev/null
 
 echo "==> Publishing managed app (${RID}, self-contained)…"
@@ -144,7 +153,7 @@ build_with_appimagetool() {
 build_manually() {
   echo "    assembling AppImage by hand (mksquashfs + type2 runtime)…"
   if ! command -v mksquashfs >/dev/null; then
-    echo "error: need squashfs-tools (mksquashfs) for the manual AppImage path — apt install squashfs-tools" >&2
+    echo "error: need squashfs-tools (mksquashfs) for the manual AppImage path — install it (apt on Debian/Ubuntu, dnf on EL)" >&2
     exit 1
   fi
   local runtime="dist/runtime-${AI_ARCH}"          # cached under dist/ (gitignored)
@@ -152,9 +161,13 @@ build_manually() {
     curl -fsSL -o "${runtime}" \
       "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-${AI_ARCH}"
   fi
+  # zstd where available; the release container's EL8 squashfs-tools 4.3 has no
+  # zstd, and gzip is the AppImage type2 default anyway.
+  local comp="gzip"
+  mksquashfs -help 2>&1 | grep -q zstd && comp="zstd" || true
   local sq="dist/nota-${AI_ARCH}.squashfs"
   rm -f "${sq}"
-  mksquashfs "${APPDIR}" "${sq}" -root-owned -noappend -quiet -comp zstd
+  mksquashfs "${APPDIR}" "${sq}" -root-owned -noappend -quiet -comp "${comp}"
   cat "${runtime}" "${sq}" > "${OUT}"    # type2 runtime finds the appended filesystem itself
   chmod +x "${OUT}"
   rm -f "${sq}"

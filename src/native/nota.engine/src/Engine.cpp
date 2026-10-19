@@ -404,6 +404,9 @@ void Engine::transportPlayCountIn() {
     const int32_t bars = countInBars();
     if (bars <= 0 || transport_.uiIsPlaying()) { transportPlay(); return; }
     arrangementActive_.store(true, std::memory_order_relaxed);
+    startCountIn(bars);
+}
+void Engine::startCountIn(int32_t bars) {
     captureGate_.store(false, std::memory_order_relaxed);
     // Mirror it now so a poll before the audio thread picks the command up already sees
     // the count-in (Play pressed again = stop, not a second start).
@@ -413,6 +416,18 @@ void Engine::transportPlayCountIn() {
 void Engine::transportStop() {
     arrangementActive_.store(false, std::memory_order_relaxed);
     finalizeSessionRecord(false);   // don't lose an in-progress session take on a global stop
+    // Stop means everything stops, Session clips included (#139). Immediately, not on the
+    // next launch boundary: the clock halts with this command, so a quantized stop would
+    // never land and the clips would stay launched (and resume on the next Play).
+    // Only tracks with a clip launched or queued: applying a stop flushes the track's notes
+    // and MIDI effects, which must not touch a track that plays the Arrangement.
+    if (authoring_)
+        for (auto& t : authoring_->tracks)
+            if (auto& sp = t->sessionPlayer;
+                sp && (sp->playing.load(std::memory_order_relaxed) >= 0
+                       || sp->pending.load(std::memory_order_relaxed) != SessionPlayer::kNone))
+                sp->requestStopNow();
+    sceneFollowScene_ = -1;
     Command c; c.type = CommandType::TransportStop; commands_.push(c);
 }
 // Hand every track back to the Arrangement: stop all session clips + re-activate the timeline.
@@ -554,7 +569,9 @@ bool Engine::undo() {
         undoStack_.pop_back();
         bool applied = false;
         redoStack_.push_back({e.graph ? authoring_ : nullptr, e.mix});
-        if (e.graph) { publishRaw(std::move(e.graph)); applied = true; }   // restore without a new checkpoint
+        // Restore without a new checkpoint; the restored chains may add or drop a latent
+        // device (a removed look-ahead coming back, #109), so compensation follows them.
+        if (e.graph) { publishRaw(std::move(e.graph)); recomputePdc(); applied = true; }
         for (const auto& c : e.mix) applied |= applyMix(c, false);
         if (applied) return true;
     }
@@ -567,7 +584,7 @@ bool Engine::redo() {
         redoStack_.pop_back();
         bool applied = false;
         undoStack_.push_back({e.graph ? authoring_ : nullptr, e.mix});
-        if (e.graph) { publishRaw(std::move(e.graph)); applied = true; }
+        if (e.graph) { publishRaw(std::move(e.graph)); recomputePdc(); applied = true; }
         for (const auto& c : e.mix) applied |= applyMix(c, true);
         if (applied) return true;
     }
@@ -576,8 +593,48 @@ bool Engine::redo() {
 
 // --- mix gestures (specs/009) ----------------------------------------------
 
+namespace {
+bool isParamKind(MixKind k) {
+    return k == MixKind::DeviceParam || k == MixKind::MidiDeviceParam || k == MixKind::PluginParam;
+}
+// The CV-modulation target kind (Engine_Modulation) a parameter value step addresses.
+int32_t cvKindOf(MixKind k) {
+    return k == MixKind::DeviceParam ? 0 : k == MixKind::PluginParam ? 1 : 2;
+}
+}
+
+// Does the parameter a value step addresses exist right now? (specs/016: a step whose
+// device is gone is skipped, like one whose track is gone.)
+bool Engine::paramTargetExists(MixKind kind, int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
+    if (paramIndex < 0) return false;
+    switch (kind) {
+        case MixKind::DeviceParam: {
+            auto* d = deviceAt(trackId, deviceIndex);
+            return d && paramIndex < d->paramCount();
+        }
+        case MixKind::MidiDeviceParam: {
+            auto* m = midiDeviceAt(trackId, deviceIndex);
+            return m && paramIndex < m->paramCount();
+        }
+        case MixKind::PluginParam: return paramIndex < pluginParamCount(trackId, deviceIndex);
+        default: return false;
+    }
+}
+
 bool Engine::mixValue(const MixTarget& t, float& v) const {
     if (t.kind == MixKind::MasterVolume) { v = masterVolume(); return true; }
+    if (isParamKind(t.kind)) {
+        if (!paramTargetExists(t.kind, t.trackId, t.deviceIndex, t.paramIndex)) return false;
+        // A CV-modulated parameter: the user edits (and undo restores) the link's base, not
+        // the value the modulation is driving right now.
+        if (cvBaseValue(cvKindOf(t.kind), t.trackId, t.deviceIndex, t.paramIndex, v)) return true;
+        switch (t.kind) {
+            case MixKind::DeviceParam:     v = deviceGetParam(t.trackId, t.deviceIndex, t.paramIndex); break;
+            case MixKind::MidiDeviceParam: v = midiEffectGetParam(t.trackId, t.deviceIndex, t.paramIndex); break;
+            default:                       v = pluginParamGet(t.trackId, t.deviceIndex, t.paramIndex); break;
+        }
+        return true;
+    }
     auto tr = findTrackAuthoring(t.trackId);
     if (!tr) return false;
     v = t.kind == MixKind::TrackVolume ? tr->volume() : tr->pan();
@@ -587,6 +644,15 @@ bool Engine::mixValue(const MixTarget& t, float& v) const {
 bool Engine::applyMix(const MixChange& c, bool after) {
     const float v = after ? c.after : c.before;
     if (c.kind == MixKind::MasterVolume) { setMasterVolume(v); return true; }
+    if (isParamKind(c.kind)) {
+        if (!paramTargetExists(c.kind, c.trackId, c.deviceIndex, c.paramIndex)) return false;   // gone: skip
+        switch (c.kind) {   // the user-facing setters: CV bases, PDC and plugin hosts follow
+            case MixKind::DeviceParam:     deviceSetParam(c.trackId, c.deviceIndex, c.paramIndex, v); break;
+            case MixKind::MidiDeviceParam: midiEffectSetParam(c.trackId, c.deviceIndex, c.paramIndex, v); break;
+            default:                       pluginParamSet(c.trackId, c.deviceIndex, c.paramIndex, v); break;
+        }
+        return true;
+    }
     auto tr = findTrackAuthoring(c.trackId);
     if (!tr) return false;   // the track is gone: skip quietly
     if (c.kind == MixKind::TrackVolume) tr->setVolume(v); else tr->setPan(v);
@@ -598,7 +664,8 @@ bool Engine::applyMix(const MixChange& c, bool after) {
 void Engine::mergeMix(std::vector<MixChange>& into, const std::vector<MixChange>& later) {
     for (const auto& c : later) {
         auto it = std::find_if(into.begin(), into.end(), [&](const MixChange& m) {
-            return m.kind == c.kind && (c.kind == MixKind::MasterVolume || m.trackId == c.trackId);
+            return m.kind == c.kind && (c.kind == MixKind::MasterVolume ||
+                   (m.trackId == c.trackId && m.deviceIndex == c.deviceIndex && m.paramIndex == c.paramIndex));
         });
         if (it == into.end()) into.push_back(c); else it->after = c.after;
     }
@@ -657,7 +724,8 @@ int32_t Engine::beginMixGesture(const MixTarget* targets, int32_t count) {
     OpenMixGesture g{ nextMixGesture_, {}, undoPushCount_, undoStack_.size() };
     for (int32_t i = 0; i < count; ++i) {
         float v = 0.0f;
-        if (mixValue(targets[i], v)) g.targets.push_back({ targets[i].kind, targets[i].trackId, v, v });
+        if (mixValue(targets[i], v))
+            g.targets.push_back({ targets[i].kind, targets[i].trackId, v, v, targets[i].deviceIndex, targets[i].paramIndex });
     }
     if (g.targets.empty()) return 0;
     if (++nextMixGesture_ <= 0) nextMixGesture_ = 1;
@@ -674,7 +742,7 @@ void Engine::endMixGesture(int32_t handle) {
     std::vector<MixChange> changes;
     for (auto& c : g.targets) {
         float v = 0.0f;
-        if (!mixValue({ c.kind, c.trackId }, v)) continue;   // the track went away mid-gesture
+        if (!mixValue({ c.kind, c.trackId, c.deviceIndex, c.paramIndex }, v)) continue;   // gone mid-gesture
         if (v == c.before) continue;                          // exact: no net change, no step
         c.after = v;
         changes.push_back(c);
@@ -717,6 +785,23 @@ bool Engine::setPanLaw(PanLaw law, bool checkpoint) {
     return true;
 }
 
+// --- arrangement sections (specs/016) ---------------------------------------
+
+void Engine::setSections(std::vector<Section> sections, bool checkpoint) {
+    if (!authoring_) return;
+    sections.erase(std::remove_if(sections.begin(), sections.end(),
+                                  [](const Section& s) { return !(s.lengthBeats > 0.0); }),   // also drops NaN
+                   sections.end());
+    for (auto& s : sections) if (!(s.startBeat > 0.0)) s.startBeat = 0.0;
+    std::stable_sort(sections.begin(), sections.end(),
+                     [](const Section& a, const Section& b) { return a.startBeat < b.startBeat; });
+    if (sections == authoring_->sections) return;   // nothing changed: no step
+    auto g = std::make_shared<Graph>(*authoring_);   // copy: tracks shared, graph-level fields kept
+    g->sections = std::move(sections);
+    if (checkpoint) publish(std::move(g));
+    else publishRaw(std::move(g));
+}
+
 // --- project load (M7-6) ---------------------------------------------------
 
 void Engine::reset() {
@@ -748,6 +833,7 @@ void Engine::clearUndoHistory() {
     undoStack_.clear();
     redoStack_.clear();
     mixGestures_.clear();   // a gesture can't outlive the history it would land in
+    touchGestures_.clear();
     undoGroupDepth_ = 0; undoGroupBase_ = 0;
 }
 

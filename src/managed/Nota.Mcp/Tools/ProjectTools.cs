@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// MCP tools — whole-project snapshot (so the AI can see before it acts) + undo/redo.
+// MCP tools — whole-project snapshot (so the AI can see before it acts), undo/redo and the
+// arrangement's song sections.
 
 using System.ComponentModel;
 using ModelContextProtocol.Server;
@@ -17,12 +18,12 @@ public sealed class ProjectTools(IAudioEngine engine, IEngineDispatch dispatch, 
     public sealed record DeviceInfo(int Index, int BuiltinKind, string Name, bool Bypassed);
     public sealed record MidiFxInfo(int Index, int Kind, string Name, bool Bypassed);
     public sealed record TrackInfo(int Id, string Name, string Type, int ColorIndex, bool Muted, bool Soloed,
-        float Volume, float Pan, int InstrumentKind, int GroupId, ClipInfo[] Clips, MidiFxInfo[] MidiFx, DeviceInfo[] Devices);
+        float Volume, float Pan, int InstrumentKind, bool InstrumentOff, int GroupId, ClipInfo[] Clips, MidiFxInfo[] MidiFx, DeviceInfo[] Devices);
     public sealed record Overview(double Bpm, bool Playing, double PositionBeats, TrackInfo[] Tracks);
 
     [McpServerTool(Name = "get_overview"), Description(
         "Full snapshot of the open project: tempo, transport, and every track with its type, mixer state, "
-        + "instrument kind, clips (index/start/length/midi), MIDI effects and audio devices. Call this first to see state.")]
+        + "instrument kind (and whether its on/off switch is off), clips (index/start/length/midi), MIDI effects and audio devices. Call this first to see state.")]
     public Task<Overview> GetOverview() => Read(() =>
     {
         int n = E.TrackCount;
@@ -42,7 +43,7 @@ public sealed class ProjectTools(IAudioEngine engine, IEngineDispatch dispatch, 
             for (int d = 0; d < dc; d++) devs.Add(new DeviceInfo(d, E.TrackDeviceBuiltinKind(ti.Id, d), E.DeviceName(ti.Id, d), E.DeviceBypassed(ti.Id, d)));
             tracks.Add(new TrackInfo(ti.Id, E.GetTrackName(ti.Id), TypeName(ti.Type), E.GetTrackColorIndex(ti.Id),
                 ti.Muted != 0, ti.Soloed != 0, ti.Volume, ti.Pan, ti.IsInstrument ? E.TrackInstrumentKind(ti.Id) : -1,
-                ti.GroupId, clips.ToArray(), mfx.ToArray(), devs.ToArray()));
+                ti.IsInstrument && E.DeviceBypassed(ti.Id, -1), ti.GroupId, clips.ToArray(), mfx.ToArray(), devs.ToArray()));
         }
         return new Overview(E.Bpm, E.IsPlaying, E.PositionBeats, tracks.ToArray());
     });
@@ -52,4 +53,20 @@ public sealed class ProjectTools(IAudioEngine engine, IEngineDispatch dispatch, 
 
     [McpServerTool(Name = "redo"), Description("Redo the last undone edit. Returns whether anything was redone.")]
     public Task<bool> Redo() => Mutate(() => E.Redo());
+
+    public sealed record Section(double StartBeat, double LengthBeats, string Name);
+
+    [McpServerTool(Name = "list_sections"), Description(
+        "List the arrangement's song sections (the named spans on the Sections lane — Intro, Verse, Drop …) in start order: "
+        + "start and length in beats, and the name.")]
+    public Task<Section[]> ListSections() => Read(() => E.Sections.Select(s => new Section(s.StartBeat, s.LengthBeats, s.Name)).ToArray());
+
+    [McpServerTool(Name = "set_sections"), Description(
+        "Replace the arrangement's song sections with this list (pass [] to remove them all). Each needs startBeat >= 0 and "
+        + "lengthBeats > 0; they are sorted by start, and a span with no length is dropped. One undo step. Returns the list as stored.")]
+    public Task<Section[]> SetSections(Section[] sections) => Mutate(() =>
+    {
+        E.SetSections(sections.Select(s => new SectionInfo(s.StartBeat, s.LengthBeats, s.Name ?? "")).ToList());
+        return E.Sections.Select(s => new Section(s.StartBeat, s.LengthBeats, s.Name)).ToArray();
+    });
 }

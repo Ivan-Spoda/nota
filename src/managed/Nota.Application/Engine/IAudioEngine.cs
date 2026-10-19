@@ -31,6 +31,11 @@ public interface IAudioEngine : IDisposable
     void SetCountIn(int bars);
     /// <summary>Beats of count-in still to click (0 = not counting in).</summary>
     double CountInBeats { get; }
+    /// <summary>Loop record mode for MIDI recorded into the Arrangement with the loop on:
+    /// false = overdub (every pass adds to the take), true = replace (the first new note of a
+    /// pass removes what earlier passes of the take recorded). Applies from the next pass.</summary>
+    void SetLoopRecordMode(bool replace);
+    bool LoopRecordReplace { get; }
     void StopTransport();
     void SetBpm(double bpm);
     double Bpm { get; }
@@ -534,6 +539,10 @@ public interface IAudioEngine : IDisposable
     void MidiEffectSetParam(int trackId, int index, int paramIndex, float value);
     void SetMidiEffectBypassed(int trackId, int index, bool bypassed);
     bool MidiEffectBypassed(int trackId, int index);
+    /// <summary>Fold (specs/022): the Devices panel draws the MIDI effect as a narrow strip.
+    /// A view flag kept on the device (follows moves and undo) and saved with the project.</summary>
+    void SetMidiEffectFolded(int trackId, int index, bool folded);
+    bool MidiEffectFolded(int trackId, int index);
     void SetMidiEffectCcDest(int trackId, int index, int destDevice, int destParam);
     void SetMidiEffectCcDepth(int trackId, int index, float depth);
     int MidiEffectCcDestDevice(int trackId, int index);
@@ -587,6 +596,10 @@ public interface IAudioEngine : IDisposable
     void SetPluginState(int trackId, int deviceIndex, byte[] data);
     void SetDeviceBypassed(int trackId, int deviceIndex, bool bypassed);
     bool DeviceBypassed(int trackId, int deviceIndex);
+    /// <summary>Fold (specs/022): the Devices panel draws the device as a narrow strip.
+    /// deviceIndex -1 = the instrument. Kept on the device; saved with the project.</summary>
+    void SetDeviceFolded(int trackId, int deviceIndex, bool folded);
+    bool DeviceFolded(int trackId, int deviceIndex);
     int TrackLatencySamples(int trackId);
 
     // --- Instrument Rack (parallel chains + 8 macros) ----------------------
@@ -797,6 +810,12 @@ public interface IAudioEngine : IDisposable
     /// resets it). Pitch −1 addresses the whole instrument, where Bend is the wheel −1..+1.</summary>
     void NoteExpression(int pitch, NoteExpressionDim dim, float value);
     void TrackNoteExpression(int trackId, int pitch, NoteExpressionDim dim, float value);
+    /// <summary>A live instrument-wide controller (<see cref="MidiController"/>): plays now and
+    /// is recorded into the take. The track form addresses one track.</summary>
+    void SendController(int ctl, float value);
+    void SendTrackController(int trackId, int ctl, float value);
+    /// <summary>The last controller value delivered to the track's instrument; NaN when none.</summary>
+    float DeliveredController(int trackId, int ctl);
     /// <summary>Live notes also reach this track when unarmed (rack/drum pad audition). -1 = none.</summary>
     void SetAuditionTrack(int trackId);
     void SetRecording(bool enabled);
@@ -812,6 +831,11 @@ public interface IAudioEngine : IDisposable
     int MasterTrackId { get; }
     /// <summary>Live min/max peaks over the in-progress capture buffer (growing-take waveform). Returns buckets written.</summary>
     int AudioRecordPeaks(float[] outMinMax, int maxPoints);
+    /// <summary>Notes held into the in-progress MIDI take, for drawing them growing. Fills
+    /// <paramref name="buffer"/> and returns the count (0 when no MIDI take records); trackId is
+    /// the take's track (0 = none), sessionScene the Session scene (-1 = arrangement take),
+    /// nowBeat the capture clock — the held notes' right edge, running through the count-in.</summary>
+    int RecordHeldNotes(NotaRecordHeldNote[] buffer, out int trackId, out int sessionScene, out double nowBeat);
     void Poll();
 
     // --- Undo / redo (M6-6) ------------------------------------------------
@@ -833,9 +857,16 @@ public interface IAudioEngine : IDisposable
     /// step (project load, the new-project baseline). No-op if unchanged.</summary>
     void SetPanLaw(PanLaw law, bool checkpoint = true);
 
-    // --- Mix undo (specs/009) --------------------------------------------
-    /// <summary>Starts a gesture on volume / pan / master volume: their values now are what
-    /// undo returns to. Returns a handle (0 = no valid target).</summary>
+    // --- Arrangement sections (specs/016) -------------------------------
+    /// <summary>The project's sections, sorted by start.</summary>
+    IReadOnlyList<SectionInfo> Sections { get; }
+    /// <summary>Replaces the sections (sorted; zero-length dropped). <paramref name="checkpoint"/>
+    /// = one undo step (an identical list makes none); false = baseline (project load).</summary>
+    void SetSections(IReadOnlyList<SectionInfo> sections, bool checkpoint = true);
+
+    // --- Value undo (specs/009, specs/016) -------------------------------
+    /// <summary>Starts a gesture on volume / pan / master volume / device parameters: their
+    /// values now are what undo returns to. Returns a handle (0 = no valid target).</summary>
     int BeginMixGesture(params MixTarget[] targets);
     /// <summary>Ends the gesture: one undo step for whatever it changed (none → no step).</summary>
     void EndMixGesture(int handle);
@@ -1001,6 +1032,15 @@ public interface IAudioEngine : IDisposable
     /// <summary>MIDI clip envelope (velocity or volume; 0..1, clip-local beats).</summary>
     AutomationPoint[] GetMidiClipEnvelope(int trackId, int clipIndex, MidiClipEnvelope kind);
     void SetMidiClipEnvelope(int trackId, int clipIndex, MidiClipEnvelope kind, AutomationPoint[] points);
+    /// <summary>The controllers (<see cref="MidiController"/> ids, ascending) a MIDI clip holds
+    /// curves for, and each curve (clip-local beats). Set replaces it — empty removes; one undo
+    /// step. The Session forms address a slot's clip.</summary>
+    int[] GetMidiClipControllers(int trackId, int clipIndex);
+    AutomationPoint[] GetMidiClipController(int trackId, int clipIndex, int ctl);
+    void SetMidiClipController(int trackId, int clipIndex, int ctl, AutomationPoint[] points);
+    int[] GetSessionControllers(int trackId, int scene);
+    AutomationPoint[] GetSessionController(int trackId, int scene, int ctl);
+    void SetSessionController(int trackId, int scene, int ctl, AutomationPoint[] points);
 
     /// <summary>Smoothed real-time DSP load, 0..1 (0 when no live device runs).</summary>
     float CpuLoad { get; }

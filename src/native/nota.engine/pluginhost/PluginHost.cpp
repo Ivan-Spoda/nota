@@ -17,9 +17,7 @@
 #include "Instrument.h"
 #include "PluginHostBridge.h"
 #include "CommandQueue.h"   // SpscRingBuffer: message-thread -> audio-thread note injection
-#if !defined(__APPLE__) // JUCE_MAC is not defined yet: the JUCE headers come below
-#include "NotaConfigFile.h" // cfgfile::dataDir: the Windows/Linux per-user data dir
-#endif
+#include "NotaConfigFile.h" // cfgfile::dataDir/dataDirOverride: the per-user data dir
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -126,15 +124,22 @@ juce::KnownPluginList& catalog() {
     return list;
 }
 
-// Per-user Nota data dir (mirrors NotaPaths.DataDir / cfgfile::dataDir):
-//   macOS   -> ~/Library/Application Support/Nota
-//   Windows -> %APPDATA%\Nota
-//   Linux   -> $XDG_CONFIG_HOME/nota or ~/.config/nota
+// Per-user Nota data dir: the explicit override (nota_set_data_dir, i.e.
+// NotaPaths.DataDir) or NOTA_DATA_DIR (tests). Unset on Windows/Linux means
+// cfgfile::dataDir() is empty and catalog IO becomes a silent no-op — the app
+// always sets the override at startup, so this only bites standalone use.
 juce::File notaSupportDir() {
+    // Explicit override from nota_set_data_dir (managed startup) wins everywhere,
+    // so the host never diverges from audio.json / midi.json.
+    if (std::string over = nota::cfgfile::dataDirOverride(); !over.empty()) {
+        juce::File dir{juce::CharPointer_UTF8(over.c_str())};
+        dir.createDirectory();
+        return dir;
+    }
     // NOTA_DATA_DIR (tests) relocates the catalog + scan paths, like NotaPaths.DataDir.
     // Needed because on macOS JUCE resolves the home folder via NSHomeDirectory(), not $HOME.
-    if (const char* over = std::getenv("NOTA_DATA_DIR"); over != nullptr && *over != '\0') {
-        juce::File dir{juce::CharPointer_UTF8(over)};
+    if (const char* env = std::getenv("NOTA_DATA_DIR"); env != nullptr && *env != '\0') {
+        juce::File dir{juce::CharPointer_UTF8(env)};
         dir.createDirectory();
         return dir;
     }
@@ -692,6 +697,7 @@ public:
         editor_.onNoteOff = [this](int32_t pitch)            { guiNotes_.push({false, pitch, 0.0f}); };
     }
     const char* displayName() const override { return name_.empty() ? "Plugin" : name_.c_str(); }
+    bool handlesSustain() const override { return true; }   // the plug-in gets CC64 itself
     ~PluginInstrument() override { if (plugin_) plugin_->removeListener(this); }
 
     void setSampleRate(double sr) override { prepare(sr); }
@@ -705,20 +711,24 @@ public:
     void allNotesOff() override {
         pending_.addEvent(juce::MidiMessage::allNotesOff(1), 0);
     }
-    // Expression reaches a plugin as plain channel-1 MIDI: the instrument-wide wheel /
-    // channel pressure / CC74, and a note's pressure as polyphonic aftertouch. (Per-note
-    // bend and slide would need the plugin's own MPE channel layout — not sent.)
+    // Expression reaches a plugin as plain channel-1 MIDI: a note's pressure as polyphonic
+    // aftertouch. (Per-note bend and slide would need the plugin's own MPE channel layout —
+    // not sent.) The instrument-wide wheel / pressure / CCs arrive through controller().
     void noteExpression(int32_t pitch, int32_t dim, float value) override {
-        auto u7 = [](float v) { return juce::jlimit(0, 127, (int)std::lround(v * 127.0f)); };
-        if (pitch < 0) {
-            if (dim == 0) pending_.addEvent(juce::MidiMessage::pitchWheel(1, juce::jlimit(0, 16383, (int)std::lround((value + 1.0f) * 8191.5f))), 0);
-            else if (dim == 1) pending_.addEvent(juce::MidiMessage::channelPressureChange(1, u7(value)), 0);
-            else if (dim == 2) pending_.addEvent(juce::MidiMessage::controllerEvent(1, 74, u7(value)), 0);
-            else if (dim == 3) pending_.addEvent(juce::MidiMessage::controllerEvent(1, 64, value >= 0.5f ? 127 : 0), 0);
-        } else if (dim == 1) {
+        if (pitch >= 0 && dim == 1)
             pending_.addEvent(juce::MidiMessage::aftertouchChange(1, pitch, u7(value)), 0);
-        }
     }
+    // Every controller as the MIDI message itself (specs/020): any CC with its real value
+    // (the sustain pedal too, so a piano can half-pedal), the 14-bit wheel, channel pressure.
+    void controller(int32_t ctl, float value) override {
+        if (ctl == nota::kCtlPitchWheel)
+            pending_.addEvent(juce::MidiMessage::pitchWheel(1, juce::jlimit(0, 16383, (int)std::lround((value + 1.0f) * 8191.5f))), 0);
+        else if (ctl == nota::kCtlChannelPressure)
+            pending_.addEvent(juce::MidiMessage::channelPressureChange(1, u7(value)), 0);
+        else if (ctl >= 0 && ctl < 128)
+            pending_.addEvent(juce::MidiMessage::controllerEvent(1, ctl, u7(value)), 0);
+    }
+    static int u7(float v) { return juce::jlimit(0, 127, (int)std::lround(v * 127.0f)); }
 
     void render(float* out, int32_t frames) override {
         if (frames <= 0 || frames > maxBlock_ || plugin_ == nullptr) return;

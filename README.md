@@ -13,6 +13,8 @@
   <a href="https://github.com/nota-daw/nota/releases/latest"><img src="https://img.shields.io/badge/Download-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-FF9F1C?style=for-the-badge" alt="Download for macOS, Windows and Linux"></a>
   &nbsp;
   <a href="https://nota-daw.github.io/nota-site/"><img src="https://img.shields.io/badge/Website-2B2D31?style=for-the-badge" alt="Website"></a>
+  &nbsp;
+  <a href="https://discord.gg/apf4Q2JKWk"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join our Discord"></a>
 </p>
 
 <p align="center">
@@ -22,8 +24,6 @@
   <a href="LICENSES/"><img src="https://img.shields.io/badge/license-AGPL--3.0-FF9F1C" alt="License: AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-FF9F1C" alt="Platforms: macOS, Windows, Linux">
   <a href="https://nota-daw.github.io/nota-docs/"><img src="https://img.shields.io/badge/docs-user%20manual-FF9F1C" alt="Documentation"></a>
-  <a href="https://t.me/notadaw"><img src="https://img.shields.io/badge/Telegram-2CA5E0?logo=telegram&logoColor=white" alt="Telegram"></a>
-  <a href="https://discord.gg/apf4Q2JKWk"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
 ![Nota playing a song in the Arrangement view, with the selected track's devices open below](assets/screenshots/playback.webp)
@@ -194,7 +194,9 @@ JUCE-free.
 ```bash
 git clone --recurse-submodules https://github.com/nota-daw/nota.git
 cd nota
-scripts/build.sh            # macOS; scripts/build-linux.sh on Linux, scripts/build-win.ps1 on Windows
+scripts/build.sh            # Build on macOS.
+scripts/build-linux.sh      # Build on Linux.
+scripts/build-win.ps1       # Build on Windows.
 dotnet run --project src/managed/Nota.App
 ```
 

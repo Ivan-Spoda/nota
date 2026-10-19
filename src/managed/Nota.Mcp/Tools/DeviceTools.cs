@@ -48,7 +48,7 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     [McpServerTool(Name = "move_device"), Description("Reorder a device within a track's chain.")]
     public Task MoveDevice(int trackId, int fromIndex, int toIndex) => Mutate(() => E.MoveDevice(trackId, fromIndex, toIndex));
 
-    [McpServerTool(Name = "set_device_bypass"), Description("Bypass or enable a device.")]
+    [McpServerTool(Name = "set_device_bypass"), Description("Bypass or enable a device. deviceIndex -1 is the track's instrument: bypassed, it makes no sound (its MIDI effects and audio effects keep running).")]
     public Task SetDeviceBypass(int trackId, int deviceIndex, bool bypassed) => Mutate(() => E.SetDeviceBypassed(trackId, deviceIndex, bypassed));
 
     [McpServerTool(Name = "get_device_params"), Description("List a device's parameters (index, name, min, max, current value).")]
@@ -62,7 +62,7 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     });
 
     [McpServerTool(Name = "set_device_param"), Description("Set a device parameter by index (value is in the param's own min..max range from get_device_params).")]
-    public Task SetDeviceParam(int trackId, int deviceIndex, int paramIndex, float value) => Mutate(() => E.DeviceSetParam(trackId, deviceIndex, paramIndex, value));
+    public Task SetDeviceParam(int trackId, int deviceIndex, int paramIndex, float value) => Mutate(() => DevParam(trackId, deviceIndex, paramIndex, value));
 
     [McpServerTool(Name = "load_device_file"), Description("Load an audio file into a device that takes one — Nota Chamber: a user impulse response (WAV / FLAC / MP3; mono, stereo or 4-channel true stereo), which also selects it. Returns true on success.")]
     public Task<bool> LoadDeviceFile(int trackId, int deviceIndex, [Description("Absolute path to the audio file")] string path) => Mutate(() => E.DeviceLoadFile(trackId, deviceIndex, path));

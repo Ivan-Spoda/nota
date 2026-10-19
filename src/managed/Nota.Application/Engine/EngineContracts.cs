@@ -35,6 +35,18 @@ public struct NotaExprPoint(NoteExpressionDim dim, float beat, float value)
     public float Value = value;
 }
 
+/// <summary>A note held into the in-progress MIDI take (live-recording preview). Matches native
+/// NotaRecordHeldNote. StartBeat is an absolute timeline beat for an arrangement take (it may
+/// precede the take's clip and be negative — played on the count-in), slot-local for Session.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaRecordHeldNote
+{
+    public int Pitch;
+    public int Source;      // 0 live input, 1 routed MIDI ("MIDI In")
+    public double StartBeat;
+    public float Velocity;
+}
+
 /// <summary>Track summary for the Arrangement View. Matches native NotaTrackInfo.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaTrackInfo
@@ -258,23 +270,81 @@ public struct StereoMeasure
     public readonly bool Silent => LevelDb < -60f;
 }
 
-/// <summary>What a mix gesture targets (specs/009). Matches NOTA_MIX_*.</summary>
-public enum MixKind { TrackVolume = 0, TrackPan = 1, MasterVolume = 2 }
+/// <summary>What a value gesture targets (specs/009 volume / pan, specs/016 device
+/// parameters). Matches NOTA_MIX_*.</summary>
+public enum MixKind { TrackVolume = 0, TrackPan = 1, MasterVolume = 2, DeviceParam = 3, MidiDeviceParam = 4, PluginParam = 5 }
 
-/// <summary>One parameter a mix gesture records for undo; laid out like native NotaMixTarget.
-/// <see cref="TrackId"/> is ignored for the master volume.</summary>
+/// <summary>One value a gesture records for undo; laid out like native NotaMixTarget.
+/// <see cref="TrackId"/> is ignored for the master volume; <see cref="DeviceIndex"/> /
+/// <see cref="ParamIndex"/> address a device parameter (−1 otherwise; a plugin parameter's
+/// device −1 is the track's instrument).</summary>
 [StructLayout(LayoutKind.Sequential)]
-public readonly record struct MixTarget(MixKind Kind, int TrackId)
+public readonly record struct MixTarget(MixKind Kind, int TrackId, int DeviceIndex = -1, int ParamIndex = -1)
 {
     public static MixTarget Volume(int trackId) => new(MixKind.TrackVolume, trackId);
     public static MixTarget Pan(int trackId) => new(MixKind.TrackPan, trackId);
     public static MixTarget Master => new(MixKind.MasterVolume, -1);
+    /// <summary>A built-in audio effect's parameter (its own min..max range).</summary>
+    public static MixTarget DeviceParam(int trackId, int deviceIndex, int paramIndex) => new(MixKind.DeviceParam, trackId, deviceIndex, paramIndex);
+    /// <summary>A MIDI effect's parameter.</summary>
+    public static MixTarget MidiDeviceParam(int trackId, int index, int paramIndex) => new(MixKind.MidiDeviceParam, trackId, index, paramIndex);
+    /// <summary>A normalized plugin / built-in instrument parameter (device −1 = the instrument).</summary>
+    public static MixTarget PluginParam(int trackId, int deviceIndex, int paramIndex) => new(MixKind.PluginParam, trackId, deviceIndex, paramIndex);
 }
+
+/// <summary>A named span of arrangement time — Intro / Verse / Drop (specs/016). Project
+/// data held by the engine: undoable, saved with the project.</summary>
+public readonly record struct SectionInfo(double StartBeat, double LengthBeats, string Name);
 
 
 /// <summary>MIDI clip envelope target (M9 follow-up). Velocity scales note velocities;
 /// Volume scales the instrument output during the clip.</summary>
 public enum MidiClipEnvelope { Velocity = 0, Volume = 1 }
+
+/// <summary>Instrument-wide MIDI controllers (specs/020), one id space matching native
+/// NOTA_CTL_*: 0..127 the CC, <see cref="PitchWheel"/>, <see cref="ChannelPressure"/>. Values
+/// are normalised: a CC 0..1 (data / 127; CC64–69 are switches, on at ≥ 0.5), the wheel −1..+1,
+/// pressure 0..1.</summary>
+public static class MidiController
+{
+    public const int PitchWheel = 128;
+    public const int ChannelPressure = 129;
+    public const int Count = 130;
+    public const int ModWheel = 1;
+    public const int Sustain = 64;
+
+    /// <summary>Data entry / RPN / NRPN and the channel mode messages: never recorded,
+    /// drawn or automated.</summary>
+    public static bool IsReserved(int ctl) =>
+        ctl < 0 || ctl >= Count || ctl == 6 || ctl == 38 || (ctl >= 96 && ctl <= 101) || (ctl >= 120 && ctl <= 127);
+
+    /// <summary>CC64–69 (sustain, portamento, sostenuto, soft, legato, hold 2): on/off.</summary>
+    public static bool IsSwitch(int ctl) => ctl >= 64 && ctl <= 69;
+
+    public static (float Min, float Max) Range(int ctl) => ctl == PitchWheel ? (-1f, 1f) : (0f, 1f);
+
+    private static readonly Dictionary<int, string> Names = new()
+    {
+        [0] = "Bank select", [1] = "Mod wheel", [2] = "Breath", [4] = "Foot", [5] = "Portamento time",
+        [7] = "Volume", [8] = "Balance", [10] = "Pan", [11] = "Expression", [12] = "Effect 1", [13] = "Effect 2",
+        [64] = "Sustain", [65] = "Portamento", [66] = "Sostenuto", [67] = "Soft pedal", [68] = "Legato", [69] = "Hold 2",
+        [71] = "Resonance", [72] = "Release", [73] = "Attack", [74] = "Brightness", [75] = "Decay",
+        [76] = "Vibrato rate", [77] = "Vibrato depth", [78] = "Vibrato delay",
+        [84] = "Portamento control", [91] = "Reverb", [92] = "Tremolo", [93] = "Chorus", [94] = "Detune", [95] = "Phaser",
+        [PitchWheel] = "Pitch wheel", [ChannelPressure] = "Channel pressure",
+    };
+
+    /// <summary>The controller's standard name ("Mod wheel", "Sustain"), or "CC 3" when it has none.</summary>
+    public static string Name(int ctl) => Names.TryGetValue(ctl, out var n) ? n : $"CC {ctl}";
+
+    /// <summary>A short label for a lane tab: "Sustain", "Mod wheel", "Pressure", "CC 74".</summary>
+    public static string ShortName(int ctl) => ctl switch
+    {
+        ChannelPressure => "Pressure",
+        PitchWheel or ModWheel or Sustain or 2 or 11 => Name(ctl),
+        _ => $"CC {ctl}",
+    };
+}
 
 /// <summary>A per-note expression dimension (MPE). Matches native ExprDim: Bend in semitones
 /// (the whole-instrument wheel −1..+1), Pressure 0..1, Slide (CC74 timbre) 0..1 with 0.5 neutral.</summary>

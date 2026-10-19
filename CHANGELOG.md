@@ -22,6 +22,268 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.56.1] — 2026-10-19
+
+### Added
+- **Nota Volt does what Nota Bass and Nota Synth did** (nota-daw/nota#195): each oscillator
+  has a **Shape** knob that morphs its wave toward the next one (sine → triangle → saw →
+  square) and a **Pulse Width** for the square; a **Drive** in front of both filters and one on
+  the output; a **Unison** choice of 1 / 2 / 4 / 7 voices, where 2 to 7 stack detuned copies of
+  each oscillator and **Spread** pans them across the stereo field; **Poly / Mono / Legato**,
+  where Mono falls back to the key you are still holding when you let go of the top one; and
+  **Wheel → LFO**, which opens each filter's LFO onto its cutoff as you raise the mod wheel.
+  The 49 Nota Synth and Nota Bass factory presets are now Volt presets too, in Volt's folders
+  (Bass's in Sub Bass, Analog Bass, Acid, Growl & Wobble and Electric Bass). A Volt patch you
+  already have sounds the same, except that in Mono a note played while the last one is
+  fading out now starts afresh instead of fading with it.
+- **Hear notes while you edit them in the piano roll** (nota-daw/nota#46): with the new
+  speaker switch in the clip editor's header on (it is by default), a note sounds on the
+  track's instrument while you place it, click it or drag it, and re-sounds at each new pitch
+  as you drag. The switch is remembered. Nothing is auditioned while a take is recording.
+- **Play the piano roll's keys** (nota-daw/nota#47): click a key on the left of the piano roll
+  to play it on the track's instrument, ⇧-drag down the keys to glide through them, and
+  ⌘-click (Ctrl-click) a key to select every note of that pitch (⇧ adds to the selection).
+  Dragging up or down on the keys still zooms the rows.
+- **Pause** (nota-daw/nota#51): ⇧Space (and *Play / pause* in the Transport menu and the
+  command palette) stops with the playhead left where it is, and the next Play carries on from
+  there. Space still stops and goes back to where playback started.
+- **Show playhead** (nota-daw/nota#105): P (and View ▸ Show playhead) scrolls the Arrangement to
+  the playhead without moving it, the zoom or the selection — only when it is off screen, and
+  with what comes next in view. When the playhead is off screen an arrow at that end of the
+  ruler points to it; a click on the arrow does the same. Follow now pauses when you scroll
+  away during playback, instead of snapping back: the Follow button turns to an outline, and
+  P, a click on the button or the next Play picks it up again. Follow no longer scrolls the
+  lanes under a clip drag, trim or selection in progress.
+- **Resize, move and clear the loop region** (nota-daw/nota#125): drag either end of the loop
+  brace in the ruler to move just that end (a sideways cursor and a brighter edge show where
+  to grab), drag the brace itself to move the whole region, with ⌥ to leave the grid. The
+  start, end and length show while you drag. Right-click the ruler to turn the loop on or off,
+  loop the selection or **Clear loop region**, which forgets the region (turning the loop off
+  keeps it). Clips, notes and automation are never touched.
+- **The sustain pedal on every built-in instrument** (nota-daw/nota#99): with the pedal down,
+  released keys keep sounding on Synth, Sampler, Volt, Bass, Flux, Grain, Operator,
+  Wavetable, Physical, Pentad, Consort, Monolith and Pendulum (and on an Instrument Rack's
+  chains) until the pedal comes up; striking a held key again restarts it. It works for a
+  keyboard's pedal and for a pedal recorded or drawn in a clip. Keys, Mosaic and plug-ins keep
+  their own pedal handling, and drums (Drum Rack, Rhythm) ignore it.
+- **Move the playhead from the clip editor** (nota-daw/nota#50): click the piano roll's ruler
+  to put the playhead there, or drag along it to scrub (snapped to the grid); while playing,
+  playback carries on from the new spot. The piano roll now shows the playhead when stopped
+  too, where playback will start.
+- **New notes take the last note's length and velocity** (nota-daw/nota#44): a note drawn in
+  the piano roll gets the length and velocity of the note you last clicked, moved, resized or
+  changed the velocity of, so a run of quarter notes on a 1/16 grid is one length change and
+  then double-clicks. Before you touch a note it is one grid step at velocity 0.8, as before.
+- **Release notes from the status bar** (nota-daw/nota#127): the version number at the
+  bottom right of the main window, next to the sample rate, is now a button: click it to
+  open What's New for the installed version (it never starts an update). Escape closes What's
+  New. The status bar now always shows the app version; before, it showed nothing at launch
+  and the engine's version after an audio device change.
+- **Back to Init from any preset** (nota-daw/nota#57): the preset list on a built-in
+  instrument or effect card (and its right-click Preset menu) now starts with **Init**,
+  which puts every parameter back to its default, as on a freshly added device. The card
+  size and a loaded sample stay. ‹ › step through Init too: past the last preset comes Init,
+  then the first again. Devices whose factory list already has its own "Init" preset keep
+  just that one.
+- **Fold a device into a narrow strip** (nota-daw/nota#147): double-click a device's header
+  (or choose Fold in its right-click menu) and the card collapses into a 28 px strip with its
+  name, rotated, and its on/off switch, so a long chain fits the Devices panel. Double-click
+  the strip to open it again. A folded device still selects, drags to a new slot and opens its
+  menu; it works for audio effects, MIDI effects, plug-ins and the instrument. The fold is
+  saved with the project (format v23) and follows the device when it is moved or its
+  deletion is undone.
+- **An on/off switch on instrument cards** (nota-daw/nota#148): every instrument in the
+  Devices panel (built-in synths and samplers, Instrument and Drum Racks, hosted plug-ins)
+  now has the same switch as the effects. Off silences the instrument without muting the
+  track or deleting anything: it fades out over a few milliseconds and then uses no CPU,
+  while the MIDI effects before it and the audio effects after it keep their settings (a
+  reverb tail rings out). Back on, it plays from the next note. The switch is saved with
+  the project and kept when the track is duplicated; the AI assistant reaches it through
+  `set_device_bypass` with device index -1.
+- **Double-click the loop brace to turn the loop off and on** (nota-daw/nota#59): in the
+  arrangement ruler, a double-click on the loop region switches looping off without losing
+  the region. It stays in the ruler in grey, and another double-click turns it back on. A
+  double-click elsewhere on the ruler still moves the playhead.
+- **Close the start screen with Esc or a click outside it** (nota-daw/nota#67): either one
+  closes it like its close button and keeps the current project. While Settings or What's New
+  is open from the start screen, a click outside goes back to that dialog instead.
+- **Piano roll vertical zoom** (nota-daw/nota#43): make rows taller to hit notes precisely,
+  or shorter to see the whole keyboard (6–36 px; at the smallest, all 88 keys fit in about
+  530 px). Zoom with ⌘⌥ + wheel (Ctrl + Alt on Windows and Linux), by dragging on the keys
+  (down taller, up shorter), or with ⌥ + pinch on a trackpad. The pitch under the pointer
+  stays put. **Fit to notes** (⇧F, the "Fit" button in the clip editor header, or the
+  command palette) zooms and scrolls so every note of the clip is in view. Each clip
+  remembers its own zoom.
+- **Record the sustain pedal, the wheels and any CC** (nota-daw/nota#69): recording MIDI now
+  keeps the sustain pedal, the pitch wheel, the mod wheel, channel pressure and every other
+  controller (expression, breath, CC74…) with the notes, and the clip plays them back to the
+  instrument. Starting playback in the middle of a clip first sets each controller to where
+  the clip has it (the pedal is already down), and when a clip ends or you stop, its pedal is
+  released and the wheel centred, so no note hangs. A pedal already down when you press Record
+  is in the take from its start. In loop recording, a pass replaces a controller only where
+  you moved it: re-record just the pedal on the next pass and the notes stay. Controllers
+  travel with the clip when you move, copy, split, trim or consolidate it, and are saved with
+  the project. Polyphonic aftertouch from an ordinary keyboard is kept as each note's
+  pressure. MCP: `get_clip_controllers`, `set_clip_controller`.
+- **Double-click an instrument to swap the selected track's** (nota-daw/nota#145): with a
+  MIDI / instrument track selected, double-clicking an instrument in the browser replaces
+  that track's instrument and keeps its clips and effects, so you can try instruments on a
+  part one after another (each swap is one undo step). With no track selected, an audio
+  track, or a rack selected, it starts a new track as before; ⌥ + double-click (Alt on
+  Windows and Linux) always starts a new track.
+
+### Changed
+- **What's New shows the release notes**: the window now shows each version's curated release
+  notes, the same text as its GitHub release, instead of the raw working log from this file.
+  A version without release notes (older ones, and builds between releases) still shows its
+  changelog section.
+
+### Fixed
+- **Aurora: every unison voice goes through the filters** (nota-daw/nota#193): with two or
+  more unison voices and any Spread, the stereo part of the stack used to skip the source
+  routing and both filters, so a plucked or filtered patch kept a bright, unfiltered layer
+  that ignored the cutoff, the filter envelope and its modulation. Now the whole stack is
+  routed and filtered the same way, so a pluck closes down with unison just as it does with
+  one voice.
+- **Linux: the AppImage runs on RHEL-class distros** (nota-daw/nota#82): Linux releases are
+  now built against a glibc 2.28 baseline (AlmaLinux 8 container) instead of the build
+  machine's glibc 2.39, so the AppImage starts on RHEL/Alma/Rocky 8 and 9, Debian 10+ and
+  every distro with glibc ≥ 2.28. CI now rejects any shipped binary that would need a newer
+  glibc or libstdc++.
+- **Drum Rack crash while loading a kit** (nota-daw/nota#177): building a Drum Rack kit (or
+  any burst of rack edits) while audio was running could crash the audio engine with a
+  use-after-free in the rack's render (seen on macOS). A rack keeps every replaced chain
+  layout alive until the audio thread has finished two more blocks, instead of only the last
+  16 edits; the Instrument Rack, Audio Effect Rack and Rhythm's voice effects get the same fix.
+- **Horizontal sliders drag sideways** (nota-daw/nota#115): every horizontal slider on the
+  devices (ADSR, mix, depth…) now follows a left/right drag, with the handle under the
+  pointer, instead of only responding to an up/down drag. Vertical dragging still works,
+  Shift is still fine, and a click still never jumps the value.
+- **Session recording counts in** (nota-daw/nota#158): recording into a Session slot (or a
+  scene) with the transport stopped now plays the metronome count-in first, with the slot
+  blinking "Rec in…", and the take starts when it ends. A note you start during the count-in
+  and still hold when the take begins is kept, from the take's start. Stop cancels the
+  count-in and leaves the slot empty, with no undo step. With the transport already
+  running, nothing changes: the take starts on the launch quantization.
+- **No more benign IBus errors in the system log on Linux** (nota-daw/nota#36): with the
+  IBus input method (Linux Mint with Cinnamon, some Ubuntu and Fedora setups), the system
+  log filled up with `[IME] Error while destroying the context` entries — a harmless D-Bus
+  quirk in how Avalonia disposes its input contexts, repeated for every popup and tooltip.
+  Those known-harmless messages are now filtered out; every other error still reaches the
+  log unchanged.
+- **A tempo set over MCP shows in the transport bar and is saved**: `set_tempo` (and
+  anything driving it, such as a hardware controller) changed the tempo you hear, but the
+  BPM field kept the old number, and saving, autosave and export used that stale tempo, so
+  a reopened project came back at the wrong speed. The transport bar now follows the
+  engine's tempo, and dragging the field never snaps back while the engine catches up.
+- **Un-warped audio clips follow the tempo as you change it**: an un-warped clip keeps its
+  length in seconds, so a new tempo makes it longer or shorter in bars. Changing the tempo
+  in the transport bar now shows that at once, while you drag, so a clip can be lined up
+  with a bar line. Before, the arrangement kept drawing each clip at its old width until
+  some other edit redrew it.
+- **Send faders stay in step everywhere** (nota-daw/nota#138): turning a Send knob on a
+  track's Sends card in the Devices panel now moves that send's fader in the Session mixer
+  and the Mixer window at once, and the other way round. Automation of a send shows on all
+  three too. Before, the other controls kept the old value until the view was rebuilt.
+- **The clip editor shows the playhead of a playing Session clip** (nota-daw/nota#137):
+  open a launched slot and the piano roll's cursor, or the Drum Rack step grid's lit
+  column, now follows the slot as it loops. Before, only Arrangement clips showed one.
+- **Notes no longer cut off at the loop seam** (nota-daw/nota#29): when the loop jumps
+  back to its start, a key you're holding keeps sounding and release tails (pads, strings)
+  ring out. Before, every voice was cut at the seam. A clip note running past the loop end
+  now releases there, and an arpeggiator keeps its pattern and held keys going across the
+  seam instead of starting over. Recording in a loop, a note held across the seam is stored
+  as two notes, one up to the loop end and one from the loop start. Before, it was saved
+  as a short blip.
+- **Undo covers device knobs** (nota-daw/nota#30): turning a knob, flipping a switch or
+  typing a value on an effect, a MIDI effect, an instrument or a plug-in is now one undo
+  step, in order with note and clip edits — before, ⌘Z skipped it and undid the edit before.
+  A drag is one step; so is an A/B switch, a MIDI controller movement (ended by a one-second
+  pause), a touch on Nota Remote's macro knobs or XY pad, and each MCP tool call.
+- **Undo covers arrangement sections** (nota-daw/nota#64): creating, renaming, moving,
+  resizing, duplicating and deleting a section are each one undo step. Sections are now
+  stored in the project file; a project saved by an earlier version keeps its sections and
+  moves them into the project file on the next save.
+- **Transport tooltips name their real shortcuts** (nota-daw/nota#10): Play (Space),
+  Stop (Return), Record (⌘R) and the metronome (⌘M) now show their keys. The metronome tip
+  said a bare M, which does nothing. On Windows and Linux the tips spell Ctrl instead of ⌘.
+- **The Shortcuts filter searches group titles and each word** (nota-daw/nota#40): in
+  Settings → Shortcuts, `keyboard` now finds the whole "Play notes (computer keyboard)"
+  group, and a query of several words (`play keyboard`, `loop record`) matches rows that
+  contain every word, in any order.
+- **Modular: the Math node's Gain uses its whole range** (nota-daw/nota#92): Gain now goes
+  up to 2.00 as the knob shows. Before, anything above 1.00 was cut back to 1.00 and the
+  knob snapped back.
+- **Export audio: Custom range, and Loop exports the real loop** (nota-daw/nota#102): pick
+  **Custom** and type a start and an end as bar.beat (`5.1`, or `5.2.3` to the sixteenth,
+  counted from 1 as in the transport; the export stops at the end, so `1` to `5` is four bars);
+  the readout shows both ends and the length, and Export waits until the end comes after
+  the start. **Loop** now exports the transport's loop region wherever it is. Before, it
+  always bounced bars 1–5, and exporting reset the loop region to bars 1–5. MCP:
+  `export_master` and `export_stems` take a `startBeat`.
+- **The browser preview follows Appearance → Waveform** (nota-daw/nota#107): with Solid
+  chosen, the sample player under the browser draws a continuous waveform too, and
+  switching the setting redraws a preview that is already showing.
+- **The Clip editor keeps its height** (nota-daw/nota#53): clicking clips no longer makes
+  the panel at the bottom a little shorter each time at display scaling such as 150 % or
+  175 %. The height you drag it to is kept.
+- **Stop also stops Session clips** (nota-daw/nota#139): the transport's Stop (Return, or
+  Space while playing) now stops the clips launched in the Session view right away, as Stop
+  all clips does. Before, they stayed launched and started again on the next Play.
+- **Undo brings a removed device back where you can see it** (nota-daw/nota#109): removing a
+  device and pressing Undo now shows it again in the Devices panel for the track the panel
+  is showing (the Master, a track other than the selected one), and in Modular. Before, the
+  device came back in the engine but the panel kept the old chain until you clicked away.
+  Undo and Redo also restore the delay compensation a look-ahead device adds, so the other
+  tracks line up again. Devices inside a rack still aren't covered by undo.
+- **A Session take shows its notes when recording stops** (nota-daw/nota#156): stopping a
+  Session recording with the transport's Stop (or when the take ends on its own) now draws
+  the recorded clip and its notes in the slot right away, and in the piano roll if the slot
+  is open there. Before, the slot looked empty until you switched views.
+- **Mosaic: back to Init** (nota-daw/nota#165): choosing **Init** in a Nota Mosaic card's
+  preset list now empties the instrument, as on a freshly added Mosaic: no samples, every
+  parameter at its default. Before, Init reset the parameters but kept the multisample, so
+  the list jumped back to the preset's name.
+- **No crash when a panel moves between windows** (nota-daw/nota#164): opening the command
+  palette (⌘⇧P / Ctrl+Shift+P) from the Mixer window or a popped-out panel after using it in
+  the main window, opening or closing the Mixer, or popping the Devices or Clip panel out and
+  back, no longer crashes the app with "Attempt to call InvalidateArrange on wrong
+  LayoutManager".
+
+### Added
+- **Loop recording: Overdub or Replace** (nota-daw/nota#29): when you record MIDI in a loop,
+  choose whether each pass adds to the take (**Overdub**, as before) or replaces it
+  (**Replace**). In Replace mode, the first note you play on a new pass clears the earlier
+  passes, so playing a phrase again until it's right leaves only the latest take instead of
+  stacked copies. A pass you don't play on keeps the take, and notes that were already in the
+  clip stay. Switch with the Overdub / Replace cell next to Loop in the transport,
+  ⌘⇧R / Ctrl+Shift+R, or the Transport menu. A switch applies from the next pass, and Nota
+  remembers your choice. MCP: `set_loop_record_mode`, and `get_transport` reports the mode.
+- **MCP `list_sections` and `set_sections`**: read and replace the arrangement's sections.
+- **See MIDI notes while you record** (nota-daw/nota#56): a note now shows up in the take
+  the moment the key goes down and grows with the playhead while the key is held, instead
+  of appearing only on release. A new note fades in from the accent colour. Works in the
+  arrangement, in a Session slot being recorded, and in the piano roll when it shows the
+  take, for keyboard and MIDI input and for MIDI routed in from another track.
+
+### Changed
+- **Nota Volt is the default instrument; Nota Bass and Nota Synth leave the browser**
+  (nota-daw/nota#195): a new instrument track, a new project, an imported MIDI file, an
+  audio-to-MIDI conversion and a new Instrument Rack now start on Nota Volt. Nota Bass and
+  Nota Synth are no longer offered in the browser, the command palette, the rack and Drum Rack
+  menus or MCP's `list_instrument_kinds`, since Volt now covers both. Projects and presets that
+  use them still open, play and show their own card.
+- **Hosted plug-ins get every MIDI controller** (nota-daw/nota#69): the mod wheel and any
+  other CC from your keyboard now reach a plug-in instrument (before, only the wheel, pressure,
+  CC74 and the sustain pedal did), and the sustain pedal arrives with its real value, so a
+  piano plug-in can half-pedal. Built-in synths with a Mod Wheel control (Bass, Monolith,
+  Volt, Aurora, Operator, Pentad, Consort) follow the keyboard's mod wheel.
+- **Notes played on the count-in are recorded:** a pickup played during the count-in, or a
+  key already held when recording starts, now lands in the take where it actually started.
+  The take's clip begins earlier to include it. If the take starts at 1.1, the clip still
+  starts there, and the part of the note before 1.1 is kept: extend the clip's left edge
+  after moving it to hear it.
+
 ## [0.55.1] — 2026-10-15
 
 ### Added

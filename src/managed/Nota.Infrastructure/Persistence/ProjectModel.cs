@@ -35,6 +35,10 @@ public sealed class ProjectDocument
     /// <summary>Mixer-wide settings: the project pan law (format v21). Null = a pre-v21 project
     /// (migration fills it in) = Balance + older project.</summary>
     public MixerDto? Mixer { get; set; }
+    /// <summary>Arrangement sections (specs/016), sorted by start. Null in files from before
+    /// sections moved into the project: their bundle's <c>sections.json</c> sidecar is read
+    /// once on load instead.</summary>
+    public List<SectionDto>? Sections { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 
@@ -70,6 +74,17 @@ public sealed class MixerDto
 {
     public string PanLaw { get; set; } = "balance";
     public bool PanLawLegacy { get; set; }
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>A named span of arrangement time (specs/016). The same shape the legacy
+/// <c>sections.json</c> sidecar used.</summary>
+public sealed class SectionDto
+{
+    public double Start { get; set; }
+    public double Length { get; set; }
+    public string Name { get; set; } = "";
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -195,6 +210,40 @@ public sealed class AutomationPointDto
     public AutomationPoint ToPoint() => new(Beat, Value, Curve);
 }
 
+/// <summary>One controller curve of a MIDI clip (specs/020): the controller (a CC 0..127, 128 the
+/// pitch wheel, 129 channel pressure) and its breakpoints in clip-local beats, values normalised.
+/// Stored as parallel arrays — a recorded curve can hold a few thousand points, and an object per
+/// point would grow a project by ~150 bytes each. Curves is null when every segment is linear.</summary>
+public sealed class ControllerCurveDto
+{
+    public int Ctl { get; set; }
+    public double[] Beats { get; set; } = System.Array.Empty<double>();
+    public float[] Values { get; set; } = System.Array.Empty<float>();
+    public float[]? Curves { get; set; }
+
+    public static ControllerCurveDto From(int ctl, AutomationPoint[] pts)
+    {
+        var dto = new ControllerCurveDto
+        {
+            Ctl = ctl,
+            Beats = System.Array.ConvertAll(pts, p => Math.Round(p.Beat, 6)),
+            Values = System.Array.ConvertAll(pts, p => (float)Math.Round(p.Value, 4)),
+        };
+        if (System.Array.Exists(pts, p => p.Curve != 0f)) dto.Curves = System.Array.ConvertAll(pts, p => (float)Math.Round(p.Curve, 4));
+        return dto;
+    }
+
+    public AutomationPoint[] ToPoints()
+    {
+        int n = Math.Min(Beats.Length, Values.Length);
+        var pts = new AutomationPoint[n];
+        for (int i = 0; i < n; i++) pts[i] = new AutomationPoint(Beats[i], Values[i], Curves is { } c && i < c.Length ? c[i] : 0f);
+        return pts;
+    }
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
 public sealed class InstrumentDto
 {
     /// <summary>0 = Nota Synth, 1 = Sampler, 2 = Nota Physical, -1 = hosted plugin.</summary>
@@ -208,8 +257,12 @@ public sealed class InstrumentDto
     /// <summary>Sidechain source ("React", Nota Flux) as a track INDEX in this document
     /// (-1 = none). Resolved to a live track id on load, since ids are reassigned.</summary>
     public int SidechainSource { get; set; } = -1;
+    /// <summary>Drawn as a narrow strip in the Devices panel (format v23, specs/022).</summary>
+    public bool Folded { get; set; }
     /// <summary>Nota Rhythm (Kind == 12) per-voice one-shots (only sample-source voices).</summary>
     public List<VoiceSampleDto>? VoiceSamples { get; set; }
+    /// <summary>The card's on/off switch is off: the instrument makes no sound (#148).</summary>
+    public bool Bypassed { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -291,6 +344,7 @@ public sealed class MidiDeviceDto
 {
     public int Kind { get; set; }        // 0 = Arpeggiator
     public bool Bypassed { get; set; }
+    public bool Folded { get; set; }     // drawn as a strip in the Devices panel (v23, specs/022)
     public float[] Params { get; set; } = System.Array.Empty<float>();
     // Map/CC routing (arp): CC lane → an audio-device param on the same track.
     public int CcDestDevice { get; set; } = -2;   // -2 = no routing
@@ -305,6 +359,8 @@ public sealed class DeviceDto
     /// <summary>Built-in kind: 0=EQ, 1=Compressor, 2=Reverb, 3=Delay, 4=Utility; -1 = hosted plugin.</summary>
     public int BuiltinKind { get; set; }
     public bool Bypassed { get; set; }
+    /// <summary>Drawn as a narrow strip in the Devices panel (format v23, specs/022).</summary>
+    public bool Folded { get; set; }
     public float[] Params { get; set; } = System.Array.Empty<float>();
     /// <summary>Stable plugin identifier when BuiltinKind == -1 (M7-6c).</summary>
     public string? PluginId { get; set; }
@@ -332,6 +388,7 @@ public sealed class MidiClipDto
     public NoteDto[] Notes { get; set; } = System.Array.Empty<NoteDto>();
     public AutomationPointDto[]? VelocityEnvelope { get; set; }  // clip velocity envelope (v10)
     public AutomationPointDto[]? VolumeEnvelope { get; set; }    // clip volume envelope (v10)
+    public ControllerCurveDto[]? Controllers { get; set; }       // MIDI controller curves (v22, specs/020)
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -365,6 +422,7 @@ public sealed class SessionSlotDto
     public int Scene { get; set; }
     public double LengthBeats { get; set; } = 4.0;
     public NoteDto[] Notes { get; set; } = System.Array.Empty<NoteDto>();
+    public ControllerCurveDto[]? Controllers { get; set; }       // MIDI controller curves (v22, specs/020)
     /// <summary>Set for audio-track slots (a captured take); Notes is empty then.</summary>
     public AudioClipDto? Audio { get; set; }
     // Clip properties (Session P0); defaults match a fresh clip.

@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.55.1** (plus changes in development on `main`). This document describes what is
+**0.56.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -33,7 +33,8 @@ Contents
   MIDI, **VST3** hosting. Distributed as an Inno Setup installer
   (`Nota-Setup-<version>-x64.exe`; arm64 is also built).
 - **Linux**: PulseAudio/ALSA (via miniaudio), ALSA MIDI (RtMidi), **VST3** hosting.
-  Distributed as a portable **AppImage** (`Nota-<version>-<arch>`). Settings live in
+  Distributed as a portable **AppImage** (`Nota-<version>-<arch>`) that runs on any distro
+  with glibc ≥ 2.28 (RHEL/Alma/Rocky 8+, Debian 10+, Ubuntu 18.10+). Settings live in
   `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`).
 
 Architecture: engine and DSP in C++20 (CMake + Ninja), UI in .NET 10 / Avalonia 12 (C#),
@@ -45,12 +46,14 @@ JUCE module; the engine core is JUCE-free.
 ## Project and transport
 
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
-  operation — including volume, pan and master-volume moves from any source (Mixer, track
-  headers, Session mixer, **MST**, Nota Remote, a MIDI controller, MCP), one step per move;
-  a recorded automation pass undoes with its value. Mute, solo and sends are not in the
-  history; automation playback, opening a project and freezing add no steps.
+  operation — including volume, pan and master-volume moves and the parameters of effects,
+  MIDI effects, instruments and plug-ins, from any source (device cards, Mixer, track
+  headers, Session mixer, **MST**, Nota Remote, a MIDI controller, MCP), one step per move,
+  and every arrangement section edit; a recorded automation pass undoes with its value.
+  Mute, solo, sends and devices inside racks are not in the history; automation playback,
+  opening a project and freezing add no steps.
 - **New project template**: a new project (and the workspace Nota opens with) starts with an
-  instrument track (Nota Synth), an audio track and two returns — **Reverb** (Nota Reverb)
+  instrument track (Nota Volt), an audio track and two returns — **Reverb** (Nota Reverb)
   and **Delay** (Nota Delay), both Wet Only — ready to send to; it opens unmodified, with
   nothing to undo.
 - **Version history**: every save records a version inside the project. The browser's
@@ -61,14 +64,19 @@ JUCE module; the engine core is JUCE-free.
   unnamed versions at once; Settings → Library turns history off (erasing it, after a warning). Versions share their
   audio, so each costs only what it adds; **Save As** carries the history along.
 - **Start window**: the logo follows the theme, recent projects sit in one compact list with
-  their dates — click to select, double-click (or the arrow keys and Return) to open.
+  their dates — click to select, double-click (or the arrow keys and Return) to open. Escape
+  or a click outside closes it, keeping the current project.
 - **Quit without saving** dialog names the project and how long its changes have gone
   unsaved; Return saves (right in the dialog, then quits), Escape cancels.
 - **Project key** (KEY cell in the transport bar, saved with the project): loops dropped on
   the arrangement can be transposed to it.
 - **Transport**: play / stop / record, playhead position.
   - **Stop returns to the launch point** (a seek sets the start anchor).
-  - **Follow** — the arrangement follows the cursor (playhead stays centred).
+  - **Pause** (⇧Space) — the playhead stays where it stopped and Play carries on from there.
+  - **Follow** — the arrangement follows the cursor (playhead stays centred); scrolling away
+    during playback pauses it until **Show playhead** (P), the button or the next Play.
+  - **Show playhead** (P, View menu, or the arrow the ruler shows when it is off screen) —
+    scrolls the arrangement to the playhead without moving it.
   - **Launch quantize** (Q): None … 1/16 … 4 Bars — applied when launching slots and
     scenes in Session.
   - **Position**: clicking the readout toggles bars ↔ time (mm:ss.ms).
@@ -78,8 +86,12 @@ JUCE module; the engine core is JUCE-free.
   power of two), grid and quantization.
 - **Tap tempo**: a TAP cell beside the BPM (and *Tap Tempo* in the command palette) sets the
   tempo from tapped beats — mean of the last eight gaps, restarts on a pace change or a 3 s pause.
-- **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection).
-- **Metronome** and **count-in** before recording.
+- **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection; drag an end of the brace
+  to resize it, the brace to move it; double-click the brace to switch the loop off and on;
+  right-click the ruler to clear it). Notes held across the
+  loop seam keep sounding and release tails ring into the next pass; an arpeggiator keeps its
+  pattern going across the seam.
+- **Metronome** and **count-in** before recording, Session slot takes from stop included (notes played on the count-in are recorded).
 - **Transport shortcuts** (Space play/stop, Enter stop, R/M/A, clip copy-paste, typing
   notes, undo/redo) work in detached windows too.
 
@@ -107,7 +119,8 @@ track count and closes with Escape.
     (Intro, Verse, Drop). Drag the empty lane to mark one, click it to jump the playhead
     there, double-click to rename, drag its body or edges to move and resize it (always on
     whole bars). Its menu loops the section, selects it as a time range across every track,
-    duplicates it or deletes it. Saved with the project; View ▸ Toggle sections hides it.
+    duplicates it or deletes it. Each edit is one undo step. Saved with the project (MCP
+    `list_sections` / `set_sections`); View ▸ Toggle sections hides it.
   - **Resizable tracks and track list** — drag a track's bottom edge (header or lane) to
     set its height, 30–256 px, with a light snap to Compact / Standard / Large; a
     multi-selection resizes together, ⌥-drag resizes every track, double-click resets.
@@ -205,6 +218,8 @@ track count and closes with Escape.
   - **Send/Return** buses (sends to returns) with a return list.
 - **Level meters** (peak/RMS) on every channel and on the master, plus true peak.
 - **Device chain** per track: instrument + effects + MIDI effects, laid out in a row.
+  - Double-click a device's header (or Fold in its menu) to fold it into a narrow strip with
+    its rotated name and on/off switch; double-click the strip to unfold. Saved with the project.
 
 ---
 
@@ -214,6 +229,15 @@ track count and closes with Escape.
 - **Piano Roll**: draw, move, stretch and delete notes on the snap grid; **QUANTIZE** with
   its own step (1/32 … 1/2, triplets; independent of the zoom) and strength; a velocity
   editor; transposing the selection.
+  - A note drawn takes the length and velocity of the note last touched (clicked, moved,
+    resized or velocity-changed); before any note is touched, one grid step at velocity 0.8.
+  - **Note audition** (the speaker switch in the header, on by default): a note sounds while
+    it is placed, clicked or dragged, re-sounding at each new pitch. Nothing is auditioned
+    while a take is recording.
+  - **Playable keys**: click a key to hear it, ⇧-drag to glide, ⌘-click to select every note
+    of that pitch; a vertical drag on the keys zooms the rows.
+  - Click the roll's ruler to put the playhead there, or drag along it to scrub (snapped to
+    the grid); the roll shows the playhead while stopped too, where playback will start.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
   - Notes replace the same-pitch notes they land on instead of stacking: moved, stretched,
@@ -228,7 +252,13 @@ track count and closes with Escape.
   - **Remove out of scale** (next to the Scale key and mode) deletes every note outside the
     scale in one undo step.
   - Zoomed out, the area past the clip's end is darkened and marked with a line.
-  - Scroll and zoom are remembered per clip; a new clip centres on its own notes.
+  - **Vertical zoom**: rows from 6 to 36 px (all 88 keys fit at the smallest) with
+    ⌘⌥ + wheel (Ctrl + Alt on Windows / Linux), a drag on the keys (down taller, up
+    shorter) or ⌥ + pinch on a trackpad, keeping the pitch under the pointer in place.
+    **Fit to notes** (⇧F, the **Fit** button in the clip editor header, or the command
+    palette) sizes and scrolls the rows so every note of the clip is in view.
+  - Scroll and both zooms are remembered per clip; a new clip opens at the default row
+    height, centred on its own notes.
   - A MIDI clip trimmed in the arrangement mutes note tails at its boundary.
   - Live edits (moving a note, changing its length) reach the engine immediately, and a
     whole drag is a single undo step.
@@ -263,6 +293,32 @@ track count and closes with Escape.
 - **Input**: MIDI keyboard (live play and recording), and the **computer keyboard** plays
   MIDI (the S–K row, sharps on W E T Y U) — including while a hosted plugin window has
   focus.
+- **MIDI recording**: a note appears in the take as soon as its key goes down and grows
+  with the playhead while held, settling in from the accent colour — in the arrangement, in a
+  recording Session slot and in the piano roll showing the take, for keyboard, MIDI and
+  routed ("MIDI In") input. Notes played on the count-in and keys already held when
+  recording starts are recorded where they started: the take's clip begins earlier to hold
+  them (at 1.1 the part before the song start is kept beyond the clip's left edge).
+- **Loop recording: Overdub / Replace** — with the loop on, **Overdub** adds every pass to the
+  MIDI take; **Replace** keeps only the latest pass you play on (a silent pass keeps the take,
+  notes already in the clip stay). Switched by the cell next to Loop in the transport,
+  Cmd/Ctrl+Shift+R or the Transport menu; applies from the next pass; remembered between
+  sessions. A note held across the loop seam is recorded as two notes, up to the loop end
+  and on from the loop start.
+- **MIDI controllers in clips** — recording keeps the sustain pedal, pitch wheel, mod wheel,
+  channel pressure and any other CC with the notes (a pedal already down at Record is in the
+  take from its start), and the clip plays them back to the instrument. Starting mid-clip sets
+  each controller to the clip's value there; at a clip's end or on stop its pedals are
+  released and the wheel centred. In loop recording a pass replaces a controller only over the
+  range it moved it, so a pedal-only pass re-records the pedal and keeps the notes.
+  Controllers move, copy, split, trim and consolidate with the clip and are saved with the
+  project. Polyphonic aftertouch from an ordinary keyboard is kept as each note's pressure.
+  Live and from clips, hosted plug-ins get every controller (the pedal with its real value, for
+  half-pedalling); built-ins act on those they know — the pedal, the wheel, pressure, CC74,
+  and the mod wheel on synths with a *Mod Wheel* control (Bass, Monolith, Volt, Aurora,
+  Operator, Pentad, Consort). The sustain pedal holds released keys on every melodic built-in
+  (Keys and Mosaic model their own damper; drums ignore it); a re-struck held key restarts.
+  MCP `get_clip_controllers` / `set_clip_controller`.
 - **MPE (per-note expression)** — an MPE controller's notes each carry their own pitch
   bend, pressure and slide (CC74): channels 2–16 are per-note (lower zone, ±48 semitones by
   default; the controller's MPE Configuration and bend-range messages are honoured), channel 1
@@ -272,12 +328,10 @@ track count and closes with Escape.
   Pentad: poly aftertouch through *Aftertouch Cutoff*, Physical: bows the struck body so a held
   note sustains); slide sweeps the filter (Aurora: the wavetable position, Operator: the FM
   index, Physical: how long the body rings, Keys: drives the tine into the pickup / shifts its
-  symmetry). Instrument Racks pass it to their chains; hosted plug-ins get the wheel, channel
-  pressure, polyphonic aftertouch and the sustain pedal (CC64), which also holds Nota Keys'
-  notes. **Recording** keeps each note's bend, pressure and slide with the note: it plays back
+  symmetry). Instrument Racks pass it to their chains; hosted plug-ins get polyphonic
+  aftertouch (and every instrument-wide controller, see above). **Recording** keeps each note's bend, pressure and slide with the note: it plays back
   from the clip, moves, copies and quantizes with the note, is saved with the project, and the
-  piano roll draws it over the note (bend as the pitch it played, pressure as a shade). The
-  pitch wheel, channel pressure and sustain pedal aren't recorded.
+  piano roll draws it over the note (bend as the pitch it played, pressure as a shade).
   - **MPE lanes in the piano roll** — the lane under the notes switches between **VEL**,
     **BEND**, **PRES** and **SLIDE**. In an MPE lane every note's curve sits over its own
     span; drag across a selected note to draw its curve (⌥ for a straight line), drag a point
@@ -320,7 +374,7 @@ track count and closes with Escape.
   installed (Settings → Downloads → AI Models), Melody and Harmony use it instead: every note,
   chords included, with velocities from the playing; Melody keeps the strongest note where notes
   overlap. Without it they use the DSP below, and the Convert menu offers the model.
-  - **Convert Melody** — monophonic pitch detection (YIN) → a new Nota Synth track.
+  - **Convert Melody** — monophonic pitch detection (YIN) → a new Nota Volt track.
   - **Convert Harmony** — polyphonic (STFT + spectral peak picking) → chords: overtones,
     chorus shimmer and slight detune don't add stray notes, held chords stay whole, and
     notes start on the audio's attacks.
@@ -419,12 +473,16 @@ track count and closes with Escape.
 ## Built-in devices
 
 Every built-in device uses the same 700×260 shell with a shared header: on/bypass dot,
-name, subtitle, preset picker, **A/B comparison** (parameter snapshots), stereo meter,
+name, subtitle, preset picker (with **Init** to return to every default), **A/B comparison** (parameter snapshots), stereo meter,
 voice count (on synths), move arrows, delete, and the ⠿ drag handle. All support factory
-and user presets, automation, persistence and cloning.
+and user presets, automation, persistence and cloning. Instrument cards (built-in, racks
+and hosted plug-ins) have the same on/off switch as effects: off silences the instrument
+(after a one-block fade it isn't rendered at all) while the MIDI effects before it and the
+audio effects after it keep running and keep their settings; saved with the project.
 
 ### Instruments
-- **Nota Synth** — subtractive synthesizer (the basic one): one oscillator
+- **Nota Synth** — *no longer offered for new tracks: Nota Volt covers it and carries its
+  presets (specs/026); saved tracks still load and play.* Subtractive synthesizer (the basic one): one oscillator
   (Saw/Square/Triangle/Sine) with pulse width, detune, octave and a 1/2/4/7-voice unison
   stack with stereo spread; ADSR; a filter with type Off/LP/HP/BP, resonance and an
   Env → Cutoff amount; voice modes Poly 16 / Mono / Legato with glide, pan and Vel→Vol.
@@ -448,12 +506,16 @@ and user presets, automation, persistence and cloning.
   presets in nine folders; every preset outside Basics brings its own source (29 synthesized
   on first use — choir, strings, bells, kalimba, a drum break, an arpeggio, ocean, radio …),
   while Basics shape whatever sample is loaded.
-- **Nota Volt** — subtractive synth, two paths: two oscillators and noise, each routed to
-  one of two filters (LP/HP/BP/Notch, 12/24 dB, with Filter 1 able to feed Filter 2) and
-  its own amp; amp and filter envelopes, two LFOs (shapes, depth, fade-in, tempo sync), a
-  dedicated vibrato that can ride the mod wheel, a 7×6 modulation matrix, 8 macros over 12
-  destinations, unison, glide, oscillator start phase, pitch-bend (±2/±5/±12) and
-  modulation wheels, VEL→AMP, VEL→FILTER, Mono/Poly. 25 factory presets.
+- **Nota Volt** — the default instrument. Subtractive synth, two paths: two oscillators
+  (saw/square/triangle/sine, a Shape knob that morphs toward the next wave, pulse width) and
+  noise, each routed to one of two filters (LP/HP/BP/Notch, 12/24 dB, with Filter 1 able to
+  feed Filter 2, a drive in front of both) and its own amp; amp and filter envelopes, two
+  LFOs (shapes, depth, fade-in, tempo sync) that the mod wheel can open onto the cutoffs
+  (Wheel → LFO), a dedicated vibrato that can ride the mod wheel, a 7×6 modulation matrix,
+  8 macros over 12 destinations, unison (one detuned partner, or a 2/4/7-voice stack with
+  stereo spread), output drive, glide, oscillator start phase, pitch-bend (±2/±5/±12) and
+  modulation wheels, VEL→AMP, VEL→FILTER, Poly/Mono/Legato (Mono falls back to a held key).
+  74 factory presets: its own 25 plus the Nota Synth and Nota Bass libraries.
 - **Nota Aurora** — wavetable synth: two wavetable oscillators (16 frames per bank, warp
   Off/Sync/Bend/PWM/Fold) plus a sub oscillator and a stereo unison stack (voices, detune
   in cents, spread), two filters (LP/HP/BP/Notch/Morph, 12/24 dB) with per-source routing,
@@ -470,7 +532,8 @@ and user presets, automation, persistence and cloning.
   Note, Reset, Humanize and Pan Spread. The card draws one lane per ball from the engine's
   telemetry (direction, the wall it strikes, the time to the next one) over a bar strip of
   the generated notes; 28 factory presets; MCP `read_pendulum` / `set_pendulum`.
-- **Nota Bass** — mono-first bass synth: a morphing oscillator (sine → tri → saw → pulse,
+- **Nota Bass** — *no longer offered for new tracks: Nota Volt covers it and carries its
+  presets (specs/026); saved tracks still load and play.* Mono-first bass synth: a morphing oscillator (sine → tri → saw → pulse,
   pulse width), a sub oscillator (sine/square/tri, −1/−2 oct), a filter (LP/HP/BP/Notch,
   12/24 dB) with pre-drive, its own envelope, key tracking and LFO, amp envelope, LFO to
   cutoff and pitch, unison, output drive and pan, glide, Legato, pitch-bend (±2/±5/±12)
@@ -545,7 +608,7 @@ and user presets, automation, persistence and cloning.
   and lists gaps, duplicates and guessed notes (browser folder menu, or files dropped on the
   card). Installed sample packs become presets under Nota Mosaic → Packs. 11 factory presets
   on built-in multisamples (felt piano with release samples, mallets, nylon guitar, brass, pad,
-  music box) rendered on first use; MCP `read_mosaic`, `set_mosaic`, `set_mosaic_zone`,
+  music box) rendered on first use; Init in the card's preset list empties the instrument; MCP `read_mosaic`, `set_mosaic`, `set_mosaic_zone`,
   `set_mosaic_group`, `import_sfz`, `create_multisample`, `list_mosaic_presets`,
   `load_mosaic_preset`, `scan_sample_packs`.
 
@@ -874,8 +937,9 @@ and user presets, automation, persistence and cloning.
   group by source, favourites first — each remembered across sessions — plus the tag editor.
 - A **status line** counts what the tab is showing (`13 built-in · 4 plug-ins`), and the
   search box counts the matches.
-- **Sample player** under the Files tab: the file's real waveform (click to play from a
-  point, hover for the time), Play / Stop, time readout, Loop, Auto (play on select) and a
+- **Sample player** under the Files tab: the file's real waveform, drawn as Bars or Solid
+  like the arrangement (Settings → Appearance → Waveform; click to play from a point,
+  hover for the time), Play / Stop, time readout, Loop, Auto (play on select) and a
   preview volume fader; ↑ ↓ step through files and Space plays the selected one. It stays
   hidden until you use a list and tightens in a narrow browser. Space in the arrangement
   always drives the project transport.
@@ -902,6 +966,9 @@ and user presets, automation, persistence and cloning.
     loads into that track's instrument (switching it if needed; the effects stay).
   - A drop selects the track it lands on (a newly created one included), in the
     arrangement and the session view.
+- **Double-click an instrument** to put it on the selected MIDI / instrument track in place
+  of its instrument (clips and effects stay; one undo step), or on a new track when no such
+  track is selected or a rack is. ⌥ + double-click always starts a new track.
 - **Preset preview**: the same player sits under the Instruments, Audio Effects, MIDI
   Effects and Presets tabs and plays the selected factory preset, saved preset, drum kit or
   built-in device (its default sound). These tabs have their own **Auto**, off by default:
@@ -931,7 +998,8 @@ and user presets, automation, persistence and cloning.
 
 ## Export
 
-- **Export the master** to WAV, FLAC or MP3: range, sample rate and, per format,
+- **Export the master** to WAV, FLAC or MP3: range (the loop region, the full song, or a
+  Custom start and end typed as bar.beat), sample rate and, per format,
   bit depth (**pcm16 / pcm24 / float32** WAV; **16/24-bit** FLAC) or MP3 quality
   (**CBR 128/192/256/320 kbps**, 320 default). MP3 tops out at 48 kHz, so 96 kHz is
   not selectable for it; the footer size estimate follows the format.
@@ -985,8 +1053,10 @@ and user presets, automation, persistence and cloning.
   frame). **Full screen** — the macOS green button, or View → Toggle Full Screen (F11)
   on Windows and Linux — hides the title bar and its separator so the workspace fills the
   screen edge to edge; leaving full screen brings the bar back. Maximized keeps the bar.
-- **What's New** — a window showing changelog entries newer than `LastSeenVersion`, once
-  after the first launch on a new version.
+- **What's New** — a window showing the release notes (`release-notes/X.Y.Z.en.md`, the GitHub
+  release text; the CHANGELOG section for versions without them) newer than `LastSeenVersion`, once
+  after the first launch on a new version; any time from Help ▸ What's New or the version
+  number in the status bar.
 - **Self-update** — the start screen's banner announces a newer GitHub release. **Update**
   downloads the build for this platform (with progress, checked against the release's
   sha256). **Restart now** installs it and relaunches, and **Later** installs it on quit.
@@ -1047,17 +1117,20 @@ or Claude Code) write music directly in the open Nota project. Enable it in Pref
 appears in the UI immediately.
 
 Coverage:
-- **Transport**: play/stop, tempo, time signature, loop, metronome.
-- **Project**: `get_overview` (a full snapshot); version history — `list_versions` (with what
+- **Transport**: play/stop, tempo, time signature, loop, metronome, loop record mode
+  (`set_loop_record_mode`; `get_transport` reports it).
+- **Project**: `get_overview` (a full snapshot); the arrangement's sections
+  (`list_sections`, `set_sections`); version history — `list_versions` (with what
   each changed), `save_version` with a note, `switch_version`, `annotate_version` (name, note,
   star). Deleting versions stays with the user.
 - **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.
-- **Instruments**: add by kind, read and write parameters (by index or by stable id); read /
+- **Instruments**: add by kind, read and write parameters (by index or by stable id), turn
+  on or off (`set_device_bypass` with device index -1; `get_overview` shows it); read /
   shape Nota Keys in musical terms (`read_keys`, `set_keys`).
 - **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a
   device (a Nota Chamber impulse response) and read its resource text (IR names).
 - **MIDI clips and notes**: piano roll — add a clip, read/write/append/clear notes, move
-  and split.
+  and split; read and write a clip's controller curves (sustain, wheels, any CC).
 - **Automation**: create a lane, read and write points.
 - **MIDI effects** and engine status.
 - **Session**: the clip launcher (grid snapshot with clip and scene properties, create, copy,
@@ -1081,7 +1154,8 @@ Coverage:
 - **Audio Effect Rack**: snapshot, Parallel/Series/Select mode, dry/wet, volume,
   chain-select, add and remove chains, parameters, 8 macros.
 - **Export** the master or stems to WAV (pcm16/pcm24/float32), FLAC (pcm16/pcm24) or
-  MP3 (CBR 128–320 kbps) — `format` picks it, `bitrateKbps` tunes MP3.
+  MP3 (CBR 128–320 kbps) — `format` picks it, `bitrateKbps` tunes MP3, `startBeat` sets
+  where the render starts.
 - **AI models**: `list_ai_models` (installed or not), `separate_stems` (a clip → a group of
   Drums / Bass / Other / Vocals tracks), `convert_audio_to_midi` (melody or harmony with
   basic-pitch → a new MIDI track). Installing models stays with the user.

@@ -26,6 +26,16 @@ public sealed partial class NotaEngine : IAudioEngine
     /// <summary>Engine library version, e.g. "0.2.5" (src/native/nota.engine/VERSION).</summary>
     public static string Version => Marshal.PtrToStringUTF8(NativeMethods.Version()) ?? "?";
 
+    /// <summary>
+    /// Tells the native engine where its per-user data lives (audio.json, midi.json,
+    /// plugin catalog). Call once at startup with <c>NotaPaths.DataDir</c>, before
+    /// creating the engine handle; <c>null</c>/empty resets to auto-detect.
+    /// </summary>
+    public static void SetDataDir(string? path) => Check(NativeMethods.SetDataDir(path ?? ""));
+
+    /// <summary>Effective native data dir (the override, or what auto-detect resolved).</summary>
+    public static string DataDir => Marshal.PtrToStringUTF8(NativeMethods.GetDataDir()) ?? "";
+
     /// <summary>Negotiated output sample rate, or 0 if not started.</summary>
     public double SampleRate
     {
@@ -80,6 +90,8 @@ public sealed partial class NotaEngine : IAudioEngine
     public void PlayWithCountIn() { ThrowIfDisposed(); Check(NativeMethods.TransportPlayCountIn(_handle)); }
     public void SetCountIn(int bars) { ThrowIfDisposed(); Check(NativeMethods.SetCountIn(_handle, Math.Max(0, bars))); }
     public double CountInBeats { get { ThrowIfDisposed(); return NativeMethods.CountInBeats(_handle); } }
+    public void SetLoopRecordMode(bool replace) { ThrowIfDisposed(); Check(NativeMethods.SetLoopRecordMode(_handle, replace ? 1 : 0)); }
+    public bool LoopRecordReplace { get { ThrowIfDisposed(); return NativeMethods.LoopRecordMode(_handle) == 1; } }
     public void StopTransport() { ThrowIfDisposed(); Check(NativeMethods.TransportStop(_handle)); }
     public void SetBpm(double bpm) { ThrowIfDisposed(); Check(NativeMethods.SetBpm(_handle, bpm)); }
     public double Bpm { get { ThrowIfDisposed(); return NativeMethods.TransportBpm(_handle); } }
@@ -127,6 +139,11 @@ public sealed partial class NotaEngine : IAudioEngine
     public void TrackNoteOff(int trackId, int pitch) { ThrowIfDisposed(); Check(NativeMethods.TrackNoteOff(_handle, trackId, pitch)); }
     public void NoteExpression(int pitch, NoteExpressionDim dim, float value) { ThrowIfDisposed(); Check(NativeMethods.NoteExpression(_handle, pitch, (int)dim, value)); }
     public void TrackNoteExpression(int trackId, int pitch, NoteExpressionDim dim, float value) { ThrowIfDisposed(); Check(NativeMethods.TrackNoteExpression(_handle, trackId, pitch, (int)dim, value)); }
+    public void SendController(int ctl, float value) { ThrowIfDisposed(); Check(NativeMethods.Controller(_handle, ctl, value)); }
+    public void SendTrackController(int trackId, int ctl, float value) { ThrowIfDisposed(); Check(NativeMethods.TrackController(_handle, trackId, ctl, value)); }
+    public float DeliveredController(int trackId, int ctl) { ThrowIfDisposed(); return NativeMethods.TrackDeliveredController(_handle, trackId, ctl); }
+    /// <summary>Device-free self-test of the clip controller curves (specs/020); 0 = pass.</summary>
+    public int MidiCtlSelfTest() { ThrowIfDisposed(); return NativeMethods.MidiCtlSelfTest(_handle); }
     public void SetAuditionTrack(int trackId) { ThrowIfDisposed(); NativeMethods.SetAuditionTrack(_handle, trackId); }
     public void SetRecording(bool enabled) { ThrowIfDisposed(); Check(NativeMethods.SetRecording(_handle, enabled ? 1 : 0)); }
     public bool IsRecording { get { ThrowIfDisposed(); return NativeMethods.IsRecording(_handle) != 0; } }
@@ -142,6 +159,8 @@ public sealed partial class NotaEngine : IAudioEngine
     public int MasterTrackId { get { ThrowIfDisposed(); return NativeMethods.MasterTrackId(_handle); } }
     /// <summary>Live min/max peaks over the in-progress capture buffer (growing-take waveform). Returns buckets written.</summary>
     public int AudioRecordPeaks(float[] outMinMax, int maxPoints) { ThrowIfDisposed(); return NativeMethods.AudioRecordPeaks(_handle, outMinMax, maxPoints); }
+    public int RecordHeldNotes(NotaRecordHeldNote[] buffer, out int trackId, out int sessionScene, out double nowBeat)
+    { ThrowIfDisposed(); return NativeMethods.RecordHeldNotes(_handle, buffer, buffer.Length, out trackId, out sessionScene, out nowBeat); }
 
     /// <summary>Message-thread pump: materialises recorded notes into clips. Call from the UI timer.</summary>
     public void Poll() { ThrowIfDisposed(); NativeMethods.Poll(_handle); }
@@ -163,7 +182,38 @@ public sealed partial class NotaEngine : IAudioEngine
     public void SetPanLaw(PanLaw law, bool checkpoint = true)
     { ThrowIfDisposed(); Check(NativeMethods.SetPanLaw(_handle, (int)law, checkpoint ? 1 : 0)); }
 
-    // --- Mix undo (specs/009) --------------------------------------------------
+    // --- Arrangement sections (specs/016) ---------------------------------------
+    public IReadOnlyList<SectionInfo> Sections
+    {
+        get
+        {
+            ThrowIfDisposed();
+            int n = NativeMethods.SectionCount(_handle);
+            var list = new SectionInfo[n];
+            for (int i = 0; i < n; i++)
+                list[i] = new SectionInfo(NativeMethods.SectionStart(_handle, i), NativeMethods.SectionLength(_handle, i),
+                    Marshal.PtrToStringUTF8(NativeMethods.SectionName(_handle, i)) ?? "");
+            return list;
+        }
+    }
+    public void SetSections(IReadOnlyList<SectionInfo> sections, bool checkpoint = true)
+    {
+        ThrowIfDisposed();
+        var rows = new NativeMethods.NotaSection[sections.Count];
+        try
+        {
+            for (int i = 0; i < rows.Length; i++)
+                rows[i] = new NativeMethods.NotaSection(sections[i].StartBeat, sections[i].LengthBeats,
+                    Marshal.StringToCoTaskMemUTF8(sections[i].Name ?? ""));
+            Check(NativeMethods.SetSections(_handle, rows, rows.Length, checkpoint ? 1 : 0));
+        }
+        finally
+        {
+            foreach (var r in rows) if (r.Name != IntPtr.Zero) Marshal.FreeCoTaskMem(r.Name);
+        }
+    }
+
+    // --- Value undo (specs/009, specs/016) -------------------------------------
     public int BeginMixGesture(params MixTarget[] targets)
     { ThrowIfDisposed(); return targets.Length == 0 ? 0 : NativeMethods.MixGestureBegin(_handle, targets, targets.Length); }
     public void EndMixGesture(int handle) { ThrowIfDisposed(); if (handle > 0) NativeMethods.MixGestureEnd(_handle, handle); }

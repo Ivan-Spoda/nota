@@ -84,7 +84,7 @@ internal static class PaletteTests
         // aliases / slang
         ("verb", "Nota Reverb"), ("ott", "Nota Prism"), ("echo", "Nota Delay"), ("autotune", "Nota Auto Shift"),
         ("de-esser", "De-Esser"), ("deesser", "Nota Dynamic EQ-8"), ("limiter", "Nota Ceiling"), ("bitcrusher", "Nota Crush"),
-        ("arpeggiator", "Nota Arp"), ("303", "Nota Bass"), ("wavetable", "Nota Aurora"), ("fm", "Nota Operator"), ("granular", "Nota Grain"),
+        ("arpeggiator", "Nota Arp"), ("303", "Nota Volt"), ("wavetable", "Nota Aurora"), ("fm", "Nota Operator"), ("granular", "Nota Grain"),
         // typos (CP-10)
         ("reverv", "Nota Reverb"), ("compresor", "Nota Compressor"), ("dealy", "Nota Delay"), ("chorsu", "Nota Chorus"),
         // wrong layout (CP-10)
@@ -248,6 +248,20 @@ internal static class PaletteTests
             "an instrument replaces the track's instrument and keeps its effects (CP-3)");
         var r = svc.Insert(aurora, PaletteInsert.TargetFor(arr with { TrackId = g }, instItem, ApplyMode.NewTrack));
         yield return (r.CreatedTrack && eng.TrackCount == tracksBefore + 1, "⌘Enter puts an instrument on a new track");
+
+        // Double-click in the browser (#145): the selected instrument track swaps its
+        // instrument, clips and effects kept, one undo step; ⌥, no selection, an audio track
+        // or a rack start a track instead.
+        int s = Track(); int n = eng.TrackCount;
+        var swap = svc.Insert(aurora, svc.ActivationTarget(s, alwaysNewTrack: false));
+        yield return (swap.Ok && swap.InstrumentReplaced && !swap.CreatedTrack && eng.TrackCount == n && eng.TrackInstrumentKind(s) == 5
+                      && Chain(s) == "0,3" && eng.TryGetClipInfo(s, 0, out _),
+            $"browser double-click swaps the selected track's instrument, keeping clips and effects ({swap.Status})");
+        yield return (eng.Undo() && eng.TrackInstrumentKind(s) == 6 && Chain(s) == "0,3" && eng.TrackCount == n, "…and one undo brings the old instrument back");
+        int audio = eng.AddAudioTrack(), rack = svc.CreateInstrumentTrack(Dev(3, BrowserItemKind.BuiltinInstrument), 0);
+        yield return (svc.ActivationTarget(s, alwaysNewTrack: true).NewTrack && svc.ActivationTarget(-1, false).NewTrack
+                      && svc.ActivationTarget(audio, false).NewTrack && svc.ActivationTarget(rack, false).NewTrack,
+            "…while ⌥, no selection, an audio track or a rack start a new track");
 
         int h = Track();
         int devicesBefore = eng.TrackDeviceCount(h);

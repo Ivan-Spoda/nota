@@ -87,6 +87,7 @@
             <!-- Header text is matched from code to keep this checkmark in step with the
                  transport bar's Follow button — see MainWindow.SetFollowPlayhead. -->
             <NativeMenuItem Header="Follow playhead" app:Commands.Id="view.follow" ToggleType="CheckBox"/>
+            <NativeMenuItem Header="Show playhead" app:Commands.Id="view.showPlayhead"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Clip names" app:Commands.Id="view.clipNames"/>
           </NativeMenu>
@@ -96,8 +97,10 @@
         <NativeMenuItem.Menu>
           <NativeMenu>
             <NativeMenuItem Header="Play / stop" app:Commands.Id="transport.playStop"/>
+            <NativeMenuItem Header="Play / pause" app:Commands.Id="transport.playPause"/>
             <NativeMenuItem Header="Record" app:Commands.Id="transport.record"/>
             <NativeMenuItem Header="Loop" app:Commands.Id="transport.loop"/>
+            <NativeMenuItem Header="Loop record: overdub / replace" app:Commands.Id="transport.loopRecordMode"/>
             <NativeMenuItem Header="Metronome" app:Commands.Id="transport.metronome"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
@@ -180,15 +183,15 @@
             <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
               <!-- Shapes built from geometry: stop a square, play a filled triangle, record a
                    filled disc. No glyph font. Keys butt against each other on 1px seams. -->
-              <Button x:Name="StopBtn" Classes="tp-icon" ToolTip.Tip="Stop"
+              <Button x:Name="StopBtn" Classes="tp-icon" ToolTip.Tip="Stop (Return)"
                       Foreground="{DynamicResource Brush.TextStrong}" Command="{Binding Transport.StopCommand}">
                 <app:Glyph x:Name="StopGlyph" Kind="Stop" Width="9" Height="9"/>
               </Button>
-              <Button x:Name="PlayBtn" Classes="tp-play" ToolTip.Tip="Play"
+              <Button x:Name="PlayBtn" Classes="tp-play" ToolTip.Tip="Play (Space)"
                       Classes.playing="{Binding Transport.IsPlaying}" Command="{Binding Transport.PlayCommand}">
                 <app:Glyph x:Name="PlayGlyph" Kind="Play" Width="10" Height="12" Margin="2,0,0,0"/>
               </Button>
-              <ToggleButton x:Name="RecordBtn" Classes="tp-icon rec" ToolTip.Tip="Record"
+              <ToggleButton x:Name="RecordBtn" Classes="tp-icon rec" ToolTip.Tip="Record (⌘R)"
                             IsChecked="{Binding Transport.RecordOn}">
                 <app:Glyph x:Name="RecordGlyph" Kind="Record" Width="10" Height="10"/>
               </ToggleButton>
@@ -215,6 +218,18 @@
                            Text="{Binding Transport.LoopRangeText}"
                            Foreground="{Binding $parent[ToggleButton].Foreground}"/>
               </StackPanel>
+            </ToggleButton>
+            <!-- Loop record mode: Overdub (rests neutral) or Replace (lit, the non-default choice) -->
+            <ToggleButton x:Name="LoopRecordCell" Classes="cell" Height="22" IsChecked="{Binding Transport.LoopRecordReplace}"
+                          ToolTip.Tip="Loop recording: Overdub adds every pass · Replace keeps the latest pass (⌘⇧R)">
+              <Panel>
+                <!-- Sizer: the cell keeps the longer label's width in both states, so the bar doesn't shift -->
+                <TextBlock Classes="CellLabel" Text="Overdub" Opacity="0" VerticalAlignment="Center"/>
+                <TextBlock Classes="CellLabel" Text="Overdub" VerticalAlignment="Center" HorizontalAlignment="Center"
+                           IsVisible="{Binding !Transport.LoopRecordReplace}" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
+                <TextBlock Classes="CellLabel" Text="Replace" VerticalAlignment="Center" HorizontalAlignment="Center"
+                           IsVisible="{Binding Transport.LoopRecordReplace}" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
+              </Panel>
             </ToggleButton>
           </StackPanel>
         </Border>
@@ -279,7 +294,7 @@
           <!-- Metronome: body, pendulum rod, weight -->
           <ToggleButton x:Name="MetronomeBtn" Classes="tp-icon" IsChecked="{Binding Transport.MetronomeOn}"
                         ContextRequested="OnMetronomeContext"
-                        ToolTip.Tip="Turn the metronome on or off (M) · right-click for count-in">
+                        ToolTip.Tip="Turn the metronome on or off (⌘M) · right-click for count-in">
             <app:Glyph Kind="Metronome" Size="15"/>
           </ToggleButton>
           <!-- Follow playhead: keep the arrangement scrolling with the cursor. The
@@ -386,7 +401,7 @@
     <Border DockPanel.Dock="Bottom" Background="{DynamicResource Brush.BgApp}"
             BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,1,0,0"
             Height="22" Padding="16,0">
-      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
         <TextBlock Classes="Caption" VerticalAlignment="Center" Text="{Binding StatusText}"/>
         <!-- Settings → Downloads job (MainWindow.Downloads.cs): it keeps running after Settings closes. -->
         <Panel x:Name="DownloadHost" Grid.Column="1" VerticalAlignment="Center"/>
@@ -404,6 +419,12 @@
         </StackPanel>
         <TextBlock Grid.Column="3" Classes="Caption Mono"
                    VerticalAlignment="Center" Text="{Binding EngineInfo}"/>
+        <!-- The installed version: opens its release notes (What's New), never an update (#127). -->
+        <Button x:Name="VersionButton" Grid.Column="4" Classes="ghost"
+                VerticalAlignment="Center" Margin="6,0,-6,0" Padding="6,1" MinHeight="0"
+                Cursor="Hand" ToolTip.Tip="View release notes">
+          <TextBlock x:Name="VersionText" Classes="Caption Mono"/>
+        </Button>
       </Grid>
     </Border>
 

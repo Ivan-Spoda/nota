@@ -130,7 +130,6 @@ public partial class MainWindow
         var row = BodyGrid.RowDefinitions[2];
         row.MinHeight = 120;
         double h = honorPersist && _detailHeight > 120 ? _detailHeight : height;
-        _lastSetDetailHeight = h;
         row.Height = new GridLength(h);
         DetailSplitter.IsVisible = true;
         DetailPanel.IsVisible = true;
@@ -180,7 +179,7 @@ public partial class MainWindow
         _patternScene = -1;
         _sessionSlotTrack = -1;
         _sessionSlotScene = -1;
-        if (DetailFloating) _detailWindow!.ClipHost.Content = ClipPlaceholder();
+        if (DetailFloating) SetHost(_detailWindow!.ClipHost, ClipPlaceholder());
     }
 
     // The Clip tab targets the *currently selected* arrangement clip (MIDI or audio),
@@ -226,6 +225,11 @@ public partial class MainWindow
 
     // The audio clip editor is open on a Session slot's take.
     private bool SessionAudioEditorOpen => _audioEditor is not null && SessionClip.SceneOf(_audioEditorClipIndex) >= 0;
+
+    // A Session slot's loop-local playback position in beats, or -1 (hidden) unless that
+    // slot is the one playing on its track — the slot loops on its own clock, not the song's.
+    private double SessionSlotPlayhead(int trackId, int scene) =>
+        Engine.SessionSlotState(trackId, scene) == 3 ? Engine.SessionSlotPosition(trackId) : -1;
 
     private bool IsDrumRackTrack(int trackId) => trackId > 0 && Engine.TrackInstrumentKind(trackId) == 4;
 
@@ -389,6 +393,15 @@ public partial class MainWindow
         ShowDetail(250, honorPersist: true);
     }
 
+    // Piano-roll audition (#46/#47) plays into the clip's own track, armed or not. Not while
+    // a take is recording: a track's live notes are recorded, and a tap on a key mid-take
+    // must not land in the clip.
+    private void AuditionNoteOn(int trackId, int pitch, float velocity)
+    {
+        if (Engine.IsRecording) return;
+        Engine.TrackNoteOn(trackId, pitch, velocity);
+    }
+
     // Build the piano-roll editor for a specific arrangement clip (no panel switch).
     private void BuildClipEditor(int trackId, int clipIndex)
     {
@@ -430,6 +443,16 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            AuditionOn = (pitch, vel) => AuditionNoteOn(trackId, pitch, vel),
+            AuditionOff = pitch => Engine.TrackNoteOff(trackId, pitch),
+            // The ruler moves the transport (#50): clip-local beat → arrangement beat.
+            Seek = local =>
+            {
+                if (!Engine.TryGetClipInfo(trackId, clipIndex, out var live) || !live.IsMidi) return;
+                double beat = Math.Max(0, live.StartBeat + local);
+                Engine.Seek(beat);
+                Timeline.SetPlayhead(beat);
+            },
         };
         double length = Engine.TryGetClipInfo(trackId, clipIndex, out var ci) && ci.LengthBeats > 0 ? ci.LengthBeats : 4;
         double start = ci.StartBeat;
@@ -500,9 +523,23 @@ public partial class MainWindow
     private void ReloadEditorNotes()
     {
         _patternView?.Reload();   // the step grid is a second view of the same notes
-        if (_vm is null || _editorRoll is null || _editorTrackId < 0) return;
-        double len = Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var ci) && ci.LengthBeats > 0 ? ci.LengthBeats : _editorRoll.LengthBeats;
+        if (_vm is null || _editorRoll is null) return;
+        if (_editorTrackId < 0)
+        {
+            // A Session slot's piano roll follows a take recorded into it the same way (#156).
+            if (_sessionSlotTrack <= 0 || _sessionSlotScene < 0) return;
+            double slotLen = Engine.SessionSlotLength(_sessionSlotTrack, _sessionSlotScene);
+            _editorRoll.SetNotes(Engine.GetSessionNotes(_sessionSlotTrack, _sessionSlotScene),
+                slotLen > 0 ? slotLen : _editorRoll.LengthBeats);
+            return;
+        }
+        bool hasInfo = Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var ci);
+        double len = hasInfo && ci.LengthBeats > 0 ? ci.LengthBeats : _editorRoll.LengthBeats;
         _editorRoll.SetNotes(Engine.GetClipNotes(_editorTrackId, _editorClipIndex), len);
+        // The roll shows the recording take: draw its held notes too (#56).
+        bool take = _recordPreview is { Active: true, SessionScene: < 0 } rp
+                    && rp.TrackId == _editorTrackId && rp.TakeClipIndex == _editorClipIndex;
+        _editorRoll.SetRecordTake(take ? _recordPreview : null, hasInfo ? ci.StartBeat : 0);
     }
 
     // Tab (when the detail panel was last used) flips between Devices and Clip.
@@ -615,6 +652,8 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            AuditionOn = (pitch, vel) => AuditionNoteOn(trackId, pitch, vel),
+            AuditionOff = pitch => Engine.TrackNoteOff(trackId, pitch),
         };
         double slotLen = Engine.SessionSlotLength(trackId, scene);
         roll.SetTrackColor(TrackBrush(trackId));

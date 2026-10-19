@@ -8,6 +8,10 @@
 // share one time axis. Notes render in the track colour with opacity encoding
 // velocity; the selected note fills accent-bright. The control owns the note
 // list; every edit invokes Commit so the window pushes the set to the engine.
+// Rows zoom vertically (⌘⌥+wheel, drag on the keys, ⌥+pinch, ⇧F = Fit to notes);
+// the row height is per-clip view state like the horizontal zoom.
+// With note audition on (the clip editor's speaker chip, #46) a note sounds on the track's
+// instrument while it is placed, pressed or dragged; the keys column plays its keys (#47).
 
 using System;
 using System.Collections.Generic;
@@ -35,6 +39,75 @@ public sealed partial class PianoRollView : UserControl
     /// <summary>Polls the engine for currently-pressed live-input pitches (keyboard + MIDI) into
     /// the buffer, returning the count — used to light up the played key. Set by the host.</summary>
     public Func<int[], int>? PollHeldNotes { get; set; }
+    /// <summary>Moves the transport to a clip-local beat (#50): a click or drag on the ruler.
+    /// Null (a session slot, which runs its own clock) leaves the ruler inert.</summary>
+    public Action<double>? Seek { get; set; }
+    /// <summary>Starts / ends a note on the clip's own track (note audition, #46; the playable
+    /// keys, #47): pitch and velocity 0..1. Null leaves the roll silent. Set by the host.</summary>
+    public Action<int, float>? AuditionOn { get; set; }
+    public Action<int>? AuditionOff { get; set; }
+
+    /// <summary>Note audition (#46): placing, clicking or dragging a note plays it on the
+    /// track's instrument. App-wide like FL Studio's speaker toggle; on by default, seeded
+    /// from and saved to Settings by the host. The keys column plays whatever this says.</summary>
+    public static bool AuditionEnabled { get; set; } = true;
+    /// <summary>Fired when a clip editor's speaker chip flips <see cref="AuditionEnabled"/>.</summary>
+    public static event Action? AuditionToggled;
+    public static void SetAuditionEnabled(bool on)
+    {
+        if (AuditionEnabled == on) return;
+        AuditionEnabled = on;
+        AuditionToggled?.Invoke();
+    }
+
+    // The one pitch sounding from the roll (−1 = none): a new audition ends the previous one,
+    // so a drag across pitches re-triggers instead of stacking notes.
+    private int _auditionPitch = -1;
+    /// <summary>Sound <paramref name="pitch"/> until <see cref="StopAudition"/>. The note grid
+    /// asks only while audition is on; the keys column always plays (force).</summary>
+    internal void Audition(int pitch, float velocity, bool force = false)
+    {
+        if (AuditionOn is null || (!force && !AuditionEnabled) || pitch == _auditionPitch) return;
+        StopAudition();
+        if (pitch < MinPitch || pitch > MaxPitch) return;
+        _auditionPitch = pitch;
+        AuditionOn(pitch, Math.Clamp(velocity, 0.05f, 1f));
+        _keys.InvalidateVisual();
+    }
+    internal void StopAudition()
+    {
+        if (_auditionPitch < 0) return;
+        int p = _auditionPitch;
+        _auditionPitch = -1;
+        AuditionOff?.Invoke(p);
+        _keys.InvalidateVisual();
+    }
+
+    /// <summary>Selects every note of <paramref name="pitch"/> (⌘/Ctrl-click on a key, #47);
+    /// <paramref name="add"/> keeps the current selection.</summary>
+    internal void SelectPitch(int pitch, bool add)
+    {
+        SettlePlacement();   // a pending placement lands first: it can cut or remove notes
+        if (!add) _selection.Clear();
+        for (int i = 0; i < _notes.Count; i++)
+            if (_notes[i].Pitch == pitch) _selection.Add(i);
+        Invalidate();
+        Changed?.Invoke();
+    }
+
+    // The recording take shown in this roll (#56): its held notes grow on the grid and new
+    // notes settle in. Null when the roll shows any other clip.
+    private RecordPreview? _recPreview;
+    private double _recClipStart;
+    /// <summary>Show (or, with null, hide) the recording take's held notes; clipStart is the
+    /// take clip's timeline start — it moves left while early notes land.</summary>
+    internal void SetRecordTake(RecordPreview? preview, double clipStart)
+    {
+        if (preview is null && _recPreview is null) return;
+        _recPreview = preview;
+        _recClipStart = clipStart;
+        _gridControl.InvalidateVisual();
+    }
     /// <summary>A note's recorded MPE by <see cref="NotaNote.ExprId"/>, drawn over the note.
     /// Curves never change under an id, so they are fetched once. Set by the host.</summary>
     public Func<int, NotaExprPoint[]>? ExpressionOf { get; set; }
@@ -54,19 +127,26 @@ public sealed partial class PianoRollView : UserControl
     private DispatcherTimer? _heldTimer;
 
     // --- per-clip view persistence (scroll/zoom don't reset when you re-enter a clip) ------
-    private readonly record struct ViewState(double Ppb, double Scroll, double VOffset, bool HasV);
+    private readonly record struct ViewState(double Ppb, double Scroll, double VOffset, bool HasV, double RowH);
     private static readonly Dictionary<(int, int), ViewState> s_view = new();
     private (int, int) _clipKey = (int.MinValue, int.MinValue);
     private double? _pendingVOffset;   // absolute vertical offset to apply once the body is laid out
     private bool _pendingCenter;       // instead: centre on the clip's notes once laid out
     private bool _restoringView;       // suppress view-saves while we programmatically restore
+    private bool _saveAfterApply;      // a zoom/fit queued the offset: save it once applied
 
     /// <summary>Identifies the edited clip so its scroll/zoom/vertical position persist across
     /// re-opens. Call before <see cref="SetNotes"/>.</summary>
     public void SetClipIdentity(int a, int b) => _clipKey = (a, b);
 
     private const int MinPitch = 21, MaxPitch = 108;   // A0..C8 (88 keys)
-    private const double KeysW = 48, RowH = 12, RulerH = 24, VelH = 72;
+    private const double KeysW = 48, RulerH = 24, VelH = 72;
+
+    // Vertical zoom (specs/019-piano-roll-vertical-zoom): the row height is per-clip view
+    // state, driven by ⌘⌥+wheel, a drag on the keys, ⌥+pinch and Fit to notes.
+    private const double MinRowH = 6, DefaultRowH = 12, MaxRowH = 36;
+    private double _rowH = DefaultRowH;
+    internal double RowH => _rowH;
 
     private readonly List<NotaNote> _notes = new();
     private double _lengthBeats = 4;
@@ -119,6 +199,23 @@ public sealed partial class PianoRollView : UserControl
     // normalized so the earliest note starts at beat 0; s_clipAnchor is its origin.
     private static readonly List<NotaNote> s_clipboard = new();
     private static double s_clipAnchor;
+
+    // The last note touched — clicked, moved, resized or its velocity drawn — in any clip (#44):
+    // a new note takes its length and velocity. Before any is touched, a new note is one grid
+    // step at 0.8.
+    private static double s_lastLen = double.NaN;
+    private static float s_lastVel = 0.8f;
+    private void Remember(int i)
+    {
+        if (i < 0 || i >= _notes.Count) return;
+        s_lastLen = _notes[i].LengthBeats;
+        s_lastVel = _notes[i].Velocity;
+    }
+    private double NewNoteLen(double start)
+    {
+        double len = double.IsNaN(s_lastLen) ? MinNoteLen : Math.Max(MinNoteLen, s_lastLen);
+        return Math.Max(MinNoteLen, Math.Min(len, _lengthBeats - start));
+    }
 
     private readonly RulerLane _ruler;
     private readonly KeysColumn _keys;
@@ -238,7 +335,7 @@ public sealed partial class PianoRollView : UserControl
     private static readonly IBrush PressureShade = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0x66);
     private static readonly Typeface Mono = NotaFonts.Mono;
 
-    private static double RangeH => (MaxPitch - MinPitch + 1) * RowH;
+    private double RangeH => (MaxPitch - MinPitch + 1) * RowH;
 
     public PianoRollView()
     {
@@ -252,13 +349,15 @@ public sealed partial class PianoRollView : UserControl
         _velHost = new Border { BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0), Child = _vel };
 
         // Body: keys pinned left, grid fills; both scroll vertically together.
-        var body = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*") };
+        // Top-aligned: zoomed out past the viewport, the 88 rows stay pinned to the top.
+        var body = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), VerticalAlignment = VerticalAlignment.Top };
         body.Children.Add(_keys);
         Avalonia.Controls.Grid.SetColumn(_gridControl, 1);
         body.Children.Add(_gridControl);
         _bodyScroll = new ScrollViewer
         {
             Content = body,
+            Background = Bg,   // the well below the rows when they don't fill the viewport
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         };
@@ -315,7 +414,7 @@ public sealed partial class PianoRollView : UserControl
             }
             _heldTimer.Start();
         };
-        DetachedFromVisualTree += (_, _) => { _heldTimer?.Stop(); if (_held.Count > 0) { _held.Clear(); _keys.InvalidateVisual(); _gridControl.InvalidateVisual(); } };
+        DetachedFromVisualTree += (_, _) => { StopAudition(); _heldTimer?.Stop(); if (_held.Count > 0) { _held.Clear(); _keys.InvalidateVisual(); _gridControl.InvalidateVisual(); } };
 
         // The grid setting (and Quantize step) is app-wide: follow it while on screen only —
         // a roll is rebuilt for every clip, so a lasting subscription would leak.
@@ -340,19 +439,72 @@ public sealed partial class PianoRollView : UserControl
     private void SaveView()
     {
         if (_clipKey.Item1 == int.MinValue || _pixelsPerBeat <= 0) return;
-        s_view[_clipKey] = new ViewState(_pixelsPerBeat, _scrollBeats, _bodyScroll.Offset.Y, true);
+        s_view[_clipKey] = new ViewState(_pixelsPerBeat, _scrollBeats, _bodyScroll.Offset.Y, true, _rowH);
     }
 
     private void ApplyPendingVOffset()
     {
         if (_pendingVOffset is null && !_pendingCenter) return;
         if (_bodyScroll.Viewport.Height <= 0) return;   // not laid out yet; LayoutUpdated retries
+        // After a vertical zoom-in the extent only grows on the next layout pass; an offset
+        // set before that would be clamped to the old, shorter range.
+        if (_bodyScroll.Extent.Height < RangeH - 0.5) return;
         double vy = _pendingCenter ? CenterOffsetForNotes() : _pendingVOffset!.Value;
         _pendingVOffset = null; _pendingCenter = false;
-        double maxY = Math.Max(0, _bodyScroll.Extent.Height - _bodyScroll.Viewport.Height);
+        double maxY = Math.Max(0, RangeH - _bodyScroll.Viewport.Height);
         _restoringView = true;
         _bodyScroll.Offset = new Vector(_bodyScroll.Offset.X, Math.Clamp(vy, 0, maxY));
         _restoringView = false;
+        if (_saveAfterApply) { _saveAfterApply = false; SaveView(); }
+    }
+
+    /// <summary>Sets the row height, keeping the pitch at <paramref name="viewportY"/> (in
+    /// the body viewport) where it is. Clamped to 6–36 px; ignored mid note-gesture so a
+    /// drag never lands on a pitch the user didn't point at. View state only — no undo.</summary>
+    internal void SetRowHeightAt(double h, double viewportY)
+    {
+        if (_gridControl.Dragging) return;
+        double h0 = _rowH, h1 = Math.Clamp(h, MinRowH, MaxRowH);
+        if (Math.Abs(h1 - h0) < 1e-9) return;
+        double c = (_pendingVOffset ?? _bodyScroll.Offset.Y) + viewportY;
+        _rowH = h1;
+        _keys.Height = RangeH;
+        _gridControl.Height = RangeH;
+        _pendingCenter = false;
+        _pendingVOffset = c * h1 / h0 - viewportY;
+        _saveAfterApply = true;
+        ApplyPendingVOffset();   // now if the extent already fits; LayoutUpdated otherwise
+        Invalidate();
+        SaveView();
+    }
+
+    internal void ZoomRowsAt(double factor, double viewportY) => SetRowHeightAt(_rowH * factor, viewportY);
+
+    /// <summary>⌘⌥ (Ctrl+Alt) + wheel: the vertical-zoom wheel, checked before ⌘ + wheel.</summary>
+    private static bool IsRowZoomWheel(KeyModifiers m)
+        => (m & (KeyModifiers.Control | KeyModifiers.Meta)) != 0 && (m & KeyModifiers.Alt) != 0;
+
+    /// <summary>Fit to notes (⇧F): every note of the clip in view, one row of margin above
+    /// and below, centred; an empty clip goes back to the default height around C5.</summary>
+    public void FitToNotes()
+    {
+        if (_gridControl.Dragging) return;
+        double vh = _bodyScroll.Viewport.Height;
+        double h = DefaultRowH;
+        if (_notes.Count > 0 && vh > 0)
+        {
+            int minP = int.MaxValue, maxP = int.MinValue;
+            foreach (var n in _notes) { if (n.Pitch < minP) minP = n.Pitch; if (n.Pitch > maxP) maxP = n.Pitch; }
+            h = vh / (maxP - minP + 1 + 2);
+        }
+        _rowH = Math.Clamp(h, MinRowH, MaxRowH);
+        _keys.Height = RangeH;
+        _gridControl.Height = RangeH;
+        _pendingVOffset = null; _pendingCenter = true;
+        _saveAfterApply = true;
+        ApplyPendingVOffset();
+        Invalidate();
+        SaveView();
     }
 
     public double LengthBeats => _lengthBeats;
@@ -399,12 +551,16 @@ public sealed partial class PianoRollView : UserControl
         _notes.AddRange(notes);
         _lengthBeats = Math.Max(1, lengthBeats);
         _selection.Clear();
-        _keys.Height = RangeH;
-        _gridControl.Height = RangeH;
+        _saveAfterApply = false;   // a zoom queued on the previous clip must not save onto this one
 
         // Restore this clip's saved scroll/zoom if we've edited it before; otherwise fit the
-        // length horizontally and centre vertically on the clip's own notes.
-        if (s_view.TryGetValue(_clipKey, out var vs) && vs.HasV)
+        // length horizontally and centre vertically on the clip's own notes at the default
+        // row height. Row heights are per clip: zooming one never changes another.
+        bool saved = s_view.TryGetValue(_clipKey, out var vs) && vs.HasV;
+        _rowH = saved ? Math.Clamp(vs.RowH, MinRowH, MaxRowH) : DefaultRowH;
+        _keys.Height = RangeH;
+        _gridControl.Height = RangeH;
+        if (saved)
         {
             _pixelsPerBeat = Math.Clamp(vs.Ppb, MinPpb, MaxPpb);
             _scrollBeats = Math.Max(0, vs.Scroll);
@@ -936,7 +1092,49 @@ public sealed partial class PianoRollView : UserControl
     private sealed class RulerLane : Control
     {
         private readonly PianoRollView _o;
+        private bool _scrub;
         public RulerLane(PianoRollView o) { _o = o; }
+
+        // Click places the playhead, a drag scrubs it (snapped to the grid), as on the
+        // arrangement ruler (#50).
+        protected override void OnPointerEntered(PointerEventArgs e)
+        {
+            base.OnPointerEntered(e);
+            Cursor = _o.Seek is null ? Cursor.Default : new Cursor(StandardCursorType.Hand);
+        }
+        protected override void OnPointerPressed(PointerPressedEventArgs e)
+        {
+            base.OnPointerPressed(e);
+            if (_o.Seek is null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            _scrub = true;
+            e.Pointer.Capture(this);
+            SeekAt(e.GetPosition(this).X);
+            e.Handled = true;
+        }
+        protected override void OnPointerMoved(PointerEventArgs e)
+        {
+            base.OnPointerMoved(e);
+            if (_scrub) SeekAt(e.GetPosition(this).X);
+        }
+        protected override void OnPointerReleased(PointerReleasedEventArgs e)
+        {
+            base.OnPointerReleased(e);
+            if (!_scrub) return;
+            _scrub = false;
+            e.Pointer.Capture(null);
+        }
+        protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+        {
+            _scrub = false;
+            base.OnPointerCaptureLost(e);
+        }
+        private void SeekAt(double x)
+        {
+            double b = Math.Clamp(_o.SnapBeat(_o.XToBeat(x)), 0, _o._lengthBeats);
+            if (Math.Abs(b - _o._playheadBeat) < 1e-9) return;
+            _o.Seek?.Invoke(b);
+            _o.SetPlayhead(b, true);   // immediate feedback; the transport tick keeps it in sync
+        }
         // Beats only: a bar reads "3" in Ink 2, a beat "3.2" in Ink 5, set on the baseline in
         // mono 9 just right of its tick. The loop is a 3px brass strip along the top.
         public override void Render(DrawingContext ctx)
@@ -982,10 +1180,83 @@ public sealed partial class PianoRollView : UserControl
         private readonly PianoRollView _o;
         private int _hover = -1;
         public KeysColumn(PianoRollView o) { _o = o; }
+        private double RowH => _o.RowH;
+
+        // A press plays the key on the track's instrument (#47) until release. Dragging
+        // vertically past a few pixels turns the press into the row zoom of specs/019 — down
+        // taller, up shorter, the pressed key held at the press height — and lets the note
+        // go; with Shift held the drag glides through the keys instead. ⌘/Ctrl-click
+        // selects every note of that pitch (⇧ adds to the selection) and plays nothing.
+        private static readonly Cursor ZoomCursor = new(StandardCursorType.SizeNorthSouth);
+        private const double ZoomSlop = 4;
+        private enum Press { None, Key, Glide, Zoom }
+        private Press _press;
+        private double _pressY, _pressRowH;
+
+        private int PitchAt(double y) => (int)Math.Clamp(MaxPitch - Math.Floor(y / RowH), MinPitch, MaxPitch);
+        private const float KeyVelocity = 0.8f;
+
+        protected override void OnPointerPressed(PointerPressedEventArgs e)
+        {
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || _o._gridControl.Dragging) return;
+            int pitch = PitchAt(e.GetPosition(this).Y);
+            e.Handled = true;
+            if (ArrangementView.IsPrimaryDown(e.KeyModifiers))
+            {
+                _o.SelectPitch(pitch, (e.KeyModifiers & KeyModifiers.Shift) != 0);
+                return;
+            }
+            _press = (e.KeyModifiers & KeyModifiers.Shift) != 0 ? Press.Glide : Press.Key;
+            _pressY = e.GetPosition(_o._bodyScroll).Y;
+            _pressRowH = RowH;
+            _o.Audition(pitch, KeyVelocity, force: true);
+            e.Pointer.Capture(this);
+        }
+
+        protected override void OnPointerReleased(PointerReleasedEventArgs e)
+        {
+            if (_press == Press.None) return;
+            e.Pointer.Capture(null);
+            EndPress();
+            e.Handled = true;
+        }
+
+        protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) => EndPress();
+
+        private void EndPress()
+        {
+            if (_press == Press.None) return;
+            _press = Press.None;
+            _o.StopAudition();
+            Cursor = null;
+        }
+
+        // ⌘⌥+wheel zooms rows here too; any other wheel is left to the body ScrollViewer.
+        protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+        {
+            if (IsRowZoomWheel(e.KeyModifiers))
+            {
+                _o.ZoomRowsAt(WheelInput.ZoomFactor(e.Delta.Y, 1.2), e.GetPosition(_o._bodyScroll).Y);
+                e.Handled = true;
+            }
+        }
 
         protected override void OnPointerMoved(PointerEventArgs e)
         {
-            int p = (int)Math.Clamp(MaxPitch - Math.Floor(e.GetPosition(this).Y / RowH), MinPitch, MaxPitch);
+            if (_press == Press.Key && Math.Abs(e.GetPosition(_o._bodyScroll).Y - _pressY) > ZoomSlop)
+            {
+                _press = Press.Zoom;   // a drag, not a key press: zoom, and let the note go
+                _o.StopAudition();
+                Cursor = ZoomCursor;
+            }
+            if (_press == Press.Zoom)
+            {
+                double dy = e.GetPosition(_o._bodyScroll).Y - _pressY;
+                _o.SetRowHeightAt(_pressRowH * Math.Exp(dy * 0.01), _pressY);
+                return;
+            }
+            int p = PitchAt(e.GetPosition(this).Y);
+            if (_press == Press.Glide) _o.Audition(p, KeyVelocity, force: true);
             if (p != _hover) { _hover = p; InvalidateVisual(); }
         }
         protected override void OnPointerExited(PointerEventArgs e)
@@ -1018,9 +1289,16 @@ public sealed partial class PianoRollView : UserControl
                     ctx.FillRectangle(HeldKeyFill, new Rect(0, y, w, RowH - 1));
                     DrawKeyLabel(ctx, hp, y, w, KeyLabelOnAccent);
                 }
+            // The key the roll itself is sounding (a pressed key, an auditioned note).
+            if (_o._auditionPitch >= MinPitch && !_o._held.Contains(_o._auditionPitch))
+            {
+                double y = (MaxPitch - _o._auditionPitch) * RowH;
+                ctx.FillRectangle(HeldKeyFill, new Rect(0, y, w, RowH - 1));
+                DrawKeyLabel(ctx, _o._auditionPitch, y, w, KeyLabelOnAccent);
+            }
             // Hovered key: highlight it and label its note name (works for black keys too,
             // where the octave-C label wouldn't otherwise show).
-            if (_hover >= MinPitch)
+            if (_hover >= MinPitch && _hover != _o._auditionPitch)
             {
                 double hy = (MaxPitch - _hover) * RowH;
                 ctx.FillRectangle(KeyHover, new Rect(0, hy, w, RowH - 1));
@@ -1028,7 +1306,7 @@ public sealed partial class PianoRollView : UserControl
             }
         }
 
-        private static void DrawKeyLabel(DrawingContext ctx, int pitch, double y, double w, IBrush ink)
+        private void DrawKeyLabel(DrawingContext ctx, int pitch, double y, double w, IBrush ink)
         {
             var ft = new FormattedText(NoteName(pitch), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, ink);
             ctx.DrawText(ft, new Point(w - ft.Width - 5, y + (RowH - ft.Height) / 2));
@@ -1041,6 +1319,8 @@ public sealed partial class PianoRollView : UserControl
         private readonly PianoRollView _o;
         private enum Mode { None, Move, Resize, ResizeLeft, Marquee }
         private Mode _drag = Mode.None;
+        /// <summary>A note move / resize / box selection is in progress.</summary>
+        internal bool Dragging => _drag != Mode.None;
         private bool _dragMoved;
 
         // Move/resize: each selected note's state at grab time + the primary grabbed.
@@ -1082,12 +1362,20 @@ public sealed partial class PianoRollView : UserControl
             Focusable = true;
             // Leaving the grid (another panel, another clip, a dialog) lets the placement go.
             LostFocus += (_, _) => _o.SettlePlacement();
+            // ⌥+pinch on a trackpad zooms rows (raised by the macOS backend; elsewhere never).
+            AddHandler(PointerTouchPadGestureMagnifyEvent, (_, e) =>
+            {
+                if ((e.KeyModifiers & KeyModifiers.Alt) == 0) return;
+                _o.ZoomRowsAt(1 + e.Delta.X, e.GetPosition(_o._bodyScroll).Y);
+                e.Handled = true;
+            });
         }
 
         private double Ppb => _o.PixelsPerBeat;
         private double BeatToX(double b) => _o.BeatToX(b);
         private double XToBeat(double x) => _o.XToBeat(x);
-        private static double PitchToY(int p) => (MaxPitch - p) * RowH;
+        private double RowH => _o.RowH;
+        private double PitchToY(int p) => (MaxPitch - p) * RowH;
         private int YToPitch(double y) => (int)Math.Clamp(MaxPitch - Math.Floor(y / RowH), MinPitch, MaxPitch);
         // Alt held during the gesture positions freely, as in the arrangement (FR-009).
         private bool _free;
@@ -1143,7 +1431,10 @@ public sealed partial class PianoRollView : UserControl
                     // (or all of it, when it goes) reads faint behind a dashed track-colour edge.
                     var fate = _o._placementPending && _o._selection.Count > 0
                         ? NoteOverwrite.Fate(i, notes, _o.PlacedForRender()) : default;
-                    if (fate.Kind == NoteFateKind.Kept)
+                    double appear = _o._recPreview?.Progress(n.Pitch, _o._recClipStart + n.StartBeat) ?? 1;
+                    if (fate.Kind == NoteFateKind.Kept && appear < 1)
+                        ctx.FillRectangle(RecordPreview.AppearBrush(c, appear), r, 2);
+                    else if (fate.Kind == NoteFateKind.Kept)
                         ctx.FillRectangle(new SolidColorBrush(Color.FromArgb((byte)(255 * a), c.R, c.G, c.B)), r, 2);
                     else
                     {
@@ -1172,6 +1463,21 @@ public sealed partial class PianoRollView : UserControl
                 foreach (var d in _doomed) ctx.DrawRectangle(null, pen, d.Deflate(0.5), 2, 2);
                 _doomed.Clear();
             }
+            // Keys held into the recording take (#56): from the key-down to the capture clock,
+            // not editable — they become ordinary notes when released.
+            if (_o._recPreview is { } rp)
+                foreach (var hn in rp.Held)
+                {
+                    if (hn.Pitch < MinPitch || hn.Pitch > MaxPitch) continue;
+                    double s = hn.StartBeat - _o._recClipStart, e = Math.Max(hn.StartBeat, rp.NowBeat) - _o._recClipStart;
+                    double hx = BeatToX(s), hw = Math.Max(3, (e - s) * ppb);
+                    if (hx + hw < 0 || hx > w) continue;
+                    var c = _o._trackColor;
+                    double p = rp.Progress(hn.Pitch, hn.StartBeat);
+                    var hr = new Rect(hx, PitchToY(hn.Pitch), Math.Max(2, hw - 1), RowH - 1);
+                    ctx.FillRectangle(p < 1 ? RecordPreview.AppearBrush(c, p)
+                        : new SolidColorBrush(Color.FromArgb((byte)(255 * (0.45 + 0.55 * Math.Clamp(hn.Velocity, 0, 1))), c.R, c.G, c.B)), hr, 2);
+                }
             _o.DrawOutsideClip(ctx, w, h);
             if (_o._playheadBeat >= 0)
             {
@@ -1279,10 +1585,13 @@ public sealed partial class PianoRollView : UserControl
                 if (hit >= 0) { _o._notes.RemoveAt(hit); _o._selection.Clear(); }
                 else
                 {
-                    var nt = new NotaNote(YToPitch(p.Y), Math.Max(0, Snap(XToBeat(p.X))), _o.MinNoteLen, 0.8f);
+                    double at = Math.Max(0, Snap(XToBeat(p.X)));
+                    var nt = new NotaNote(YToPitch(p.Y), at, _o.NewNoteLen(at), s_lastVel);
                     _o._notes.Add(nt);
                     _o._selection.Clear(); _o._selection.Add(_o._notes.Count - 1);
                     _o._placementPending = true;   // a drawn note overwrites what it lands on
+                    _o.Audition(nt.Pitch, nt.Velocity);   // heard until the button comes up
+                    e.Pointer.Capture(this);
                 }
                 _o.Invalidate(); _o.CommitNotes(); _o.Changed?.Invoke();
                 e.Handled = true;
@@ -1300,7 +1609,9 @@ public sealed partial class PianoRollView : UserControl
                 }
                 if (!_o._selection.Contains(hit)) { _o._selection.Clear(); _o._selection.Add(hit); }
                 e.Pointer.Capture(this);
+                _o.Audition(_o._notes[hit].Pitch, _o._notes[hit].Velocity);
                 _primary = hit;
+                _o.Remember(hit);
                 _dragMoved = false;
                 _orig.Clear();
                 foreach (int i in _o._selection)
@@ -1363,6 +1674,8 @@ public sealed partial class PianoRollView : UserControl
                 }
                 _dragMoved = true;
                 PushLive();
+                // A drag to a new pitch re-triggers the grabbed note there (#46).
+                _o.Audition(_o._notes[_primary].Pitch, _o._notes[_primary].Velocity);
             }
             else if (_drag == Mode.Resize)
             {
@@ -1441,6 +1754,13 @@ public sealed partial class PianoRollView : UserControl
             if (hn != _hoverNote || left != _hoverLeft) { _hoverNote = hn; _hoverLeft = left; _o.Invalidate(); }
         }
 
+        // Whatever ends the press (release, a window losing the pointer) ends its note.
+        protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+        {
+            _o.StopAudition();
+            base.OnPointerCaptureLost(e);
+        }
+
         protected override void OnPointerExited(PointerEventArgs e)
         {
             if (_cursorKind != 0) { _cursorKind = 0; Cursor = ArrowCursor; }
@@ -1451,11 +1771,13 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
             StopAutoScroll();
-            if (_drag == Mode.None) return;
+            _o.StopAudition();
+            if (_drag == Mode.None) { e.Pointer.Capture(null); return; }
             var was = _drag;
             _drag = Mode.None;
             e.Pointer.Capture(null);
             _orig.Clear();
+            if ((was == Mode.Resize || was == Mode.ResizeLeft) && _dragMoved) _o.Remember(_primary);
             if (was != Mode.Marquee && _dragMoved)
             {
                 _o._placementPending = true;   // overwrites once the selection is let go
@@ -1470,12 +1792,18 @@ public sealed partial class PianoRollView : UserControl
             _o.Changed?.Invoke();
         }
 
-        // ⌘/Ctrl+wheel zooms toward the cursor; Shift+wheel scrolls horizontally;
-        // plain wheel is left to the body ScrollViewer for vertical key navigation.
+        // ⌘⌥/Ctrl+Alt+wheel zooms rows around the pitch under the cursor; ⌘/Ctrl+wheel zooms
+        // time toward the cursor; Shift+wheel scrolls horizontally; plain wheel is left to
+        // the body ScrollViewer for vertical key navigation.
         protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
         {
             var mods = e.KeyModifiers;
-            if ((mods & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+            if (IsRowZoomWheel(mods))
+            {
+                _o.ZoomRowsAt(WheelInput.ZoomFactor(e.Delta.Y, 1.2), e.GetPosition(_o._bodyScroll).Y);
+                e.Handled = true;
+            }
+            else if ((mods & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
             {
                 _o.ZoomAt(WheelInput.ZoomFactor(e.Delta.Y, 1.2), XToBeat(e.GetPosition(this).X));
                 e.Handled = true;
@@ -1535,6 +1863,9 @@ public sealed partial class PianoRollView : UserControl
             bool meta = (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0;
             bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
             if (!meta && (e.Key == Key.Delete || e.Key == Key.Back)) { if (_o.DeleteSelection()) e.Handled = true; return; }
+            // ⇧F: Fit to notes. Handled here, the window's computer-keyboard note map never
+            // sees it, so no F sounds.
+            if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Shift) { _o.FitToNotes(); e.Handled = true; return; }
             if (!meta && e.Key == Key.Escape && _o._selection.Count > 0)
             {
                 _o.SettlePlacement();
@@ -1700,6 +2031,7 @@ public sealed partial class PianoRollView : UserControl
         {
             if (!_drag) return;
             _drag = false; _grabbed.Clear(); e.Pointer.Capture(null);
+            _o.Remember(_velNote);
             _o.CommitNotes(); _o.Changed?.Invoke();
         }
 

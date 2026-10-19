@@ -293,6 +293,21 @@ void Engine::routeCvBaseEdit(int32_t targetKind, int32_t trackId, int32_t device
     }
 }
 
+bool Engine::cvBaseValue(int32_t targetKind, int32_t trackId, int32_t device, int32_t param, float& out) const {
+    if (!authoring_) return false;
+    for (auto& op : authoring_->tracks) {
+        const int32_t owner = op->id();
+        for (auto& l : op->cvLinks) {
+            const int32_t tgt = l.targetTrack < 0 ? owner : l.targetTrack;
+            if (tgt == trackId && l.targetKind == targetKind && l.targetDevice == device && l.targetParam == param) {
+                out = l.base.load(std::memory_order_relaxed);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // ---- device edit → CV-link index fix-up (message thread) -------------------
 
 // New index of `idx` after the device at `from` is moved to `to` (vector erase+insert).
@@ -523,7 +538,12 @@ bool Engine::modulationSelfTest() {
     modulatorSet(tid, mth, static_cast<int32_t>(ModField::InputA), (float)ma);
     modulatorSet(tid, mth, static_cast<int32_t>(ModField::InputB), (float)mb);
     updateModulators(authoring_.get(), 0.0, 0.0, 0.01);
-    const bool mathOk = std::fabs(modulatorValue(tid, mth) - 0.7f) < 1e-3f;
+    bool mathOk = std::fabs(modulatorValue(tid, mth) - 0.7f) < 1e-3f;
+    // Scale with a gain above 1 (the Math gain runs 0..2, #92): 0.3 × 1.5 = 0.45.
+    modulatorSet(tid, mth, static_cast<int32_t>(ModField::Waveform), 4);          // op Scale
+    modulatorSet(tid, mth, static_cast<int32_t>(ModField::Depth), 1.5f);
+    updateModulators(authoring_.get(), 0.0, 0.0, 0.01);
+    mathOk = mathOk && std::fabs(modulatorValue(tid, mth) - 0.45f) < 1e-3f;
     envOk = envOk && mathOk;
 
     // Removing the modulator must drop all its remaining links.

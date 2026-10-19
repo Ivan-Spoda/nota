@@ -30,6 +30,7 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
     // materialised / MIDI capture stops), so toggling its REC button stops the recording.
     if (audioRecording_ && trackId == audioRecordTrackId_) stopAudioRecording();
     if (recording_.load(std::memory_order_relaxed) && trackId == recordTrackId_) {
+        flushCtlTake();   // the take's controllers still in flight (specs/020)
         recordTrackId_ = -1;
         recordTrackRt_.store(-1, std::memory_order_relaxed);
         recordClipIndex_ = -1;
@@ -161,9 +162,20 @@ void Engine::noteOff(int32_t pitch) {
         liveHeld_[pitch >> 5].fetch_and(~(1u << (pitch & 31)), std::memory_order_relaxed);
 }
 
+// The instrument-wide dims (pitch −1) are controllers now: one path plays and records them.
+static int32_t ctlOfGlobalDim(int32_t dim) {
+    switch (dim) {
+        case ExprBend: return kCtlPitchWheel;
+        case ExprPressure: return kCtlChannelPressure;
+        case ExprSlide: return 74;
+        default: return kCtlSustain;   // ExprSustain
+    }
+}
+
 void Engine::noteExpression(int32_t pitch, int32_t dim, float value) {
     if (pitch < -1 || pitch > 127 || dim < 0 || dim >= kExprWireDims || (dim >= kExprDims && pitch >= 0)
         || !std::isfinite(value)) return;
+    if (pitch < 0) { controller(ctlOfGlobalDim(dim), value); return; }
     std::lock_guard<std::mutex> lk(liveMidiMx_);
     liveMidi_.push(MidiEvent{false, pitch, value, -1, dim});
 }
@@ -171,8 +183,25 @@ void Engine::noteExpression(int32_t pitch, int32_t dim, float value) {
 void Engine::trackNoteExpression(int32_t trackId, int32_t pitch, int32_t dim, float value) {
     if (pitch < -1 || pitch > 127 || dim < 0 || dim >= kExprWireDims || (dim >= kExprDims && pitch >= 0)
         || !std::isfinite(value)) return;
+    if (pitch < 0) { trackController(trackId, ctlOfGlobalDim(dim), value); return; }
     std::lock_guard<std::mutex> lk(remoteMidiMx_);
     remoteMidi_.push(MidiEvent{false, pitch, value, trackId, dim});
+}
+
+void Engine::controller(int32_t ctl, float value) {
+    if (ctlIsReserved(ctl) || !std::isfinite(value)) return;
+    value = ctlClamp(ctl, value);
+    noteLiveController(ctl, value);
+    std::lock_guard<std::mutex> lk(liveMidiMx_);
+    liveMidi_.push(MidiEvent{false, -1, value, -1, kCtlDimBase + ctl});
+}
+
+void Engine::trackController(int32_t trackId, int32_t ctl, float value) {
+    if (ctlIsReserved(ctl) || !std::isfinite(value)) return;
+    value = ctlClamp(ctl, value);
+    noteLiveController(ctl, value);
+    std::lock_guard<std::mutex> lk(remoteMidiMx_);
+    remoteMidi_.push(MidiEvent{false, -1, value, trackId, kCtlDimBase + ctl});
 }
 
 void Engine::trackNoteOn(int32_t trackId, int32_t pitch, float velocity) {
@@ -207,14 +236,51 @@ int32_t Engine::liveHeldNotes(int32_t* out, int32_t maxN) const {
     return n;
 }
 
+// The live-recording preview (#56): the audio thread's held-note snapshot, retried while a
+// block is writing it. Take geometry comes from the message-thread record state (this
+// runs on the UI thread, which owns it). A read that keeps racing returns 0 — one
+// frame without preview, never a wait.
+int32_t Engine::recordHeldNotes(NotaRecordHeldNote* out, int32_t maxN, int32_t* trackId,
+                                int32_t* sessionScene, double* nowBeat) const {
+    // An audio take into a Session slot records no MIDI: recordTrackId_ may still name the
+    // last MIDI take's track (it isn't reset on stop), so it must not light up here.
+    const bool rec = recording_.load(std::memory_order_relaxed) && !recordSessionAudio_;
+    const bool slot = rec && recordSessionScene_ >= 0 && recordSessionTrackId_ > 0;
+    const int32_t tid = !rec ? 0 : slot ? recordSessionTrackId_ : (recordTrackId_ > 0 ? recordTrackId_ : 0);
+    if (trackId) *trackId = tid;
+    if (sessionScene) *sessionScene = slot ? recordSessionScene_ : -1;
+    if (nowBeat) *nowBeat = 0.0;
+    if (tid <= 0) return 0;
+    for (int attempt = 0; attempt < 4; ++attempt) {
+        const uint32_t s0 = heldSeq_.load(std::memory_order_acquire);
+        if (s0 & 1u) continue;
+        const int32_t n = std::clamp(heldCount_.load(std::memory_order_relaxed), 0, kMaxHeldSnap);
+        const double now = heldNow_.load(std::memory_order_relaxed);
+        const int32_t m = (out && maxN > 0) ? std::min(n, maxN) : 0;
+        for (int32_t i = 0; i < m; ++i) {
+            out[i].pitch      = heldSnap_[i].pitch.load(std::memory_order_relaxed);
+            out[i].source     = heldSnap_[i].source.load(std::memory_order_relaxed);
+            out[i].start_beat = heldSnap_[i].startBeat.load(std::memory_order_relaxed);
+            out[i].velocity   = heldSnap_[i].velocity.load(std::memory_order_relaxed);
+        }
+        std::atomic_thread_fence(std::memory_order_acquire);
+        if (heldSeq_.load(std::memory_order_relaxed) != s0) continue;
+        if (nowBeat) *nowBeat = now;
+        return n;
+    }
+    return 0;
+}
+
 void Engine::setRecording(bool on) {
     // The record button is also the automation-record switch (M9-C): while it is
     // engaged, moving any control writes that parameter's lane. This is set even
     // when no track is armed for a take — if the UI then pops the button back up
     // it calls us again with false, which clears it.
     setAutomationRecord(on);
-    if (on) { collectRecordedExpr(); pendingExpr_.clear(); }   // a new take starts with no stale curves
+    if (on) { collectRecordedExpr(); pendingExpr_.clear(); resetCtlFold(); }   // a new take starts with no stale curves
     if (!on) {
+        // Controllers still being replaced over a range end where the take stops (poll folds it).
+        if (recording_.load(std::memory_order_relaxed)) { ctlStopPending_ = true; ctlStopAt_ = transport_.uiPositionBeats(); }
         recording_.store(false, std::memory_order_relaxed);
         stopAudioRecording(); // materialise if an audio take was rolling
         // If the take started the transport, stop it and rewind to where the
@@ -262,6 +328,11 @@ void Engine::setRecording(bool on) {
             republishWithTrack(recordTrackId_, nt);
         }
         recordClipIndex_ = idx;
+        // A fresh take for loop record replace: nothing recorded, nothing replaced yet (the
+        // audio thread also zeroes replaceUpTo_ when it sees the take start).
+        takeNotes_.clear();
+        appliedReplaceUpTo_ = 0;
+        replaceUpTo_.store(0, std::memory_order_relaxed);
         recording_.store(true, std::memory_order_relaxed);
     }
 

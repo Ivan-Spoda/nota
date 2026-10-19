@@ -61,8 +61,10 @@ public partial class MainWindow
         }
 
         double bpm = (double)_vm.Transport.Bpm;
-        const double loopBeats = 4 * 4;   // transport loop region (0..4 bars)
-        var opts = await new ExportWindow(endBeats, loopBeats, bpm).ShowDialog<ExportOptions?>(this);
+        // The transport's loop region; with none set yet, the first four bars (as Loop on uses).
+        double loopStart = Engine.LoopStart, loopEnd = Engine.LoopEnd;
+        if (loopEnd <= loopStart) (loopStart, loopEnd) = (0, 4 * 4);
+        var opts = await new ExportWindow(endBeats, loopStart, loopEnd, bpm).ShowDialog<ExportOptions?>(this);
         if (opts is null) return;
 
         Activate(); // keep the native panel focused (see DoImportAsync)
@@ -105,7 +107,7 @@ public partial class MainWindow
                 path, opts.RangeBeats + opts.TailBeats, bpm, opts.SampleRate, opts.Depth,
                 RestoreLoop: _vm.Transport.LoopOn, RestoreMetronome: _vm.Transport.MetronomeOn,
                 Normalize: opts.Normalize, Dither: opts.Dither,
-                Format: opts.Format, Mp3BitrateKbps: opts.BitrateKbps);
+                Format: opts.Format, Mp3BitrateKbps: opts.BitrateKbps, StartBeats: opts.StartBeats);
             await RunBlockingAsync("Export", opts.Stems ? "Exporting stems…" : "Exporting…", async prog =>
             {
                 var frac = new Progress<double>(f =>
@@ -184,7 +186,6 @@ public partial class MainWindow
         _panLawLegacy = false;     // new projects use the Stereo pan law (set by the template)
         _projectPath = null;
         _learn?.Clear();   // start with a clean MIDI-map for the new project
-        Timeline.ClearSections();   // …and a clean song structure
         Timeline.ResetTrackView();  // …at the default track sizes
         Nota.Infrastructure.ProjectTemplate.ApplyDefault(Engine);   // instrument, audio, Reverb + Delay returns
         RefreshAfterLoad();
@@ -249,7 +250,6 @@ public partial class MainWindow
             _projectPath = dir;
             _learn?.LoadMappings(dir);   // MIDI-learn mappings ride in the bundle sidecar
             _modular?.LoadLayout(dir);   // modular-editor node/island positions (sidecar)
-            Timeline.LoadSections(dir);  // arrangement song sections (sidecar)
             Timeline.LoadTrackView(dir); // track heights + track-list width (sidecar)
             LoadFreezeLinks(dir);        // live-freeze links (v1.1) — re-sleep linked sources
             RecordRecentProject(dir);    // surface it on the welcome screen next launch
@@ -318,7 +318,6 @@ public partial class MainWindow
             var warnings = _projects.Save(Engine, TransportSnapshot(), dir);
             _learn?.SaveMappings(dir);   // MIDI-learn mappings ride in the bundle sidecar
             _modular?.SaveLayout(dir);   // modular-editor node/island positions (sidecar)
-            Timeline.SaveSections(dir);  // arrangement song sections (sidecar)
             Timeline.SaveTrackView(dir); // track heights + track-list width (sidecar)
             SaveFreezeLinks(dir);        // live-freeze links (v1.1) ride in the bundle sidecar
             _analysis.AdoptInto(dir);    // analysis cached while unsaved moves into the bundle

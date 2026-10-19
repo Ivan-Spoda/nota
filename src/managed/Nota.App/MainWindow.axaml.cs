@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     private IAudioExporter _exporter = default!;
 
     private SessionView? _session;
+    private readonly RecordPreview _recordPreview = new();   // held notes of a recording MIDI take (#56)
     private MeterBar? _masterMeter;
     private MidiLearnService? _learn;
     /// <summary>The MIDI-learn service, so secondary windows can host their own learn glass.</summary>
@@ -73,11 +74,11 @@ public partial class MainWindow : Window
     // Remembered detail-panel height once the user drags the splitter, so reopening the
     // panel keeps their size instead of snapping back to the per-mode default. 0 = unset.
     private double _detailHeight;
-    private double _lastSetDetailHeight;
     // True while the detail panel (Devices/Clip) was the last area the user interacted
     // with — Tab then toggles between the two tabs.
     private bool _detailWasLastFocused;
     private bool _trackHeadersFocused;
+    private bool _tempoRefreshPosted;
 
     private IAudioEngine Engine => _vm!.Engine;
 
@@ -252,7 +253,11 @@ public partial class MainWindow : Window
 
         vm.Transport.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(vm.Transport.Bpm)) bpmField.Value = (double)vm.Transport.Bpm;
+            if (e.PropertyName == nameof(vm.Transport.Bpm))
+            {
+                bpmField.Value = (double)vm.Transport.Bpm;
+                RequestTempoRefresh();   // un-warped audio clips change beat length with the tempo
+            }
             // Opening a project restores the master gain on the view model; move the fader
             // with it so the handle and the dB readout beside it never disagree. Skipped
             // mid-drag, where the fader is the one driving.
@@ -291,14 +296,26 @@ public partial class MainWindow : Window
             if (_audioEditor is { IsEffectivelyVisible: true })
                 _audioEditor.OnPlayhead(beats, vm.Engine.IsPlaying);       // live clip playback cursor
             // Piano-roll playback cursor: map the global beat to clip-local time for the
-            // open arrangement MIDI clip (session slots run their own clock → skipped).
-            if (_clipEditor is { IsEffectivelyVisible: true } && _editorRoll is not null
-                && _editorTrackId > 0 && Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
-                _editorRoll.SetPlayhead(beats - pci.StartBeat, vm.Engine.IsPlaying);
-            // Same for the Drum Rack step grid (Session slots run their own clock → skipped).
-            if (_patternView is { IsEffectivelyVisible: true } && _patternTrackId > 0 && _patternScene < 0
-                && Engine.TryGetClipInfo(_patternTrackId, _patternClipIndex, out var ppi) && ppi.IsMidi)
-                _patternView.SetPlayhead(beats - ppi.StartBeat, vm.Engine.IsPlaying);
+            // open arrangement MIDI clip, shown stopped too, where play will start (#50); a
+            // session slot runs its own loop clock, so follow the slot's position instead (#137).
+            if (_clipEditor is { IsEffectivelyVisible: true } && _editorRoll is not null)
+            {
+                if (_editorTrackId > 0)
+                {
+                    if (Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
+                        _editorRoll.SetPlayhead(beats - pci.StartBeat, true);
+                }
+                else if (_sessionSlotTrack > 0 && _sessionSlotScene >= 0)
+                    _editorRoll.SetPlayhead(SessionSlotPlayhead(_sessionSlotTrack, _sessionSlotScene), true);
+            }
+            // Same for the Drum Rack step grid.
+            if (_patternView is { IsEffectivelyVisible: true } && _patternTrackId > 0)
+            {
+                if (_patternScene >= 0)
+                    _patternView.SetPlayhead(SessionSlotPlayhead(_patternTrackId, _patternScene), true);
+                else if (Engine.TryGetClipInfo(_patternTrackId, _patternClipIndex, out var ppi) && ppi.IsMidi)
+                    _patternView.SetPlayhead(beats - ppi.StartBeat, vm.Engine.IsPlaying);
+            }
 
             double load = Math.Clamp(vm.Engine.CpuLoad, 0, 1);         // live DSP load (Phase 11)
             int pct = (int)Math.Round(load * 100);
@@ -315,11 +332,29 @@ public partial class MainWindow : Window
         // Recording tick fires ~60 Hz: refresh clip data + lane drawing only, WITHOUT
         // rebuilding the header cards — otherwise the input combobox and any open track/
         // clip context menu are torn down every frame and can't be used while recording.
-        vm.RecordingTick += () => { Timeline.Refresh(rebuildHeaders: false); ReloadEditorNotes(); };
+        // The live-recording preview (#56) reads the held notes first, so the lanes, the piano
+        // roll and the Session slot all draw the same frame of the growing take.
+        Timeline.RecordPreview = _recordPreview;
+        vm.RecordingTick += () =>
+        {
+            _recordPreview.Update(vm.Engine);
+            Timeline.Refresh(rebuildHeaders: false);
+            ReloadEditorNotes();
+        };
+        // The take ended: drop the preview and redraw once so no growing note lingers.
+        vm.PlayheadUpdated += _ =>
+        {
+            if (!_recordPreview.Active || vm.Engine.IsRecording) return;
+            _recordPreview.Clear();
+            Timeline.Refresh(rebuildHeaders: false);
+            ReloadEditorNotes();
+        };
         // Hit Record with nothing armed → auto-arm the selected/last track (M-fix).
         vm.Transport.RecordArmTarget = () => Timeline.RecordArmTarget();
         vm.Transport.SelectionLoopRange = () => Timeline.SelectionLoopRange();
         vm.Transport.TracksChanged += () => { Timeline.Refresh(); ReloadEditorNotes(); };
+        Timeline.FollowSuspendedChanged -= OnFollowSuspendedChanged;
+        Timeline.FollowSuspendedChanged += OnFollowSuspendedChanged;
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
 
         Browser.CollapsedChanged += OnBrowserCollapsedChanged;
@@ -327,7 +362,20 @@ public partial class MainWindow : Window
         // Arrangement view options (View menu) persist the same way.
         Timeline.ClipLabels = (ClipLabelMode)Math.Clamp(vm.Settings.Current.ArrangementClipLabels, 0, 2);
         Timeline.ShowSections = vm.Settings.Current.ArrangementShowSections;
+        // The piano roll's note audition (speaker chip) persists too.
+        PianoRollView.AuditionEnabled = vm.Settings.Current.PianoRollAudition;
+        PianoRollView.AuditionToggled -= OnAuditionToggled;
+        PianoRollView.AuditionToggled += OnAuditionToggled;
         vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
+        vm.Transport.LoopRecordReplace = vm.Settings.Current.LoopRecordReplace;
+        vm.Transport.PropertyChanged += (_, e) =>
+        {
+            // The loop record mode is an app preference: every switch (toggle, ⌘⇧R, menu, MCP) persists.
+            if (e.PropertyName != nameof(vm.Transport.LoopRecordReplace)
+                || vm.Settings.Current.LoopRecordReplace == vm.Transport.LoopRecordReplace) return;
+            vm.Settings.Current.LoopRecordReplace = vm.Transport.LoopRecordReplace;
+            vm.Settings.Save();
+        };
         Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
         InitSnapGrid();
         // Settings → Appearance can switch the waveform style while the arrangement is open.
@@ -366,6 +414,7 @@ public partial class MainWindow : Window
             GetMasterVolume = () => (float)vm.Transport.MasterVolume,
             SetMasterVolume = v => vm.Transport.MasterVolume = v,
             GetTempo = () => ((double)vm.Transport.Bpm, vm.Transport.TimeSigNumerator, vm.Transport.TimeSigDenominator),
+            RecordPreview = _recordPreview,
         };
         _session.SlotEditRequested += OpenSessionClipEditor;
         _session.ItemDropped += OnSessionDrop;                        // browser drag & drop (M7-5)
@@ -427,14 +476,15 @@ public partial class MainWindow : Window
 
         // Remember the detail panel's height once the user drags the splitter — but only
         // on the Clip tab. The Devices tab keeps its natural card-fitting height, so its
-        // drags aren't persisted (a programmatic set matches _lastSetDetailHeight and is
-        // ignored; only a real drag differs).
-        DetailPanel.SizeChanged += (_, e) =>
+        // drags aren't persisted. Only a finished splitter drag counts, and it stores the
+        // row's height (what ShowDetail sets), not the panel's: the panel sits 1px inside its
+        // row, and at fractional display scaling every re-show used to be recorded as a
+        // slightly shorter "drag", so the Clip tab shrank on each clip click (#53).
+        DetailSplitter.DragCompleted += (_, _) =>
         {
             bool clipActive = DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView;
-            if (clipActive && DetailPanel.IsVisible && e.NewSize.Height > 120
-                && Math.Abs(e.NewSize.Height - _lastSetDetailHeight) > 1.0)
-                _detailHeight = e.NewSize.Height;
+            double h = BodyGrid.RowDefinitions[2].ActualHeight;
+            if (clipActive && DetailPanel.IsVisible && h > 120) _detailHeight = h;
         };
 
         // Track whether the detail panel was the last area the user clicked into, so Tab
@@ -458,6 +508,10 @@ public partial class MainWindow : Window
 
         // Clicking away from a text field (browser search, rename boxes…) hands the keyboard back.
         ReleaseTextFocusOnOutsidePress(this);
+
+        // Status bar: the installed version opens its release notes (#127).
+        VersionText.Text = $"v{AppInfo.Version}";
+        VersionButton.Click += (_, _) => ShowWhatsNew();
 
         Closed += (_, _) => vm.Dispose();
         SetUpCpuTip(vm.Engine);
@@ -530,6 +584,17 @@ public partial class MainWindow : Window
 
     }
 
+    /// <summary>A tempo change moves the beat length of every un-warped audio clip (its
+    /// seconds are fixed), but the arrangement only re-reads clip lengths on Refresh. A
+    /// BPM drag raises many changes a second, so coalesce them to one live refresh (clip
+    /// data + lanes, headers untouched) after the current batch.</summary>
+    private void RequestTempoRefresh()
+    {
+        if (_tempoRefreshPosted) return;
+        _tempoRefreshPosted = true;
+        Dispatcher.UIThread.Post(() => { _tempoRefreshPosted = false; Timeline.Refresh(rebuildHeaders: false); }, DispatcherPriority.Background);
+    }
+
     private void OnAddInstrumentClicked(object? sender, RoutedEventArgs e) => AddTrack(NewTrackKind.Instrument);
     private void OnAddAudioClicked(object? sender, RoutedEventArgs e) => AddTrack(NewTrackKind.Audio);
 
@@ -543,7 +608,7 @@ public partial class MainWindow : Window
         Engine.BeginUndoGroup();
         try
         {
-            trackId = kind == NewTrackKind.Instrument ? Engine.AddInstrumentTrack() : Engine.AddAudioTrack();
+            trackId = kind == NewTrackKind.Instrument ? Engine.AddVoltSynthTrack() : Engine.AddAudioTrack();
             if (kind == NewTrackKind.Instrument) Engine.AddMidiClip(trackId, 0.0, 4.0);
             Timeline.PlaceNewTrack(trackId, anchorTrackId);
         }
@@ -736,7 +801,12 @@ public partial class MainWindow : Window
 
     // Follow: keep the arrangement scrolling with the playhead during playback. The bar
     // button and View ▸ Follow playhead are two faces of one state, so both land here.
-    private void OnToggleFollow(object? sender, RoutedEventArgs e) => SetFollowPlayhead(FollowBtn.IsChecked == true);
+    // A click on a paused Follow picks it up again rather than turning it off.
+    private void OnToggleFollow(object? sender, RoutedEventArgs e)
+    {
+        if (Timeline.FollowSuspended && FollowBtn.IsChecked != true) FollowBtn.IsChecked = true;
+        SetFollowPlayhead(FollowBtn.IsChecked == true);
+    }
 
     internal void SetFollowPlayhead(bool on)
     {
@@ -751,6 +821,35 @@ public partial class MainWindow : Window
     }
 
     private NativeMenuItem? _followMenuItem;
+
+    private void OnAuditionToggled()
+    {
+        if (_vm is null) return;
+        _vm.Settings.Current.PianoRollAudition = PianoRollView.AuditionEnabled;
+        _vm.Settings.Save();
+        _vm.StatusText = PianoRollView.AuditionEnabled ? "Note audition on" : "Note audition off";
+    }
+
+    // Show playhead (#105, P / View menu / the ruler's off-screen arrow): a one-shot scroll
+    // to the playhead that also picks up a paused Follow.
+    private void ShowPlayhead()
+    {
+        bool resumed = Timeline.FollowPlayhead && Timeline.FollowSuspended;
+        Timeline.RevealPlayhead();
+        if (_vm is not null && resumed) _vm.StatusText = "Following the playhead";
+    }
+
+    // Follow pauses when the lanes are scrolled away during playback (#105); the Follow
+    // button dims to say so and the status bar says how to pick it up again.
+    private void OnFollowSuspendedChanged()
+    {
+        bool paused = Timeline.FollowSuspended;
+        FollowBtn.Classes.Set("paused", paused);
+        ToolTip.SetTip(FollowBtn, paused
+            ? "Follow is paused while you look elsewhere · P or a click here picks it up again"
+            : "Scroll the arrangement to keep the playhead in view");
+        if (paused && _vm is not null) _vm.StatusText = "Follow paused · press P to go back to the playhead";
+    }
 
     private static NativeMenuItem? FindMenuItem(NativeMenu? menu, string header)
     {
