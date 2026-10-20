@@ -262,6 +262,15 @@ track count and closes with Escape.
   - A MIDI clip trimmed in the arrangement mutes note tails at its boundary.
   - Live edits (moving a note, changing its length) reach the engine immediately, and a
     whole drag is a single undo step.
+  - **Several clips at once**: double-click one of two or more selected MIDI clips (one
+    track or several), or right-click → **Edit selected clips together** (also in the
+    command palette), to open them together on the arrangement's bars. Selecting, moving,
+    transposing, quantizing, deleting and clip tools work across clips, one undo for the
+    whole edit; a note moved past the seam into the next open clip of its track moves into
+    that clip. A **clip strip** under the ruler shows the open clips: click one to make it
+    the active clip (header, inspector and envelopes follow it; new notes go into it), or
+    click its lock to keep it as a dimmed, read-only reference. The set stays as opened
+    while the arrangement selection changes.
 - **Clip tools (generate and transform)**: a **Tools** rail beside the piano roll with
   fifteen tools that write or rewrite notes. Six **generators** — *Rhythm* (a pattern that
   leans on the strong beats), *Seed* (learns the clip's own intervals and rhythm, then
@@ -273,7 +282,9 @@ track count and closes with Escape.
     before deciding — and **Apply** keeps it as a single undo step. Backing out leaves no
     trace in the history.
   - A selection scopes the tool to those notes; with nothing selected it works the whole
-    clip. Output can **replace** what it was given or be **added** on top.
+    clip. Output can **replace** what it was given or be **added** on top. With several
+    clips open, the tool runs on each clip that has selected notes (or the active clip),
+    and what it writes stays in that clip.
   - Everything is **seeded**, so a result is repeatable and "New seed" re-rolls it.
   - Tools that think in pitch follow the roll's **Set Scale** key, so what they write
     stays in key.

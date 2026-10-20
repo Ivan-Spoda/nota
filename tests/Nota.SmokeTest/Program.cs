@@ -288,6 +288,14 @@ if (args.Length >= 1 && args[0] == "--notes")
     Console.WriteLine(failures == 0 ? "NOTES PASSED" : $"NOTES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Several clips in one Clip editor alone: `--multiclip`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--multiclip")
+{
+    Console.WriteLine("-- multi-clip editing --");
+    foreach (var (ok, label) in MultiClipTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MULTICLIP PASSED" : $"MULTICLIP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Default project template alone: `--template`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--template")
 {
@@ -14937,6 +14945,9 @@ foreach (var (ok, label) in SnapGridTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- note editing --");
 foreach (var (ok, label) in NoteEditingTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- multi-clip editing --");
+foreach (var (ok, label) in MultiClipTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- default project template --");
 foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);

@@ -1209,6 +1209,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag velocity stem", "Set velocity · selected notes move together · ⇧ adds a note"),
             ("Drag in the Bend / Pres / Slide lane", "Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it"),
             ("Double-click in an MPE lane", "Add a point · on a point, delete it · right-click to clear the curve"),
+            ("Click a clip in the clip strip", "Make it the active clip (several clips open) · its lock keeps it as a read-only reference"),
             ("⌘⌥ + wheel", "Zoom rows (vertical zoom)"),
             ("Click a key", "Play it on the track's instrument · ⇧-drag glides through the keys · ⌘-click selects every note of that pitch"),
             ("Drag on the keys", "Zoom rows · down taller, up shorter"),
@@ -1242,7 +1243,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         ("Mouse", new[]
         {
-            ("Double-click clip", "Open in the clip editor"),
+            ("Double-click clip", "Open in the clip editor · on one of several selected MIDI clips, open them all together"),
             ("Double-click a browser instrument", "Swap it onto the selected instrument track · clips and effects stay · no track selected starts one"),
             ("⌥ + double-click a browser instrument", "Always start a new track with it"),
             ("Right-click the metronome", "Count-in before Play / Record: off · 1 · 2 · 4 bars"),

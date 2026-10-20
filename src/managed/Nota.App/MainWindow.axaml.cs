@@ -201,6 +201,7 @@ public partial class MainWindow : Window
         Timeline.FreezeTracksMenuItems = BuildTracksFreezeMenu;   // multi-track menu: Freeze / Unfreeze all
         Timeline.RefreshStarting = PruneFreezeLinks;       // drop links to deleted / undone tracks
         Timeline.MidiClipActivated += OpenClipEditor;
+        Timeline.EditSelectedClipsRequested += () => EditSelectedClips();
         Timeline.AudioClipActivated += OpenAudioClipEditor;
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)
         Timeline.SampleToInstrument += (item, t) => { DropBrowserItem(item, t); Timeline.Select(t, -1); };   // audio clip → Grain / Drum Rack / Sampler… (that track becomes the selection)
@@ -307,8 +308,9 @@ public partial class MainWindow : Window
             {
                 if (_editorTrackId > 0)
                 {
+                    // Editor beats count from the open clips' origin (the clip's start for one).
                     if (Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
-                        _editorRoll.SetPlayhead(beats - pci.StartBeat, true);
+                        _editorRoll.SetPlayhead(beats - _editorRoll.Origin, true);
                 }
                 else if (_sessionSlotTrack > 0 && _sessionSlotScene >= 0)
                     _editorRoll.SetPlayhead(SessionSlotPlayhead(_sessionSlotTrack, _sessionSlotScene), true);

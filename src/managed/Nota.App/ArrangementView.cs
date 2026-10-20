@@ -228,6 +228,8 @@ public sealed partial class ArrangementView : UserControl
 
     /// <summary>Raised when a MIDI clip is double-clicked (trackId, clipIndex).</summary>
     public event Action<int, int>? MidiClipActivated;
+    /// <summary>"Edit selected clips together" from a clip's context menu (specs/029).</summary>
+    public event Action? EditSelectedClipsRequested;
     /// <summary>Raised when an audio clip is double-clicked (trackId, clipIndex).</summary>
     public event Action<int, int>? AudioClipActivated;
     /// <summary>Raised when a track becomes selected (clip or header click).</summary>
@@ -1122,6 +1124,35 @@ public sealed partial class ArrangementView : UserControl
 
         // Plain vertical wheel / trackpad → let the enclosing ScrollViewer scroll the tracks
         // vertically (don't handle, so the event bubbles up to it).
+    }
+
+    // The multi-selection a click just narrowed down to one clip, kept for the double-click
+    // that click may be the first half of (specs/029).
+    private (int Track, int Clip, (int, int)[] Before)? _narrowed;
+
+    internal void RememberNarrowed(int trackId, int clipIndex, bool wasSelected)
+        => _narrowed = wasSelected && _sel.Count > 1 ? (trackId, clipIndex, _sel.ToArray()) : null;
+
+    /// <summary>A double-click on the clip a click just narrowed the selection to: put the
+    /// selection back, so the clips open together.</summary>
+    internal void RestoreNarrowed(int trackId, int clipIndex)
+    {
+        if (_narrowed is { } n && n.Track == trackId && n.Clip == clipIndex && _sel.Count == 1 && _sel.Contains((trackId, clipIndex)))
+        {
+            SetSelection(n.Before);
+            SelTrackId = trackId; SelClipIndex = clipIndex;
+        }
+        _narrowed = null;
+    }
+
+    /// <summary>The selected MIDI clips, ordered by start then track order (specs/029).</summary>
+    public IReadOnlyList<(int TrackId, int ClipIndex)> SelectedMidiClips()
+    {
+        var list = new List<(int, int, double, int)>();
+        for (int r = 0; r < _tracks.Count; r++)
+            foreach (var c in _tracks[r].Clips)
+                if (c.IsMidi && _sel.Contains((_tracks[r].Id, c.ClipIndex))) list.Add((_tracks[r].Id, c.ClipIndex, c.StartBeat, r));
+        return list.OrderBy(x => x.Item3).ThenBy(x => x.Item4).Select(x => (x.Item1, x.Item2)).ToList();
     }
 
     internal void OnClipDoubleClicked(int trackId, int clipIndex, bool isMidi)
