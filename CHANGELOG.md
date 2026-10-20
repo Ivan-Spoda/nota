@@ -48,6 +48,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   is kept for the next launch. Text stays sharp at every size. The timeline, piano roll and
   audio editor zoom as before, on top of the scale. Pick 125 % or more when the text is too
   small to read on a laptop screen, or 75 % to fit more tracks on a small one.
+- **Nota tells you about updates wherever you are** (nota-daw/nota#58). It used to look for a
+  new version only on the start screen, so it was easy to miss. Now:
+  - It checks on every launch and once a day while it runs, and shows a new version in the
+    status bar beside the version number: click it to **Update** or read the release notes.
+    The download's progress and **Restart to update** show there too.
+  - **Help → Check for updates…** (on macOS also in the **Nota** menu) checks right away and
+    says so when you're up to date or GitHub can't be reached.
+  - **Settings → Updates** can turn the automatic checks off, and shows the last check with a
+    **Check now** button. Nothing downloads until you click Update.
 
 ### Fixed
 - **⌘D in the piano roll no longer piles copies at the clip's end** when the selection is
