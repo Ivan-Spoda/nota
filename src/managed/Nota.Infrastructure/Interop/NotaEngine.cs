@@ -238,6 +238,16 @@ public sealed partial class NotaEngine : IAudioEngine
     }
 
     /// <summary>
+    /// Renders one block the way the audio device callback does (real-time deadline), without
+    /// a device — for tests that pace blocks like a callback. Device must be stopped.
+    /// </summary>
+    public void RenderDeviceBlock(float[] outBuffer, int frames)
+    {
+        ThrowIfDisposed();
+        Check(NativeMethods.RenderDeviceBlock(_handle, outBuffer, frames));
+    }
+
+    /// <summary>
     /// Renders `frames` of interleaved stereo at <paramref name="sampleRate"/> (WAV export, M6-4).
     /// Stop the audio backend first — this mutates transport state the audio thread reads.
     /// </summary>
@@ -297,6 +307,20 @@ public sealed partial class NotaEngine : IAudioEngine
     /// <summary>Smoothed real-time DSP load, 0..1 (render time / block budget).</summary>
     public float CpuLoad
     { get { ThrowIfDisposed(); return NativeMethods.CpuLoad(_handle); } }
+
+    /// <summary>
+    /// Dedicated parallel render threads (the audio thread helps too). Set while the device
+    /// is stopped: a negative count restores the default, 0 renders on the audio thread alone.
+    /// </summary>
+    public int RenderThreads
+    {
+        get { ThrowIfDisposed(); return NativeMethods.RenderThreads(_handle); }
+        set { ThrowIfDisposed(); Check(NativeMethods.SetRenderThreads(_handle, value)); }
+    }
+
+    /// <summary>CPU time the render threads have used, summed, in seconds (≈ constant while idle).</summary>
+    public double RenderThreadsCpuSeconds
+    { get { ThrowIfDisposed(); return NativeMethods.RenderThreadsCpuSeconds(_handle); } }
 
     public void Dispose()
     {

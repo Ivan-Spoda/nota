@@ -131,6 +131,16 @@ int32_t nota_engine_xrun_selftest(NotaEngine* e) {
 float nota_engine_cpu_load(const NotaEngine* e) {
     return e ? CENG(e)->cpuLoad() : 0.0f;
 }
+NotaResult nota_engine_set_render_threads(NotaEngine* e, int32_t count) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setRenderThreads(count) ? NOTA_OK : NOTA_ERR_ALREADY_RUNNING;
+}
+int32_t nota_engine_render_threads(const NotaEngine* e) {
+    return e ? CENG(e)->renderThreads() : 0;
+}
+double nota_engine_render_threads_cpu_seconds(const NotaEngine* e) {
+    return e ? CENG(e)->renderThreadsCpuSeconds() : 0.0;
+}
 
 // ---- Transport ------------------------------------------------------------
 
@@ -427,6 +437,13 @@ NotaResult nota_engine_master_meter(const NotaEngine* e, NotaMeter* out) {
 NotaResult nota_engine_render_offline(NotaEngine* e, float* out, int32_t frames) {
     if (!e || !out || frames <= 0) return NOTA_ERR_INVALID_ARG;
     ENG(e)->renderOffline(out, frames);
+    return NOTA_OK;
+}
+
+NotaResult nota_engine_render_device_block(NotaEngine* e, float* out, int32_t frames) {
+    if (!e || !out || frames <= 0) return NOTA_ERR_INVALID_ARG;
+    if (ENG(e)->isRunning()) return NOTA_ERR_ALREADY_RUNNING; // the device renders itself
+    ENG(e)->renderDeviceBlock(out, frames);
     return NOTA_OK;
 }
 

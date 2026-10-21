@@ -461,6 +461,16 @@ NOTA_API int32_t nota_engine_automation_overridden(const NotaEngine* engine);
  * 0 when no live device is running. */
 NOTA_API float nota_engine_cpu_load(const NotaEngine* engine);
 
+/* ---- Render threads -------------------------------------------------------
+ * Dedicated threads that render tracks in parallel (the audio thread helps too).
+ * set: count < 0 = the default (hardware threads - 1, capped), 0 = render on the audio
+ * thread alone. Only while the audio device is stopped: NOTA_ERR_ALREADY_RUNNING
+ * otherwise. cpu_seconds: CPU time those threads have used, summed (per-thread OS
+ * clocks) - near zero while nothing renders. Diagnostics and performance tests. */
+NOTA_API NotaResult nota_engine_set_render_threads(NotaEngine* engine, int32_t count);
+NOTA_API int32_t    nota_engine_render_threads(const NotaEngine* engine);
+NOTA_API double     nota_engine_render_threads_cpu_seconds(const NotaEngine* engine);
+
 /* ---- Transport (M1) ------------------------------------------------------ */
 NOTA_API NotaResult nota_transport_play(NotaEngine* engine);
 NOTA_API NotaResult nota_transport_stop(NotaEngine* engine);
@@ -1744,6 +1754,13 @@ NOTA_API NotaResult nota_engine_render_offline(NotaEngine* engine, float* out, i
  * calling — otherwise the audio thread and this call race on transport state. */
 NOTA_API NotaResult nota_engine_render_offline_at(NotaEngine* engine, float* out,
                                                   int32_t frames, double sampleRate);
+
+/* Renders one block exactly as the audio device callback does (a real-time deadline, not
+ * a bounce: the render threads join only when one thread can't keep up), without a
+ * device. For tests and benchmarks that pace blocks like a callback; call
+ * nota_engine_render_offline_at once first to prepare the nodes at a rate. The device
+ * must be stopped (NOTA_ERR_ALREADY_RUNNING otherwise). */
+NOTA_API NotaResult nota_engine_render_device_block(NotaEngine* engine, float* out, int32_t frames);
 
 /* ---- Audio file encoders (export) -----------------------------------------
  * Streaming FLAC / MP3 writers behind the same ABI as the offline render above:
