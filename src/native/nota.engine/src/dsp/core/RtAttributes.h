@@ -54,6 +54,9 @@ inline constexpr std::size_t kCacheLineSize = 64;
 #if !defined(NOTA_CPU_PAUSE)
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #define NOTA_CPU_PAUSE() _mm_pause()
+#elif defined(_M_ARM64) && defined(_MSC_VER) && !defined(__clang__)
+#include <intrin.h>
+#define NOTA_CPU_PAUSE() __isb(_ARM64_BARRIER_SY)
 #elif defined(__aarch64__) || defined(_M_ARM64)
 #define NOTA_CPU_PAUSE() __asm__ volatile("isb sy" : : : "memory")
 #else

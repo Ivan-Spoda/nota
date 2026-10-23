@@ -44,6 +44,9 @@
 
 #if defined(NOTA_ARCH_X86)
 #define NOTA_CPU_PAUSE() _mm_pause()
+#elif defined(_M_ARM64) && defined(_MSC_VER) && !defined(__clang__)
+#include <intrin.h>
+#define NOTA_CPU_PAUSE() __isb(_ARM64_BARRIER_SY)
 #elif defined(NOTA_ARCH_ARM)
 #define NOTA_CPU_PAUSE() __asm__ volatile("isb sy" : : : "memory")
 #else
