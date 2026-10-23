@@ -102,8 +102,21 @@ public partial class MainWindow : Window
             ExtendClientAreaToDecorationsHint = true;
             ExtendClientAreaTitleBarHeightHint = 32;
         }
+        // The whole window sits under the interface scale (spec 027); the OS window buttons
+        // stay system-size, so the room kept for them is fixed on screen: the macOS traffic
+        // lights' 78px corner, and on Windows the caption buttons over the right edge
+        // (3 × ~46px ≈ 142px, rounded up a touch). Linux hides the bar.
+        var root = (Control)Content!;
+        Content = null;
+        Content = NotaUiScale.Wrap(this, root, OperatingSystem.IsLinux() ? 0 : 32);
+        NotaUiScale.Track(TitleBarRow, s =>
+        {
+            if (OperatingSystem.IsMacOS()) TitleBarRow.ColumnDefinitions[0].Width = new GridLength(78 / s);
+            else if (OperatingSystem.IsWindows()) TitleBarRow.Margin = new Thickness(0, 0, 180 / s, 0);
+        });
         DataContextChanged += OnDataContextChanged;
         BuildDownloadIndicator();
+        BuildUpdateIndicator();
         InitTransportFit();
         // Platform-specific window icon: Windows/Linux get the .ico bundle from
         // assets/icons/windows so the taskbar / alt-tab shows the brand mark. macOS
@@ -111,13 +124,6 @@ public partial class MainWindow : Window
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
             Icon = new WindowIcon(Avalonia.Platform.AssetLoader.Open(new Uri("avares://Nota.App/Assets/nota.ico")));
-            // On Windows the native caption buttons (minimise/maximise/close) overlay
-            // the right edge of the extended title bar. Reserve room so the centred doc
-            // title (and anything else in that corner) never sits under them.
-            // 3 buttons × ~46px wide ≈ 142px; round up a touch. (Linux hides the bar,
-            // so this only applies to Windows.)
-            if (OperatingSystem.IsWindows())
-                TitleBarRow.Margin = new Thickness(0, 0, 180, 0);
         }
     }
 
@@ -196,6 +202,8 @@ public partial class MainWindow : Window
         Timeline.FreezeTracksMenuItems = BuildTracksFreezeMenu;   // multi-track menu: Freeze / Unfreeze all
         Timeline.RefreshStarting = PruneFreezeLinks;       // drop links to deleted / undone tracks
         Timeline.MidiClipActivated += OpenClipEditor;
+        Timeline.EditSelectedClipsRequested += () => EditSelectedClips();
+        Timeline.ClipSelectionChanged += FollowClipSelection;
         Timeline.AudioClipActivated += OpenAudioClipEditor;
         Timeline.ItemDropped += OnArrangementDrop;   // browser drag & drop (M7-5)
         Timeline.SampleToInstrument += (item, t) => { DropBrowserItem(item, t); Timeline.Select(t, -1); };   // audio clip → Grain / Drum Rack / Sampler… (that track becomes the selection)
@@ -222,12 +230,14 @@ public partial class MainWindow : Window
 
         // Thin master volume fader (mockup 1b) — MiniFader instead of a stock Slider. It
         // sits over the master meter inside the MST module, with the gain printed in dB.
-        var masterVol = new MiniFader((double)vm.Transport.MasterVolume, 1.5);
+        var masterVol = new MiniFader((double)vm.Transport.MasterVolume, 1.5) { Default = 1.0 };
         var masterUndo = new MixGesture(vm.Engine, MixTarget.Master);   // one undo step per drag (specs/009)
         masterVol.GestureBegin += masterUndo.Begin;
         masterVol.GestureEnd += masterUndo.End;
         Action<double> setMaster = v => vm.Transport.MasterVolume = v;
         masterVol.ValueChanged += v => masterUndo.Change(v, setMaster);
+        // Double-click the fader or its dB number to type the master gain, ⌥-click for 0 dB.
+        ValueEntry.Attach(masterVol, masterVol.EntryField("Master volume", v => NotaNum.GainDb(v)), MasterDb);
         MasterVolHost.Children.Add(masterVol);
         MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");
 
@@ -266,7 +276,10 @@ public partial class MainWindow : Window
             else if (e.PropertyName == nameof(vm.Transport.TimeSigNumerator)) tsNum.Value = vm.Transport.TimeSigNumerator;
             else if (e.PropertyName == nameof(vm.Transport.TimeSigDenominator)) tsDen.Value = vm.Transport.TimeSigDenominator;
             else if (e.PropertyName == nameof(vm.Transport.KeyCode)) ShowProjectKey();
+            // Every ruler reads in the read-out's unit, bars or time (#275).
+            else if (e.PropertyName == nameof(vm.Transport.ShowTimeDisplay)) RulerDisplay.Set(vm.Transport.ShowTimeDisplay);
         };
+        RulerDisplay.Set(vm.Transport.ShowTimeDisplay);
 
         var cpuGreen = (IBrush?)NotaPalette.Success;
         var cpuAmber = (IBrush?)NotaPalette.Warning;
@@ -302,8 +315,9 @@ public partial class MainWindow : Window
             {
                 if (_editorTrackId > 0)
                 {
+                    // Editor beats count from the open clips' origin (the clip's start for one).
                     if (Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
-                        _editorRoll.SetPlayhead(beats - pci.StartBeat, true);
+                        _editorRoll.SetPlayhead(beats - _editorRoll.Origin, true);
                 }
                 else if (_sessionSlotTrack > 0 && _sessionSlotScene >= 0)
                     _editorRoll.SetPlayhead(SessionSlotPlayhead(_sessionSlotTrack, _sessionSlotScene), true);
@@ -393,17 +407,20 @@ public partial class MainWindow : Window
         Browser.RevealRequested += OnBrowserReveal;
         Browser.CreateMultisampleRequested += item => OpenMosaicCreate(new[] { item.Path }, -1);
         Browser.DeleteProjectRequested += OnBrowserDeleteProject;
+        Browser.DeletePresetRequested += OnBrowserDeletePreset;
+        Browser.OpenPresetsFolderRequested += OnBrowserOpenPresetsFolder;
         Browser.EditTagsRequested += OnBrowserEditTags;
 
         _deviceChain = new DeviceChainView(vm.Engine, _factory, App.Services.GetService<IPluginCatalog>(), _kits, App.Services.GetService<IMosaicPacks>());
         InitMosaic();
         // A pad added / removed / renamed in the Drum Rack card changes the pattern grid's rows.
-        _deviceChain.Changed += () => { Timeline.Refresh(); _patternView?.Reload(); if (_modular?.IsVisible == true) _modular.Refresh(); };
+        _deviceChain.Changed += () => { Timeline.Refresh(); _patternView?.Reload(); SyncClipTab(); if (_modular?.IsVisible == true) _modular.Refresh(); };
         _deviceChain.DevicesRemapped += Timeline.RemapAutoTargets;
         _deviceChain.PresetSaveRequested += OnSavePreset;
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;
         _deviceChain.ItemDropped += OnDevicePanelDrop;   // browser drag onto the device panel
         _deviceChain.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };
+        _deviceChain.AddDeviceRequested += Browser.FocusEffectSearch;   // the chain's "+" (#97)
         Timeline.TrackSelected += OnTrackSelected;
         Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
         Timeline.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // automation-follow hints etc.
@@ -426,6 +443,7 @@ public partial class MainWindow : Window
             if (kind == NewTrackKind.Return) OnAddReturnClicked(this, new RoutedEventArgs());
             else AddTrack(kind, anchor);
         };
+        HookRecentInstruments();   // "Add track ▸ Recent" in both views' menus
         // Selecting a slot selects its track everywhere: devices below, arrangement header.
         _session.SlotSelected += (trackId, _) => Timeline.Select(trackId, -1);
         Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
@@ -613,6 +631,7 @@ public partial class MainWindow : Window
             Timeline.PlaceNewTrack(trackId, anchorTrackId);
         }
         finally { Engine.EndUndoGroup(); }
+        if (kind == NewTrackKind.Instrument) RecordTrackInstrument(trackId);
         Timeline.Refresh();
         Timeline.RevealTrack(trackId);   // scrolled into view, not left below the pinned returns
         if (anchorTrackId > 0) Timeline.Select(trackId, -1);   // show where it landed

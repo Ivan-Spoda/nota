@@ -253,6 +253,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_render_offline")]
     internal static partial NotaResult RenderOffline(IntPtr engine, [Out] float[] outBuffer, int frames);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_render_device_block")]
+    internal static partial NotaResult RenderDeviceBlock(IntPtr engine, [Out] float[] outBuffer, int frames);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_render_offline_at")]
     internal static partial NotaResult RenderOfflineAt(IntPtr engine, [Out] float[] outBuffer, int frames, double sampleRate);
 
@@ -288,4 +291,13 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_cpu_load")]
     internal static partial float CpuLoad(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_render_threads")]
+    internal static partial NotaResult SetRenderThreads(IntPtr engine, int count);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_render_threads")]
+    internal static partial int RenderThreads(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_render_threads_cpu_seconds")]
+    internal static partial double RenderThreadsCpuSeconds(IntPtr engine);
 }

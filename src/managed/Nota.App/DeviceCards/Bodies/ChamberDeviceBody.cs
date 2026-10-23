@@ -142,6 +142,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         {
             var val = Mono(fmt(P(p)), 7, TxtC);
             var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
+            knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(v); onChange?.Invoke(); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
@@ -324,19 +325,19 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                     if (irList[i].Cat != lastCat)
                     {
                         if (lastCat.Length > 0) fly.Items.Add(new Separator());
-                        fly.Items.Add(new MenuItem { Header = NotaText.Label(irList[i].Cat), IsEnabled = false, FontSize = 9 });
+                        fly.Items.Add(MenuKit.Caption(irList[i].Cat));
                         lastCat = irList[i].Cat;
                     }
                     int iv = i;
                     var mi = new MenuItem { Header = NotaNum.F($"{irList[i].Name}   {irList[i].Len}\u2009s") };
-                    if (i == cur) mi.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Amber };
+                    mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = i == cur;
                     mi.Click += (_, _) => SetP(IrSelect, iv / (float)(IrCount - 1));
                     fly.Items.Add(mi);
                 }
                 fly.Items.Add(new Separator());
                 string userName = engine.DeviceText(track, di, 2);
                 var um = new MenuItem { Header = userName.Length > 0 ? NotaNum.F($"User · {userName}") : "User IR (none loaded)", IsEnabled = userName.Length > 0 };
-                if (cur == IrCount - 1) um.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Amber };
+                um.ToggleType = MenuItemToggleType.Radio; um.IsChecked = cur == IrCount - 1;
                 um.Click += (_, _) => SetP(IrSelect, 1f);
                 fly.Items.Add(um);
                 var load = new MenuItem { Header = "Load impulse response…" };

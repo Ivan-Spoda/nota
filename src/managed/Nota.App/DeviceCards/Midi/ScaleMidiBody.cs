@@ -386,7 +386,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
                 {
                     int iv = sc;
                     var item = new MenuItem { Header = ScaleNames[sc] };
-                    if (Sc() == sc) item.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = NotaPalette.Accent };
+                    item.ToggleType = MenuItemToggleType.Radio; item.IsChecked = Sc() == sc;
                     item.Click += (_, _) => PickType(iv);
                     fly.Items.Add(item);
                 }
@@ -424,7 +424,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             {
                 if (!ev.GetCurrentPoint(valHit).Properties.IsLeftButtonPressed) return;
                 ev.Handled = true;
-                if (ev.ClickCount == 2) { Begin(p); Put(p == PRangeLo ? 0 : 127); End(p); return; }
+                if ((ev.ClickCount == 2 || (ev.KeyModifiers & KeyModifiers.Alt) != 0)) { Begin(p); Put(p == PRangeLo ? 0 : 127); End(p); return; }
                 drag = true; y0 = ev.GetPosition(valHit).Y; v0 = Get(); ev.Pointer.Capture(valHit); Begin(p);
             };
             valHit.PointerMoved += (_, ev) => { if (drag) Put(v0 + (int)Math.Round((y0 - ev.GetPosition(valHit).Y) / 4)); };

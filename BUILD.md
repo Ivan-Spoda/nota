@@ -16,15 +16,11 @@ Nota? Grab a ready build from [Releases](https://github.com/nota-daw/nota/releas
 - Avalonia templates, only if you are scaffolding new projects —
   `dotnet new install Avalonia.Templates`.
 
-## Submodules
+## Source dependencies (CPM)
 
-JUCE (plugin hosting) is a git submodule at `src/native/nota.engine/vendor/JUCE`; the native
-build fails without it. Clone with `git clone --recurse-submodules`, or initialize it in an
-existing checkout (and again after a pull that moves it):
-
-```bash
-git submodule update --init --recursive
-```
+All native third-party code (JUCE included) is fetched by CPM into the build
+dir — nothing is vendored or submoduled, so a plain `git clone` is enough.
+See "CMake dependencies (CPM)" below for the cache story.
 
 ## CMake dependencies (CPM)
 
@@ -47,6 +43,41 @@ and runs the smoke test.
 ```bash
 dotnet run --project src/managed/Nota.App
 ```
+
+## Performance gate
+
+`scripts/perf-gate.sh` checks that an engine change does not make Nota slower. It builds
+the engine at two commits, renders the same scenarios with both and compares the CPU
+instructions each render does, counted by Valgrind across every engine thread:
+
+- each built-in instrument on one track, and each built-in effect (its own share, eight
+  instances on a Synth track) — new devices are picked up automatically;
+- busy mixes of 1, 4, 8, 16 and 32 tracks (Volt + EQ-8 + Compressor + Auto Filter);
+- a sparse session (32 tracks, one in four playing) and a silent one (32 tracks, no clips).
+
+Instruction counts repeat exactly from run to run, unlike timings on shared CI machines,
+so any scenario more than 1% above the base fails. Some slowdowns add no instructions
+(denormals, cache misses, threads waiting on each other: EQ-8 in #212 ran 35% fewer
+instructions yet took 38% longer), so wall-clock time is checked too. Base and change are
+timed back to back over 5 rounds, and the fastest round of each is compared. A scenario
+more than 15% slower is re-timed with 10 more rounds, and fails only if it is still
+slower. A scenario that renders sound on the base but silence with the change fails too. `tests/perf/nota_idle_cpu` separately checks that an idle engine (created,
+transport stopped) stays under 5% of one core; it runs on macOS, Windows and Linux. Until #223 (idle
+worker threads spinning) is fixed, it reports a failure as a warning instead of failing CI.
+
+Linux only (Valgrind), with the Linux build requirements plus `valgrind` (and `ccache`
+to speed up the second build):
+
+```bash
+scripts/perf-gate.sh develop          # your working tree against develop
+scripts/perf-gate.sh 82babfe 64250a5  # any two commits
+```
+
+The report lands in `build/perf/report.md`. Knobs: `PERF_LIMIT_PCT` (default 1),
+`PERF_TIME_LIMIT_PCT` (default 15), `PERF_ROUNDS` (5), `PERF_CONFIRM_ROUNDS` (10),
+`PERF_SECONDS` (audio per scenario, default 1). The scenario harness is
+`tests/perf/nota_perf.cpp`; it uses only the public C ABI and is always taken from the
+newer commit, so both engines run the same scenarios.
 
 ## Stress test
 
@@ -71,8 +102,15 @@ before measuring, so a full run takes several minutes.
 ```
 src/native/nota.engine/        # C++ engine + C ABI (libnota_engine.dylib)
   include/nota/nota_engine.h   # the public boundary (C ABI)
-  src/                         # Engine, audio/MIDI backends, SPSC queue, DSP
+  src/                         # Engine core (Engine*.cpp), abi/, media/, audio_io/
+    devices/                   # base interfaces + effects/ instruments/ midi_fx/ racks/
+    engine/                    # Graph/Track/Transport/… + AudioThreadPool (.h/.cpp pairs)
+    dsp/core,math,primitives,poly/  # shared DSP building blocks
   pluginhost/                  # JUCE-based VST3/AU hosting (the only JUCE-aware module)
+    hosting/                   # play-head, editors, plugin devices (in nota_pluginhost)
+    scanner/                   # catalog, out-of-process scan (nota_pluginscanner INTERFACE)
+    scanner/worker/            # nota-scanworker sources
+    bridge/                    # the two bridge headers
 src/managed/Nota.Domain/       # pure domain types
 src/managed/Nota.Application/  # ports (interfaces) and use cases
 src/managed/Nota.Infrastructure/  # P/Invoke interop, .nota persistence, services
@@ -83,7 +121,12 @@ tests/Nota.SmokeTest/          # end-to-end check: C# -> C ABI -> engine -> audi
 ```
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for how these fit together and the rules that
-govern the boundary between them.
+govern the boundary between them. Native convention: every device, engine model
+class, and DSP block is a `.h`/`.cpp` pair (declaration header + implementation
+TU, AGPL SPDX header on each), so editing one `.cpp` recompiles one TU.
+`nota_pluginscanner` is an INTERFACE target whose translation units compile
+inside `nota_pluginhost` — a second STATIC JUCE library would duplicate ~11k
+symbols at link time.
 
 ## Building the parts by hand
 
@@ -108,7 +151,7 @@ translation units are not OOM-killed: `export CMAKE_BUILD_PARALLEL_LEVEL=2`.
 
 ### Nota Pentad as a standalone VST3 (optional)
 
-For checking the Pentad synth in another host, the same DSP (`src/Pentad.h`) also builds
+For checking the Pentad synth in another host, the same DSP (`src/devices/instruments/Pentad.h`/`.cpp`) also builds
 as a VST3 with JUCE's generic editor. It is off by default and not part of the app:
 
 ```bash
@@ -147,9 +190,9 @@ a single x64 host. An ARM64 build cannot be run on x64 — the smoke test is x64
 
 ### Platform details
 
-- Audio is **WASAPI** through vendored miniaudio (`vendor/miniaudio`); ASIO is not
+- Audio is **WASAPI** through miniaudio (fetched by CPM); ASIO is not
   supported yet.
-- MIDI input is **WinMM** through vendored RtMidi (`vendor/rtmidi`).
+- MIDI input is **WinMM** through RtMidi (fetched by CPM).
 - Plugin hosting is **VST3** (AU is macOS-only).
 - Settings, logs and projects are written to `%APPDATA%\Nota` (the counterpart of
   `~/Library/Application Support/Nota`).

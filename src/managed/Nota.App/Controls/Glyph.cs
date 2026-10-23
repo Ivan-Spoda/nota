@@ -35,7 +35,8 @@ internal enum GlyphKind
     Copy, Cut, Paste, Trash, Duplicate, Split, Consolidate, Stems, Reverse, Folder, Ungroup,
     Palette, Note, Input, Arrow, Grid, Select, Save, List, Compare, Flatten,
     // Path kinds (16-unit grid, see Paths)
-    Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Apple, Windows, Linux, ChainLink,
+    Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Apple, Windows, Linux, ChainLink, Update,
+    Lock, LockOpen,                // a reference (read-only) clip in the multi-clip editor, and the unlocked toggle
 }
 
 internal sealed class Glyph : Control
@@ -471,6 +472,8 @@ internal sealed class Glyph : Control
         [GlyphKind.Appearance] = ("M8 2.667 A5.333 5.333 0 1 0 8 13.333 ZM8 2.667 A5.333 5.333 0 0 1 8 13.333", null),
         // A keycap row on a keyboard (shortcuts).
         [GlyphKind.Shortcuts] = ("M2 4.667 H14 V11.333 H2 ZM4.667 7.333 H4.673 M7.333 7.333 H7.34 M10 7.333 H10.007 M5.333 9.333 H10.667", null),
+        // A circular arrow (a new version: Settings → Updates).
+        [GlyphKind.Update] = ("M13 8 A5 5 0 1 1 11.536 4.464 M11.6 1.6 V4.5 H8.7", null),
         // A controller with keys (MIDI devices).
         [GlyphKind.MidiPort] = ("M2.667 3.333 H13.333 V12.667 H2.667 ZM5.333 3.333 V8.667 M8 3.333 V8.667 M10.667 3.333 V8.667", null),
         // A prompt: chevron and cursor (a command).
@@ -508,6 +511,9 @@ internal sealed class Glyph : Control
         // The Linux penguin (even-odd, so the belly is a hole).
         [GlyphKind.Linux] = (null, "F1 M8 1.333 C9.333 1.333 10.133 2.4 10.133 3.867 C10.133 4.933 9.667 5.467 10 6.267 C11.067 7.733 12.667 9.6 12.267 11.867 L13.2 14 H2.8 L3.733 11.867 C3.333 9.6 4.933 7.733 6 6.267 C6.333 5.467 5.867 4.933 5.867 3.867 C5.867 2.4 6.667 1.333 8 1.333 ZM8 6.8 C6.733 6.8 5.867 8.667 5.867 10.533 C5.867 12.2 6.8 13.2 8 13.2 C9.2 13.2 10.133 12.2 10.133 10.533 C10.133 8.667 9.267 6.8 8 6.8 Z"),
         // Two interlocked chain links (a live-freeze link).
+        // A padlock, shut and open: a clip locked as reference in the multi-clip editor (specs/029).
+        [GlyphKind.Lock] = ("M3.333 7.333 h9.333 v6.667 h-9.333 z M5.333 7.333 v-2 a2.667 2.667 0 0 1 5.333 0 v2", null),
+        [GlyphKind.LockOpen] = ("M3.333 7.333 h9.333 v6.667 h-9.333 z M5.333 7.333 v-2 a2.667 2.667 0 0 1 5.2 -0.8", null),
         [GlyphKind.ChainLink] = ("M2.711 5.619 L6.266 9.175 A2.057 2.057 0 0 0 9.175 6.266 L5.619 2.711 A2.057 2.057 0 0 0 2.711 5.619 ZM6.825 9.734 L10.381 13.289 A2.057 2.057 0 0 0 13.289 10.381 L9.734 6.825 A2.057 2.057 0 0 0 6.825 9.734 Z", null),
     };
 

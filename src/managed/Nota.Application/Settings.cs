@@ -44,9 +44,16 @@ public sealed class Settings
     /// <summary>Recently opened/saved project bundle paths, most-recent first. Shown on the
     /// welcome screen; capped and pruned of missing folders when displayed.</summary>
     public List<string> RecentProjects { get; set; } = new();
+    /// <summary>Instruments added most recently, most-recent first (spec 034): "Add track ▸
+    /// Recent". Rules in <see cref="Nota.Application.RecentInstruments"/>.</summary>
+    public List<RecentInstrument> RecentInstruments { get; set; } = new();
     /// <summary>Show the welcome screen (recent projects launcher) on startup. On by default;
     /// toggled from the welcome screen's "Show on startup" checkbox.</summary>
     public bool ShowWelcomeOnStartup { get; set; } = true;
+    /// <summary>Look for a newer Nota release on launch and once a day while running (#58).
+    /// On by default; Settings → Updates. Help → Check for updates… works either way, and
+    /// nothing downloads until the user clicks Update.</summary>
+    public bool CheckForUpdates { get; set; } = true;
     /// <summary>The Mixer window's view: "strips" or "map" (the Stereo Map, specs/008).
     /// A per-user preference, remembered between openings.</summary>
     public string MixerView { get; set; } = "strips";
@@ -99,6 +106,10 @@ public sealed class Settings
     /// <summary>The last items applied from the palette, most recent first (its Recent section).</summary>
     public List<string> PaletteRecent { get; set; } = new();
 
+    /// <summary>Adding a plug-in by hand (browser, drag & drop, palette) opens its editor window
+    /// right away (#250). On by default; Preferences → Plug-ins.</summary>
+    public bool OpenPluginWindowOnInsert { get; set; } = true;
+
     // --- browser view options (the ⋮ button next to the browser search) ------
     /// <summary>Show each row's type as a quiet tag on the right edge of the browser list.</summary>
     public bool BrowserShowTypeTags { get; set; } = true;
@@ -143,6 +154,9 @@ public sealed class Settings
     /// <summary>How audio clips draw their waveform on the lanes (Settings → Appearance):
     /// 0 bars — spaced peak strokes (default), 1 solid — one column per pixel.</summary>
     public int ArrangementWaveform { get; set; }
+    /// <summary>Interface scale in percent (Settings → Appearance, spec 027): one of
+    /// <see cref="Application.InterfaceScale.Presets"/>; anything else reads as 100.</summary>
+    public int InterfaceScale { get; set; } = Application.InterfaceScale.Default;
     /// <summary>Piano-roll note audition (#46): notes sound while they are placed, clicked or
     /// dragged. The speaker chip in the clip editor's header; on by default.</summary>
     public bool PianoRollAudition { get; set; } = true;

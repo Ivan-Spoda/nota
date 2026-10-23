@@ -124,6 +124,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(N(p), 1.0) { Accent = true, ArcColor = arc, Default = DefN(p), Width = 34, Height = 34 };
+            knob.Format = v => fmt(v * mx[p]);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { RawN(p, v); val.Text = fmt(P(p)); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
@@ -241,7 +242,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
                 {
                     int iv = i;
                     var mi = new MenuItem { Header = names[i] };
-                    if (i == cur) mi.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brass };
+                    mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = i == cur;
                     mi.Click += (_, _) => { SetP(p, iv); RefreshAll(); };
                     fly.Items.Add(mi);
                 }

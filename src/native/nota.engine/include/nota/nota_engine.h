@@ -461,6 +461,16 @@ NOTA_API int32_t nota_engine_automation_overridden(const NotaEngine* engine);
  * 0 when no live device is running. */
 NOTA_API float nota_engine_cpu_load(const NotaEngine* engine);
 
+/* ---- Render threads -------------------------------------------------------
+ * Dedicated threads that render tracks in parallel (the audio thread helps too).
+ * set: count < 0 = the default (hardware threads - 1, capped), 0 = render on the audio
+ * thread alone. Only while the audio device is stopped: NOTA_ERR_ALREADY_RUNNING
+ * otherwise. cpu_seconds: CPU time those threads have used, summed (per-thread OS
+ * clocks) - near zero while nothing renders. Diagnostics and performance tests. */
+NOTA_API NotaResult nota_engine_set_render_threads(NotaEngine* engine, int32_t count);
+NOTA_API int32_t    nota_engine_render_threads(const NotaEngine* engine);
+NOTA_API double     nota_engine_render_threads_cpu_seconds(const NotaEngine* engine);
+
 /* ---- Transport (M1) ------------------------------------------------------ */
 NOTA_API NotaResult nota_transport_play(NotaEngine* engine);
 NOTA_API NotaResult nota_transport_stop(NotaEngine* engine);
@@ -1274,6 +1284,13 @@ NOTA_API NotaResult nota_clips_block_cut(NotaEngine* engine, const int32_t* trac
 NOTA_API int32_t    nota_clips_block_paste(NotaEngine* engine, double at_beat, int32_t source_track_id); /* dest -1 = source tracks; -> clips pasted */
 NOTA_API double     nota_clips_block_duplicate(NotaEngine* engine, const int32_t* track_ids, const int32_t* clip_indices, int32_t count);
 NOTA_API int32_t    nota_clips_block_count(NotaEngine* engine);
+/* Range copy/cut (arrangement time-selection): the slice of each listed track's clips inside
+ * [start,end) becomes the block clipboard, positioned relative to `start`, with automation.
+ * copy_range leaves the project untouched; cut_range also carves the range out (one undo
+ * step, like delete_range). A range block pastes overwriting what it lands on. Error when
+ * the range covers no clip. */
+NOTA_API NotaResult nota_clips_copy_range(NotaEngine* engine, const int32_t* track_ids, int32_t n, double start, double end);
+NOTA_API NotaResult nota_clips_cut_range(NotaEngine* engine, const int32_t* track_ids, int32_t n, double start, double end);
 NOTA_API int32_t    nota_clips_last_placed(NotaEngine* engine, int32_t* out_track_ids, int32_t* out_clip_indices, int32_t cap);
 /* Arrangement clips -> session slots. Each track's clips, in time order, fill consecutive
  * slots from start_scene; start_scene -1 = the first scene row where every slot needed is
@@ -1467,8 +1484,9 @@ NOTA_API int32_t     nota_device_text(const NotaEngine* engine, int32_t track_id
  * source_track_id -1 clears it; get returns the current source (-1 = none). */
 NOTA_API void        nota_device_set_sidechain_source(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t source_track_id);
 NOTA_API int32_t     nota_device_sidechain_source(const NotaEngine* engine, int32_t track_id, int32_t device_index);
-/* Whether a device can key off a sidechain source: 1 for the built-in Compressor and
- * for hosted plugins that expose a sidechain input bus (Phase C); 0 otherwise. */
+/* Whether a device can key off a sidechain source: 1 for the built-in Compressor (and the
+ * other keyed built-ins, e.g. Nota Vocoder's modulator) and for hosted plugins that expose
+ * a sidechain input bus (Phase C); 0 otherwise. */
 NOTA_API int32_t     nota_device_accepts_sidechain(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 /* Instrument sidechain ("React", Nota Flux): route a listening instrument to a source
  * track. source_track_id -1 clears it; get returns the current source (-1 = none);
@@ -1695,6 +1713,9 @@ NOTA_API float       nota_rackdev_live_selector(const NotaEngine* engine, int32_
  * the chain. No-op for built-in instruments. Call from the UI/main thread. */
 NOTA_API NotaResult nota_plugin_open_editor(NotaEngine* engine, int32_t track_id, int32_t device_index);
 NOTA_API NotaResult nota_plugin_close_editor(NotaEngine* engine, int32_t track_id, int32_t device_index);
+/* 1 while the plugin's editor window is on screen, else 0 (never opened, hidden by its close
+ * button, failed to open, or not a hosted plugin). Call from the UI/main thread. */
+NOTA_API int32_t    nota_plugin_editor_is_open(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 
 /* Opaque plugin state (M3-5, FR-36), for project save/restore. get writes up to
  * `capacity` bytes into `out` (pass out=NULL to query the size) and returns the
@@ -1743,6 +1764,13 @@ NOTA_API NotaResult nota_engine_render_offline(NotaEngine* engine, float* out, i
  * calling — otherwise the audio thread and this call race on transport state. */
 NOTA_API NotaResult nota_engine_render_offline_at(NotaEngine* engine, float* out,
                                                   int32_t frames, double sampleRate);
+
+/* Renders one block exactly as the audio device callback does (a real-time deadline, not
+ * a bounce: the render threads join only when one thread can't keep up), without a
+ * device. For tests and benchmarks that pace blocks like a callback; call
+ * nota_engine_render_offline_at once first to prepare the nodes at a rate. The device
+ * must be stopped (NOTA_ERR_ALREADY_RUNNING otherwise). */
+NOTA_API NotaResult nota_engine_render_device_block(NotaEngine* engine, float* out, int32_t frames);
 
 /* ---- Audio file encoders (export) -----------------------------------------
  * Streaming FLAC / MP3 writers behind the same ABI as the offline render above:
@@ -1809,12 +1837,33 @@ NOTA_API int32_t nota_pluginhost_pump(void);
 
 /* ---- Plugin scanning & catalog (M3-1, FR-33/NFR-5) ----------------------- */
 /* Scans installed plugins out-of-process, AudioUnit first then VST3. Each
- * candidate is probed in a separate `worker_path` child process with a timeout,
- * so a crashing/hanging plugin cannot take down the host. Results are merged
- * into the in-memory catalog and persisted to app-support. Blocking; call from
- * the message thread. Returns the number of known plugins, or <0 on error.
- * `worker_path` is the absolute path to the nota-scanworker executable. */
+ * candidate is probed in a separate `worker_path` child process with a timeout
+ * (30 s; a candidate that times out or dies is retried alone with 2 min), a few
+ * in parallel, so a crashing/hanging plugin cannot take down the
+ * host or stall the scan. Results are merged into the in-memory catalog and
+ * persisted to app-support as the scan goes. A candidate that yields nothing
+ * (crash, timeout, no plugins) is remembered and skipped by later scans until
+ * its file changes. One scan runs at a time; a second call waits. Blocking;
+ * call off the UI thread. Returns the number of known plugins, or <0 on error.
+ * `worker_path` is the absolute path to the nota-scanworker executable.
+ * Each scan rewrites <data dir>/logs/plugin-scan.log (one line per probe). */
 NOTA_API int32_t nota_pluginhost_scan(const char* worker_path);
+
+/* nota_pluginhost_scan with options. `only_dir` (UTF-8, may be NULL): search just
+ * this folder for VST3 bundles instead of every location — e.g. after a store
+ * install. `flags`: NOTA_SCAN_RETRY_FAILED probes the remembered failures again. */
+#define NOTA_SCAN_RETRY_FAILED 1
+NOTA_API int32_t nota_pluginhost_scan_ex(const char* worker_path, const char* only_dir, int32_t flags);
+
+/* Progress of the running scan, callable from any thread while it runs: probes
+ * finished and probes planned (0 until discovery is done). Returns 1 while a scan
+ * runs, 0 otherwise. */
+NOTA_API int32_t nota_pluginhost_scan_progress(int32_t* done, int32_t* total);
+/* Name of a plugin being probed now (VST3 file name; "" for an AU or when none), UTF-8.
+ * Owned by the engine, valid until the next call on the same thread. */
+NOTA_API const char* nota_pluginhost_scan_current(void);
+/* Number of remembered failed candidates (skipped until their file changes). */
+NOTA_API int32_t nota_pluginhost_scan_failed_count(void);
 
 /* Number of plugins in the catalog (after a scan or a load of the saved list). */
 NOTA_API int32_t nota_pluginhost_plugin_count(void);

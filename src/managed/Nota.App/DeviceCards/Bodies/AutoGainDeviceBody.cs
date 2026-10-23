@@ -110,7 +110,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             val.HorizontalAlignment = HorizontalAlignment.Right;
             Control valCtl = val;
             if (valueClick is null)
-                ValueEntry.Attach(val, () => P(p), v => Raw(p, v), () => fmt(P(p)), () => Begin(p), () => End(p), RefreshAll);
+                ValueEntry.Attach(val, () => P(p), v => Raw(p, v), () => fmt(P(p)), () => Begin(p), () => End(p), RefreshAll, control: trk);
             else
             {
                 var box = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = val };
@@ -162,7 +162,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             {
                 if (it is not { } x) { fly.Items.Add(new Separator()); continue; }
                 var mi = new MenuItem { Header = x.Label };
-                if (x.Current) mi.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brass };
+                mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = x.Current;
                 var pk = x.Pick;
                 mi.Click += (_, _) => { pk(); RefreshAll(); };
                 fly.Items.Add(mi);
@@ -349,7 +349,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         ceilBox.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(ceilBox).Properties.IsLeftButtonPressed) return;
-            if (e.ClickCount == 2) { Reset(Ceiling); RefreshAll(); e.Handled = true; return; }
+            if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { Reset(Ceiling); RefreshAll(); e.Handled = true; return; }
             cd = true; cy0 = e.GetPosition(ceilBox).Y; cv0 = P(Ceiling); Begin(Ceiling); e.Pointer.Capture(ceilBox); e.Handled = true;
         };
         ceilBox.PointerMoved += (_, e) =>

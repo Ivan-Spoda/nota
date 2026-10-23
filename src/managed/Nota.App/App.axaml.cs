@@ -97,6 +97,10 @@ public partial class App : Avalonia.Application
         // settings resolve onto the Studio themes (Appearance.Resolve).
         foreach (var err in NotaThemes.LoadErrors) log.Error($"Colour theme skipped — {err}", null);
         NotaThemeService.Set(Appearance.Resolve(Services.GetRequiredService<ISettingsService>().Current, NotaThemeService.KnownThemes));
+        // Interface scale (spec 027), likewise before the first window: windows and every
+        // popup they open take it from here.
+        NotaUiScale.InitPopups();
+        NotaUiScale.Set(Services.GetRequiredService<ISettingsService>().Current.InterfaceScale);
 
         // Nota Mosaic's samples resolve against the Samples and data folders; installed sample
         // packs get their Mosaic presets in the background (once per pack version).
@@ -133,6 +137,7 @@ public partial class App : Avalonia.Application
         {
             // A downloaded update installs once the app is gone (see AppUpdater).
             desktop.Exit += (_, _) => Services.GetRequiredService<IAppUpdater>().RunPendingInstall();
+            desktop.Exit += (_, _) => AppUpdates.Shared.CancelAll();
             // A Settings → Downloads install still running when the app quits is abandoned.
             desktop.Exit += (_, _) => DownloadJobs.Shared.CancelAll();
 
@@ -175,9 +180,10 @@ public partial class App : Avalonia.Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    // macOS application-menu items (About / Settings) forward to the main window.
+    // macOS application-menu items (About / Check for updates / Settings) forward to the main window.
     private MainWindow? MainWin =>
         (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainWindow;
     private void OnAppAbout(object? sender, EventArgs e) => MainWin?.ShowAbout();
     private void OnAppPreferences(object? sender, EventArgs e) => MainWin?.ShowPreferences();
+    private void OnAppCheckUpdates(object? sender, EventArgs e) => _ = MainWin?.CheckForUpdatesAsync();
 }

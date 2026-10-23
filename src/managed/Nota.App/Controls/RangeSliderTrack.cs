@@ -59,9 +59,8 @@ internal sealed class RangeSliderTrack : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2 && Reset is not null)
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && Reset is not null)
         {
-            if (_drag >= 0) { int d = _drag; _drag = -1; InvalidateVisual(); e.Pointer.Capture(null); GestureEnd?.Invoke(d); }
             Reset();
             e.Handled = true;
             return;

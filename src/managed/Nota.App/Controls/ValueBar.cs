@@ -3,7 +3,7 @@
 //
 // A draggable value box: a rounded field showing the
 // value text centered over a horizontal fill that tracks the normalized value. Drag
-// vertically to change (up = increase); double-click resets to the default. Fires
+// vertically to change (up = increase); double-click resets to the default, ⌥-click types a value. Fires
 // GestureBegin/End so callers can bracket an automation write, like the gauge Knob.
 
 using System;
@@ -53,6 +53,8 @@ public sealed class ValueBar : Control
     {
         _value = Math.Clamp(value, 0, 1);
         _fmt = fmt;
+        ValueEntry.Attach(this, new ValueField("Value", () => _value, fmt, Apply, () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(),
+            Default >= 0 ? Default : null));
         Height = 18;
         MinWidth = 46;
         Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
@@ -60,7 +62,7 @@ public sealed class ValueBar : Control
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
-        if (e.ClickCount == 2 && Default >= 0) { Apply(Default); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && Default >= 0) { GestureBegin?.Invoke(); Apply(Default); GestureEnd?.Invoke(); e.Handled = true; return; }
         _drag = true;
         _lastY = e.GetPosition(this).Y;
         e.Pointer.Capture(this);

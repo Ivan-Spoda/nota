@@ -451,8 +451,17 @@ Builders live in `DeviceCardKit`; controls in `Controls/`. Reuse before writing 
   Cursor `ns-resize`. A click never jumps the value. The one horizontal drag is a horizontal
   slider (`SliderTrack`) along its own axis: right increases, the handle follows the pointer,
   cursor `ew-resize`; a vertical drag still works on it as on a knob.
-- **Double-click** restores the default where one is supplied.
-- **Left button only** — right-click bubbles to the CV-modulate / MIDI Learn menu.
+- **Double-click** the control or its read-out types a value: the read-out itself turns
+  editable (`TextBox.value` — no well, no frame; its own font, size and alignment, a 1px
+  accent line under it, the number selected in `AccentSubtle` and its unit left alone; laid on
+  `SurfaceRaised` over a control without a read-out), read in the units shown —
+  `ValueEntry` / `ValueText`. Enter or a click away commits, Esc cancels, Tab / ⇧Tab move to
+  the next / previous value on the card. A commit is one `GestureBegin` / `GestureEnd`, so one
+  undo step and one automation gesture, like a drag. Return outside the box stays Stop.
+- **⌥/Alt-click** restores the default where one is supplied (clears a route or point).
+- **Right-click** opens the parameter menu — Type value…, Reset to default — merged into the
+  CV-modulate / macro menu where the control has one.
+- **Drag with the left button only.**
 - **`GestureBegin` / `GestureEnd`** bracket `BeginAutomationWrite` / `EndAutomationWrite`.
 - **`MidiLearn.Bind`** registers the control with its display name.
 - **Live follow** re-reads engine state each tick and skips while dragging.
@@ -467,7 +476,7 @@ Builders live in `DeviceCardKit`; controls in `Controls/`. Reuse before writing 
 | `DeviceCardKit.Segments` | Well strip with a rule edge; chosen = solid accent with derived ink, 600. 9 px in a device; in the shell `ToggleButton.seg` (24, raised, 12 px, the weight unchanged when chosen so auto-width keys never shift) inside `Border.segmented` — keys butted on 1px seams, only the group's outer corners round. |
 | `SliderTrack` / `DeviceCardKit.SliderRow` | Name 9/500 · 3 px well track · 6 × 7 handle · fixed-width mono value right. Fill `VizInk` and handle primary at rest, accent while hovered or dragged; teal under modulation. Bipolar fills from centre. Inactive drops to `Rule` and faint ink, keeps the number. |
 | `MiniFader`, `PanBar`, `ValueBar`, `MixBar`, `VFader` | Track-header gain and pan, value bars, mixer fader — same drag contract, same rule: neutral at rest, accent while live. |
-| `DragNumber` | Mono field: drag, or double-click to type. |
+| `DragNumber` | Mono field: drag, or double-click to type (the shared parser, one gesture per typed value). |
 | Buttons (`Button`, `.primary`, `.ghost`, `.cell`, `.chip`, `.tp-icon`, `.tp-play`) | 26 tall, radius 3, raised with a seam border and the bevel at rest. A context's primary action is set apart by weight (600) and one tone step (raised hover), **not by colour**. A toggled-on key is solid accent with derived ink. A destructive action is an ordinary raised key; its label says what it does. |
 | Readouts and fields (`Border.well`, `.cell`, `TextBox.field`, `ComboBox`, `.search`) | 26, well fill, 1 px rule edge, radius 3; a mono value with its muted unit on one line. Focus = the edge turns accent, no ring. |
 | Filter chips | 20, radius 3, 9 side pad, raised with a seam border; a category-colour dot instead of an icon; active = solid accent with derived ink. The Favorites / tags strip is one line and overflows into `+N`; the device tabs' category row wraps instead, so every category stays in sight. |
@@ -707,10 +716,39 @@ Every region is **docked**: radius 0, no gutter, separated by 1 px seams (the wi
 ### Menus, popovers, dialogs
 
 - **Menus, context menus, flyouts, drop-downs, tooltips:** raised, radius 3, a 1 px seam
-  ring. Menu items are 24 tall, radius 2; hover is a full accent fill with derived ink;
-  the shortcut on the right is muted ink (derived ink while highlighted); separators are
-  rules. **No blurred shadow:** Avalonia draws each popup in a window of its own, sized to
-  its content, so a blur would be clipped at the popup's edge.
+  ring, padding 4, at least 200 wide. **No blurred shadow:** Avalonia draws each popup in a
+  window of its own, sized to its content, so a blur would be clipped at the popup's edge.
+- **Menu items** (the Nota `MenuItem` theme in `NotaTheme.axaml`, spec 034) are 24 tall,
+  radius 2, in fixed columns that line up across a menu: icon (14, muted ink — never a
+  tinted icon) · label · value · shortcut · caret. Hover or keyboard focus is a full accent
+  fill with the derived ink on every part; disabled takes the disabled ink and no fill. A
+  chosen choice is ticked with an accent check in the icon column (radio and checkbox
+  items) — not a coloured dot. The **value** column shows a submenu's current choice in
+  muted ink ("Record input  Ext ›"), or a switch (18 × 10, accent while on — "Live
+  freeze"), or a data colour chip (a tag's colour). **Shortcuts** are Geist Mono 11, muted,
+  spelled the platform's way: `⌘G`, `⌘⇧G`, `⌫` on macOS (no "+"), `Ctrl+G` elsewhere
+  (`MenuKit.Spell`). The **submenu caret** is a small chevron glyph set in from the edge.
+- **Destructive items** (delete, remove, clear, discard, flatten) sit in the menu's last
+  group in the danger ink (label and icon) — `MenuKit.Danger`; their hover is the same
+  accent fill as every item. Danger is a semantic ink, not a second accent.
+- **The object header.** A menu for something with a name — track, clip, device, chain,
+  pad, macro, scene, Session slot, section, band, browser item, version — opens with a
+  non-interactive header row: its colour chip when it has one, the name in 600, and a
+  muted mono badge with its type and position or count ("Audio · 3", "3 tracks",
+  "MIDI clip"). Items below don't repeat the noun ("Copy", not "Copy track"). A menu on
+  empty space or a control (lane background, snap chip, metronome) has none.
+- **Inline rows** put the most common property edit in the menu itself, one click, no
+  submenu: the **colour grid** (the 9 track bases × base / light / dark, plus Auto; the
+  current colour ringed in primary ink, the pointer or keyboard cursor in muted ink) and
+  **segmented keys** (keys butted on seams, the chosen one in the accent — "Height:
+  Compact · Standard · Large", Option-click for every track). They never highlight as a
+  whole; arrows move inside them, Enter applies, and a pick closes the menu. Small muted
+  **captions** ("Recent") head a group inside a menu.
+- **Group order**, rules between groups: header → inline rows → naming and settings →
+  the object's own actions → create / group → clipboard (Copy ⌘C · Cut ⌘X · Paste ⌘V ·
+  Duplicate ⌘D, always in this order — `MenuKit.ClipboardGroup`) → destructive.
+  `DesignTokenCheck.RunMenus` keeps menus on `MenuKit`: icons through `MenuKit.Icon`,
+  destructive items through `MenuKit.Danger`, no Color / Track height submenus.
 - **Command palette** — the in-window modal: panel body, radius 4, seam ring and
   `Shadow.Modal`.
 - **Dialog windows** (`NotaWindow`): panel body; on macOS and Windows a 32 px raised header
@@ -837,7 +875,8 @@ True today, not yet fixed:
 - **The user manual** (`../nota-docs`) screenshots still show Ember; they are not re-shot.
 - **Column order** choice → work → output is applied in Utility; the other cards have not
   been audited card by card.
-- **Slider reset** on double-click works only where the card passes a default.
+- **Graph controls** (curves, pads, envelope and matrix handles) still reset on double-click
+  and do not take typed values yet (specs/035, later PRs); ⌥-click already resets them.
 - **Names:** presets with emotional names (Screaming Lead, VHS Fever, Gentle Master,
   Transparent Safety, Dive Bomb, Laser Zap…) and multi-word device names (Auto Filter,
   Beat Repeat, Dynamic EQ-8, EQ-3, the "Nota " prefix — dropped only from browser rows and

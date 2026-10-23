@@ -127,7 +127,15 @@ public partial class MainWindow
     }
 
     private DeviceInsertService? _insertion;
-    private DeviceInsertService Insertion => _insertion ??= new DeviceInsertService(Engine, _factory, _presets, _kits);
+    private DeviceInsertService Insertion => _insertion ??= NewInsertion();
+
+    private DeviceInsertService NewInsertion()
+    {
+        var s = new DeviceInsertService(Engine, _factory, _presets, _kits);
+        s.InstrumentAdded += OnInstrumentAdded;   // "Add track ▸ Recent" (MainWindow.Recent.cs)
+        s.InstrumentPresetApplied += RecordTrackInstrument;
+        return s;
+    }
 
     /// <summary>What the views do after the insert service changed a track: card state, the
     /// last-instrument fallback, refreshes, revealing the chain, the status line.</summary>
@@ -154,6 +162,15 @@ public partial class MainWindow
         if (_modular?.IsVisible == true) _modular.Refresh();
         if (revealDevices && r.ShowDevices && t > 0) ShowDevices(t);
         else _deviceChain?.Refresh();
+        if (r.PluginAdded is { } pa && _vm.Settings.Current.OpenPluginWindowOnInsert) OpenAddedPluginWindow(pa.TrackId, pa.DeviceIndex);
+    }
+
+    // A plug-in the user just added opens its window (#250). One without an editor, or whose
+    // window fails, just stays closed: the card's Open editor reports the failure if asked.
+    private void OpenAddedPluginWindow(int trackId, int deviceIndex)
+    {
+        try { Engine.OpenPluginEditor(trackId, deviceIndex); }
+        catch { /* no editor: nothing to open */ }
     }
 
     private bool TrackIsAudio(int trackId) => Insertion.TrackIsAudio(trackId);

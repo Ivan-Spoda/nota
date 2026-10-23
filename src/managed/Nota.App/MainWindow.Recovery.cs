@@ -65,16 +65,8 @@ public partial class MainWindow
         _closePromptOpen = true;
         try
         {
-            // A named project saves in place with the prompt up ("Saving…"); an untitled one
-            // needs the file panel, so the prompt closes first.
-            bool named = _projectPath is not null;
-            var choice = await new SaveChangesWindow("Unsaved changes",
-                "Do you really want to quit without saving your changes?",
-                ProjectDisplayName(), UnsavedAgeText(),
-                named ? () => DoSaveAsync(saveAs: false) : null)
-                .ShowDialog<SaveChoice>(this);
-            if (choice == SaveChoice.Cancel) return;
-            if (choice == SaveChoice.Save && !named && !await DoSaveAsync(saveAs: false)) return;
+            if (!await ConfirmLeaveChangesAsync("Unsaved changes",
+                    "Do you really want to quit without saving your changes?")) return;
             _closeConfirmed = true;
         }
         finally { _closePromptOpen = false; }
@@ -99,6 +91,10 @@ public partial class MainWindow
         _panLawLegacy = false;
         RefreshAfterLoad();
         MarkProjectClean();   // the fresh startup project counts as unmodified
+
+        // Look for a newer release now and once a day (unless Settings → Updates says not to);
+        // the start screen and the status bar show what it finds.
+        AppUpdates.Shared.Start();
 
         // What's New shows once per new app version, ahead of the launcher.
         await ShowWhatsNewIfNeeded();

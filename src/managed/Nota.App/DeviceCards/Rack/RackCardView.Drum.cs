@@ -305,7 +305,9 @@ internal sealed partial class RackCardView
     {
         Sel = chain;
         var f = new MenuFlyout();
-        var rename = new MenuItem { Header = "Rename…" };
+        f.Items.Add(MenuKit.Header(PadName(a, chain), null, "Pad"));
+        f.Items.Add(new Separator());
+        var rename = MenuKit.Item("Rename…", GlyphKind.Edit);
         rename.Click += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => PromptRenamePad(a, anchor, chain));
         f.Items.Add(rename);
 
@@ -324,9 +326,7 @@ internal sealed partial class RackCardView
         open.Click += (_, _) => _drumView = 2;
         f.Items.Add(open);
         f.Items.Add(new Separator());
-        var remove = new MenuItem { Header = "Remove pad" };
-        remove.Click += (_, _) => { a.RemoveChain(chain); _ctx.NotifyChanged(); };
-        f.Items.Add(remove);
+        f.Items.Add(MenuKit.Danger("Remove pad", GlyphKind.Trash, () => { a.RemoveChain(chain); _ctx.NotifyChanged(); }));
 
         bool renaming = false;
         rename.Click += (_, _) => renaming = true;
@@ -429,7 +429,9 @@ internal sealed partial class RackCardView
         var vol = new SliderTrack { Norm = VolNorm(a.ChainGain(c)), Reset = () => a.SetChainGain(c, 1f) };
         vol.Changed += v => a.SetChainGain(c, NormVol(v));
         _irTick.Add(() => { if (!vol.Dragging) vol.Norm = VolNorm(a.ChainGain(c)); });
-        ToolTip.SetTip(vol, "Pad volume · drag up or down, double-click for 0\u2009dB");
+        ToolTip.SetTip(vol, "Pad volume · drag up or down, ⌥-click to type, double-click for 0\u2009dB");
+        ValueEntry.Attach(vol, new ValueField("Pad volume", () => VolNorm(a.ChainGain(c)), n => VolText(NormVol(n)),
+            n => { vol.Norm = n; a.SetChainGain(c, NormVol(n)); }, Default: VolNorm(1f)));
         MidiLearn.Bind(vol, MidiTarget.RackChainGain(T, a.AutomationDeviceIndex, c), "Pad Volume");
         Grid.SetColumn(vol, 2); g.Children.Add(vol);
 
@@ -461,7 +463,7 @@ internal sealed partial class RackCardView
         {
             if (!e.GetCurrentPoint(host).Properties.IsLeftButtonPressed) return;
             e.Handled = true;
-            if (e.ClickCount == 2) { a.SetChainPan(c, 0f); tb.Text = PanText(0f); return; }
+            if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { a.SetChainPan(c, 0f); tb.Text = PanText(0f); return; }
             drag = true; lastY = e.GetPosition(host).Y; e.Pointer.Capture(host);
         };
         host.PointerMoved += (_, e) =>
@@ -756,14 +758,22 @@ internal sealed partial class RackCardView
         switch (item.Kind)
         {
             case Nota.Presentation.BrowserItemKind.Sample:
-                if (existing >= 0) a.RemoveChain(existing);
-                added = E.RackAddSamplerChain(T, item.Path, note, false);
-                if (added >= 0)
+                // An occupied pad keeps its chain (#237): level, pan, mute/solo, sends, choke and
+                // effects stay, only the sound changes. A Sampler keeps its tune, envelope and
+                // filter; another instrument gives way to a fresh Sampler.
+                if (existing >= 0 && E.RackSetChainSamplerSample(T, existing, item.Path, note))
                 {
-                    E.RackSetChainTriggerNote(T, added, note);
-                    // Name the pad after the sample — sixteen pads reading "Nota Sampler" say nothing.
-                    E.RackSetChainName(T, added, System.IO.Path.GetFileNameWithoutExtension(item.Path));
+                    added = existing;
+                    ResetSampleWindow(existing);
                 }
+                else
+                {
+                    if (existing >= 0) a.RemoveChain(existing);
+                    added = E.RackAddSamplerChain(T, item.Path, note, false);
+                    if (added >= 0) E.RackSetChainTriggerNote(T, added, note);
+                }
+                // Name the pad after the sample — sixteen pads reading "Nota Sampler" say nothing.
+                if (added >= 0) E.RackSetChainName(T, added, System.IO.Path.GetFileNameWithoutExtension(item.Path));
                 break;
             case Nota.Presentation.BrowserItemKind.BuiltinInstrument:
                 if (existing >= 0) a.RemoveChain(existing);
@@ -781,6 +791,18 @@ internal sealed partial class RackCardView
         if (added >= 0) Sel = added;
         _ctx.NotifyChanged();
         DeferRebuild();
+    }
+
+    // Start / end, reverse and the loop window belong to the sample that was on the pad: a new
+    // sample starts from their defaults.
+    private static readonly string[] SampleWindowParams = { "start", "end", "reverse", "loopstart", "loopend", "loopxfade" };
+
+    private void ResetSampleWindow(int chain)
+    {
+        int n = E.RackChainInstrumentParamCount(T, chain);
+        for (int p = 0; p < n; p++)
+            if (Array.IndexOf(SampleWindowParams, E.RackChainInstrumentParamId(T, chain, p)) >= 0)
+                E.RackChainInstrumentParamSet(T, chain, p, E.RackChainInstrumentParamDefault(T, chain, p));
     }
 
     private void ShowAddPadMenu(IRackAccess a, Control anchor, int note)

@@ -827,6 +827,7 @@ public sealed class ModularView : UserControl
         bool exposed = _exposedParams.Contains((t, d, pp));
         var value = MonoValue(Fmt(val));
         var knob = new Knob((val - min) / span, 1.0) { Accent = true, ArcColor = modulated ? Teal : null, Default = (e.DeviceParamDefault(t, d, pp) - min) / span };
+        knob.Format = frac => Fmt((float)(min + frac * span));
         knob.ValueChanged += frac => { double v = min + frac * span; e.DeviceSetParam(t, d, pp, (float)v); value.Text = Fmt((float)v); };
         knob.GestureBegin += () => e.BeginAutomationWrite(t, AutomationTarget.DeviceParam, d, pp, "");
         knob.GestureEnd += () => e.EndAutomationWrite(t, AutomationTarget.DeviceParam, d, pp, "");
@@ -852,6 +853,7 @@ public sealed class ModularView : UserControl
         bool modulated = e.ParamModulated(2, t, ix, pp);
         var value = MonoValue(Fmt(val));
         var knob = new Knob((val - min) / span, 1.0) { Accent = true, ArcColor = modulated ? Teal : null, Default = (e.MidiEffectParamDefault(t, ix, pp) - min) / span };
+        knob.Format = frac => Fmt((float)(min + frac * span));
         knob.ValueChanged += frac => { double v = min + frac * span; e.MidiEffectSetParam(t, ix, pp, (float)v); value.Text = Fmt((float)v); };
         MidiLearn.Bind(knob, MidiTarget.MidiDeviceParam(t, ix, pp), name);
         knob.ContextRequested += (_, ev) => { ShowModulateMenu(knob, 2, ix, pp, name); ev.Handled = true; };
@@ -873,6 +875,7 @@ public sealed class ModularView : UserControl
         bool modulated = e.ParamModulated(1, t, -1, pp);
         var value = MonoValue(val.ToString("0.00", NotaNum.Culture));
         var knob = new Knob(val, 1.0) { Accent = true, ArcColor = modulated ? Teal : null, Default = e.InstrumentParamDefault(t, pp) };
+        knob.Format = frac => frac.ToString("0.00", NotaNum.Culture);
         knob.ValueChanged += frac => { e.PluginParamSet(t, -1, pp, (float)frac); value.Text = frac.ToString("0.00", NotaNum.Culture); };
         knob.GestureBegin += () => e.BeginAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, pid);
         knob.GestureEnd += () => e.EndAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, pid);
@@ -1151,6 +1154,7 @@ public sealed class ModularView : UserControl
         float v0 = e.ModulatorGet(t, modId, field);
         var value = MonoValue(fmt((v0 - min) / span * span + min));
         var knob = new Knob((v0 - min) / span, 1.0) { Accent = true };
+        knob.Format = frac => fmt((float)(min + frac * span));
         knob.ValueChanged += frac => { float v = (float)(min + frac * span); e.ModulatorSet(t, modId, field, v); value.Text = fmt(v); };
         _liveKnobs.Add(() =>
         {
@@ -1174,6 +1178,7 @@ public sealed class ModularView : UserControl
         float v0 = e.ModulatorGet(t, modId, field);
         var value = MonoValue(fmt(v0));
         var knob = new Knob((v0 - min) / span, 1.0) { Accent = true, Width = 30, Height = 30 };
+        knob.Format = frac => fmt((float)(min + frac * span));
         knob.ValueChanged += frac => { float v = (float)(min + frac * span); e.ModulatorSet(t, modId, field, v); value.Text = fmt(v); };
         _liveKnobs.Add(() =>
         {
@@ -1181,6 +1186,7 @@ public sealed class ModularView : UserControl
             float cur = e.ModulatorGet(t, modId, field); double frac = (cur - min) / span;
             if (Math.Abs(frac - knob.Value) > 1e-3) { knob.Value = frac; value.Text = fmt(cur); }
         });
+        ValueEntry.Attach(knob, "Rate", value);
         return new StackPanel
         {
             Spacing = 0, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
@@ -1201,8 +1207,15 @@ public sealed class ModularView : UserControl
     {
         int t = _trackId; var e = _engine;
         var flyout = new MenuFlyout();
+        flyout.Items.Add(MenuKit.Header(paramName, null, "Parameter"));
+        flyout.Items.Add(new Separator());
+        // Type value… / Reset to default first, as on every parameter (specs/035).
+        foreach (var c in ValueEntry.MenuItems(anchor)) flyout.Items.Add(c);
+        if (flyout.Items.Count > 2) flyout.Items.Add(new Separator());
 
-        // Already modulated? Offer edit + remove (the link may be owned by another track).
+        // Already modulated? Offer edit + remove (the link may be owned by another track);
+        // Remove goes last, in the destructive group.
+        MenuItem? remove = null;
         var (owner, li) = FindModulation(targetKind, device, param);
         if (owner >= 0)
         {
@@ -1212,10 +1225,9 @@ public sealed class ModularView : UserControl
                 : "LFO " + e.CvLinkSource(owner, li);
             var edit = new MenuItem { Header = $"Edit modulation · {srcLabel}{(cross ? " (" + TrackName(owner) + ")" : "")}…" };
             edit.Click += (_, _) => ShowLinkEditor(anchor, owner, li);
-            var rm = new MenuItem { Header = "Remove modulation" };
-            rm.Click += (_, _) => { e.CvLinkRemove(owner, li); Rebuild(); Changed?.Invoke(); };
             flyout.Items.Add(edit);
-            flyout.Items.Add(rm);
+            remove = MenuKit.Danger("Remove modulation", null,
+                () => { e.CvLinkRemove(owner, li); Rebuild(); Changed?.Invoke(); });
         }
         else
         {
@@ -1278,6 +1290,12 @@ public sealed class ModularView : UserControl
             var ex = new MenuItem { Header = exposed ? "Unexpose CV output" : "Expose as CV output" };
             ex.Click += (_, _) => { if (!_exposedParams.Remove((t, device, param))) _exposedParams.Add((t, device, param)); Rebuild(); };
             flyout.Items.Add(ex);
+        }
+
+        if (remove is not null)
+        {
+            flyout.Items.Add(new Separator());
+            flyout.Items.Add(remove);
         }
 
         flyout.ShowAt(anchor, showAtPointer: true);

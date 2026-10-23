@@ -62,7 +62,7 @@ internal sealed class PerformWheel : Control
     {
         var pt = e.GetCurrentPoint(this);
         if (!pt.Properties.IsLeftButtonPressed) return;   // right-click bubbles to the CV / learn menu
-        if (e.ClickCount >= 2) { Write(Default); e.Handled = true; return; }
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { GestureBegin?.Invoke(); Write(Default); GestureEnd?.Invoke(); e.Handled = true; return; }
         _drag = true; _startY = pt.Position.Y; _startV = _norm;
         GestureBegin?.Invoke();
         e.Pointer.Capture(this);
@@ -97,6 +97,10 @@ internal sealed class PerformWheel : Control
         }
         base.OnPointerCaptureLost(e);
     }
+
+    /// <summary>The wheel as a typeable value (a held wheel — not a spring one, which would not stay put).</summary>
+    internal ValueField EntryField(string name, Func<double, string> fmt)
+        => new(name, () => _norm, fmt, Write, () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(), Default);
 
     private void Write(double v)
     {

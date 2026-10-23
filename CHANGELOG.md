@@ -22,6 +22,216 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.57.1] — 2026-10-22
+
+### Added
+- **Move the playhead from the clip editors** (nota-daw/nota#278): click or drag the audio
+  clip editor's ruler to place the playhead, snapped to the grid on a warped clip (hold ⌥ to
+  place it freely). In both clip editors the playhead line itself can be grabbed and dragged.
+  A Session slot plays on its own loop clock, so its editors don't seek and say why.
+- **Rulers read in time** (nota-daw/nota#275): click the transport's position read-out to
+  switch it to time, and the arrangement ruler and both clip editor rulers switch with it.
+- **A clip's warp tempo, next to the Warp switch** (nota-daw/nota#248): the audio clip
+  editor's **Tempo** field shows the tempo the audio was recorded at. Drag it or double-click
+  to type a value; **÷2** and **×2** fix a half- or double-time detection in one click.
+  Hand-placed warp markers keep their timing, and on an unwarped clip a tempo turns Warp on.
+- **See the warp while you drag a marker** (nota-daw/nota#140): the waveform stretches and
+  squeezes live as a warp marker moves, and the clip is re-warped once when you let go. Esc
+  during the drag puts it back.
+- **Plug-in windows open when you add a plug-in** (nota-daw/nota#250): adding a VST3 / AU
+  instrument or effect from the browser, by drag and drop or from the palette opens its
+  editor right away. Loading a project, undo, paste and the AI tools never do. Turn it off in
+  **Preferences → Plug-ins → Open plug-in window on insert**.
+- **The "+" at the end of the device chain adds an effect** (nota-daw/nota#97): click it and
+  the browser opens on Audio effects with the cursor in its search, ready to type.
+- **Delete a saved preset from the browser** (nota-daw/nota#234): right-click a preset in the
+  Presets tab → **Delete…** moves it to the Trash. Right-click a folder row there to open the
+  presets folder.
+- **Starred versions only** (nota-daw/nota#226): a star button in the History tab's header
+  lists just the versions you starred, newest first. Click it again to see the whole tree.
+- **Fold the browser's Built-in and Plug-ins sections** (nota-daw/nota#230): click a
+  **BUILT-IN** or **PLUG-INS** header in the Instruments, Effects or MIDI tab to collapse
+  it and click again to open it.
+- **Type an exact value into any knob, fader or slider** (#240): ⌥-click the control
+  (Alt-click on Windows and Linux) or double-click its value and type it in the units shown — `1.2k`, `-6`, `12 ms`, `30L`, `1/4`, `off`.
+  Enter or a click away applies it, Esc cancels, Tab moves to the next value on the card.
+  A typed value is one undo step and records into automation like a drag. Device cards,
+  instruments, racks, the mixer, track headers and the preview volume all work this way;
+  right-click a parameter for **Type value…** and **Reset to default**.
+- **Recent instruments in Add track**: right-click a track (in Arrangement or Session) →
+  **Add track** now lists the five instruments you added most recently under **Recent** —
+  built-in or plug-in, from the browser, the menus or the AI tools. One click adds a track
+  with that instrument right after the one you clicked. The list is yours, not the
+  project's, and keeps a plug-in you uninstall out of sight until it is back.
+- **Edit several MIDI clips at once** (nota-daw/nota#48): select two or more MIDI clips — on
+  one track or several — and double-click one of them (or right-click → **Edit selected
+  clips together**). The Clip editor shows all their notes on the arrangement's bars: fix a
+  bass line split over several clips in one go, or write a melody while you see the chords
+  of another clip. Select, move, transpose, quantize, delete or run a clip tool across
+  clips; one undo reverts the whole edit. A note dragged across the seam into the next open
+  clip of its track moves into that clip. A strip under the ruler shows the open clips:
+  click one to make it the active clip (its name, start, length and envelopes in the
+  editor), or lock it as a dimmed reference that cannot be changed by accident. New notes go
+  into the active clip. While the Clip tab is open it follows the selection in the
+  arrangement.
+- **Nota Vocoder** (nota-daw/nota#113): a new audio effect with two inputs. The track it
+  sits on is the voice; drop it on a vocal and you hear a robot voice straight away, from an
+  internal **Saw** (at a chosen **Pitch**). Switch the carrier to **Noise** for a whisper, or
+  to **Track** and pick another track — a pad, a synth — to make it speak the words; mute
+  that track and it keeps feeding the vocoder. 8–32 bands, **Formant** to make the voice
+  smaller or larger, **Unvoiced** to keep consonants clear, **Hold** to freeze the bands, and
+  a live graph of each band whose edges you drag to set the range. Seven presets (Robot
+  choir, Talk box, Whisper…). Agents route a carrier track with `set_device_sidechain`.
+- **Make the whole interface larger or smaller** (nota-daw/nota#38): **Settings → Appearance
+  → Interface scale** offers 75, 100, 125, 150 and 200 %. The change applies at once to every
+  window, menu, tooltip and dialog — text, buttons, knobs, track headers, device cards — and
+  is kept for the next launch. Text stays sharp at every size. The timeline, piano roll and
+  audio editor zoom as before, on top of the scale. Pick 125 % or more when the text is too
+  small to read on a laptop screen, or 75 % to fit more tracks on a small one.
+- **Nota tells you about updates wherever you are** (nota-daw/nota#58). It used to look for a
+  new version only on the start screen, so it was easy to miss. Now:
+  - It checks on every launch and once a day while it runs, and shows a new version in the
+    status bar beside the version number: click it to **Update** or read the release notes.
+    The download's progress and **Restart to update** show there too.
+  - **Help → Check for updates…** (on macOS also in the **Nota** menu) checks right away and
+    says so when you're up to date or GitHub can't be reached.
+  - **Settings → Updates** can turn the automatic checks off, and shows the last check with a
+    **Check now** button. Nothing downloads until you click Update.
+
+### Changed
+- **Release notes list every change and who made it**: from the next release on, What's New
+  shows a release's summary, then **All changes**, the full Added / Changed / Fixed list with
+  each item's commit, then the release's contributors. Links in What's New open in the
+  browser. The GitHub release carries the same text; the news posts keep the summary and the
+  contributors.
+- **The clip editor ruler shows where the clip sits** (nota-daw/nota#275): with one MIDI or
+  audio clip open, the ruler reads the clip's arrangement position — a clip at bar 9 starts
+  at 9, not 1 — as a multi-clip selection already did. Unwarped audio clips read in bars too.
+- **Detail panel tabs fit the track** (nota-daw/nota#247, nota-daw/nota#246): the **Pattern**
+  tab shows only on a track with a Drum Rack instead of sitting greyed out everywhere else,
+  and the panel can't be resized while **Devices** is shown, because the cards don't grow.
+  **Clip** and **Pattern** stay resizable and keep the height you gave them.
+- **Plug-in card: Open editor toggles** (nota-daw/nota#258): the button reads **Close
+  editor** while the plug-in's window is open and closes it on click. If the window can't
+  be opened, the status bar says so instead of nothing happening.
+- **Convert melody and harmony need the AI model** (nota-daw/nota#233): without the model the
+  clip's **Convert** menu no longer offers them (they used to fall back to a much worse
+  converter without saying so). It offers to download the model instead. Drums and Slice
+  are unchanged.
+- **Platform names for "Reveal in Finder"** (nota-daw/nota#235): the browser menus say **Show
+  in Explorer** on Windows and **Show in file manager** on Linux.
+- **The audio clip editor says why nothing snaps with Warp off** (nota-daw/nota#269): an
+  unwarped clip has no beat grid, and the hint line under the wave now says to turn on Warp.
+- **The mixer fader no longer jumps to where you click**; drag it like any other control.
+  Double-click still resets knobs, faders and sliders to their default.
+- **Context menus, redesigned**: every right-click menu in the app now follows the Studio
+  look and one order. A menu for a track, clip, device, scene, pad or version starts with
+  its name, colour and type; commands come in the same groups everywhere, with Copy, Cut,
+  Paste and Duplicate always together and Delete last, in red. Icons are calm grey,
+  shortcuts read the Mac way (⌘G, not ⌘+G), a chosen option is ticked, and a submenu shows
+  its current value (Record input **Ext**, MIDI from **None**). The track menu sets the
+  **colour** (all 27 shades and Auto) and the **height** (Compact · Standard · Large;
+  Option-click for every track) in one click, without submenus. **Live freeze** is a switch
+  that shows whether the track is live-frozen; switch it off to unfreeze.
+- **Performance gate for engine changes**: every pull request that touches the engine is
+  compared with its base branch on the same machine. Each built-in instrument and effect,
+  busy mixes of 1 to 32 tracks, and sparse and silent sessions are rendered with both, and
+  the change fails if any of them does more than 1% more work (CPU instructions, counted by
+  Valgrind, so the result does not depend on how busy the CI machine is) or takes more than
+  15% longer (timed back to back, re-checked before failing). An idle engine
+  must also stay under 5% CPU on macOS, Windows and Linux. Run it locally with
+  `scripts/perf-gate.sh develop` (Linux).
+
+### Fixed
+- **The other built-in devices use as little CPU as before the engine rebuild too**:
+  Nota Delay, Flanger, Chorus, Phaser, Reverb, Crush, Utility, Strata and Compressor, and
+  every built-in instrument (Keys most of all), had become 2–30 % heavier. Their
+  per-sample helpers run inline again, and the peaks that decide when a device may sleep
+  are measured once per block instead of on every sample. The sound is unchanged.
+- **Cutting a time range takes its automation with it**: ⌘X on a range left the volume,
+  pan and effect automation inside it behind, so the pasted copy came on top of points
+  that still played at the old place. The cut now removes them in the same undo step.
+- **A stopped playhead no longer hides the handles under it in the audio clip editor**:
+  dragging a warp marker, a trim bracket or an envelope point that sat under the playhead
+  moved the playhead instead. The handle now wins; the ruler still seeks.
+- **Nota Prism, Nota EQ-8 and Nota Auto Filter use as little CPU as before the engine
+  rebuild**: Prism and EQ-8 had become up to twice as heavy, Auto Filter about 40 %
+  heavier, with the same sound. The shared filter core runs inline again and EQ-8 runs all
+  its bands per sample; the output is unchanged to well below the last bit of 16-bit audio.
+- **The audio clip editor shows the playhead while stopped** (nota-daw/nota#277): whenever
+  the song position is inside the clip, as the piano roll does.
+- **⌘1–⌘5 change a grid you can see** (nota-daw/nota#114): after a click in the audio clip
+  editor while its view follows no grid (ADSR, or an unwarped clip), the grid shortcuts act
+  on the arrangement instead of silently changing the clip editor's.
+- **Copy, cut and paste a time range; paste onto another track** (nota-daw/nota#281): with
+  a time range selected (⇧-drag), ⌘C / ⌘X copy or cut the covered part of every selected
+  track, cut at the range edges, and the range's right-click menu has **Copy**, **Cut** and
+  **Duplicate**. A pasted range keeps its distance from the range start and replaces what it
+  lands on. ⌘V now pastes onto the track you clicked last, so copy a clip, click another
+  track and ⌘V to put the copy there. Without that click it lands on its own track, as before.
+- **Context menus are never cut off at the sides**: a menu whose longest item had no shortcut
+  (the track menu of a live-frozen track, with *Flatten (remove source)*) could open a little
+  too narrow, clipping every row on both sides. Every menu and submenu now opens at its full
+  width.
+- **Chorus, Flanger, Lens and Phaser go into rack chains** (nota-daw/nota#203): they can be
+  dropped onto an Instrument Rack or Audio Effect Rack chain and are listed in its add-device
+  menu, like every other built-in audio effect.
+- **Space and Delete work again after editing a warp marker's BPM** (nota-daw/nota#141): Enter
+  or Esc in the inline BPM field hands the keyboard back to the app.
+- **An effect with no track to land on starts its own audio track** (nota-daw/nota#68):
+  double-clicking an audio effect in the browser with no track selected and no instrument
+  track used to do nothing but a status-bar line. A MIDI effect says it needs an instrument
+  track.
+- **Replacing a Drum Rack pad's sample keeps the pad's mix** (nota-daw/nota#237): a sample
+  dropped onto an occupied pad now swaps only the sound. Level, pan, mute and solo, sends,
+  choke and the pad's effects stay; the Sampler keeps its tune and envelope, while start, end
+  and the loop window start fresh for the new sample.
+- **Resizing a track no longer re-arms it** (nota-daw/nota#255): after you disarmed a track (or
+  changed its mute or solo), changing its height brought the old state back.
+- **Buttons no longer have a lighter top edge** (nota-daw/nota#231): the raised highlight sits
+  inside the border instead of over its top line, most visible in Studio Light.
+- **Export and freeze use every core again**: since the engine's idle-CPU fix they rendered
+  on one thread, up to 4x slower. On macOS the engine also no longer wakes every render
+  thread when a block needs only a few, and a session that overloads one core no longer
+  drops out every two seconds while it plays.
+- **Plug-in scans finish, and large plug-in folders scan in minutes** (nota-daw/nota#220): the
+  30-second limit per plug-in never took effect, so one plug-in that froze while being probed —
+  or on unload, after it had already answered — left "Scanning…" up for good, and nothing found
+  was saved. Now a stuck plug-in is stopped after 30 seconds and retried once on its own, with
+  two minutes to load; plug-ins are probed four at a time; the scan shows how far it is
+  ("Scanning plugins · 312 of 1,000"); what it found is saved as it goes, so a scan cut short
+  resumes; plug-ins that fail to load are remembered and skipped until they change (Rescan
+  plugins retries them); a Get Plug-ins install scans only its own folder; and each scan writes
+  `logs/plugin-scan.log` in Nota's data folder, naming every plug-in probed and how it went.
+  macOS and Linux: parallel scans no longer lose a plug-in's answer to a file descriptor closed
+  twice by the process helper.
+- **⌘D in the piano roll no longer piles copies at the clip's end** when the selection is
+  longer than the room left after it: copies continue into the next open clip of the track,
+  and those with no clip to land in are left out.
+- **New project and Open ask before discarding unsaved changes** (nota-daw/nota#215): File →
+  New, File → Open and opening a project from the browser now offer Save / Don't save /
+  Cancel, like quitting does; Cancel keeps the current project. The detail panel also closes
+  cleanly on the switch instead of leaving an empty band, and a popped-out detail window
+  shows the new project's devices.
+- Duplicating a track keeps each effect's sidechain source and tap; the compressor's key
+  was dropped on the copy.
+- A sidechain source keeps feeding its key when it is muted or another track is soloed (the
+  pre tap, like a console's pre-fader send): ducking against a muted kick, or a vocoder under
+  a muted vocal, no longer goes quiet. A deleted source now counts as no key at all.
+- **macOS: About Nota and Settings… sit directly in the Nota app menu** (nota-daw/nota#160):
+  they used to hide inside an extra **Nota ›** submenu. The bold **Nota** menu now opens
+  with About Nota, then Settings… (⌘,), then Services, Hide and Quit, as in other Mac apps.
+- **macOS: Audio Unit plug-ins no longer waste work on every audio block**: since 0.52.1 Nota
+  handed each AU 31 audio channels instead of the two it was set up for, so the plug-in
+  copied the extra channels every block and grabbed memory on the audio thread on the first
+  one. In debug builds this printed a JUCE assertion per block and caused dropouts. AUs now get
+  exactly their own channels; VST3 plug-ins keep the extra headroom that stops them crashing
+  when they change their inputs or outputs.
+- **Heavy Aurora arrangements no longer stutter**: dense presets like Super Saw render
+  about 2.5× faster with bit-identical sound — block-constant unison, chorus and pitch
+  math is hoisted out of the per-sample loop. The `aurora-supersaw-2x` benchmark scenario
+  and the Aurora null-test gate in the smoke test cover the change.
+
 ## [0.56.1] — 2026-10-19
 
 ### Added
@@ -133,6 +343,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Windows and Linux) always starts a new track.
 
 ### Changed
+- **Engine internals rebuilt as modular C++20 DSP (no audible change):** every
+  built-in device is now a `.h`/`.cpp` pair in its family folder —
+  `devices/effects/` (25 audio effects), `devices/instruments/` (18 instruments),
+  `devices/midi_fx/` (6 MIDI effects), `devices/racks/` (4 racks) — on top of
+  shared `dsp/{core,math,primitives,poly}/` blocks (filters, delay, oscillators,
+  envelopes, oversampling, convolution, voices) and engine model classes moved
+  to `src/engine/`. Plugin scanning is separated from hosting
+  (`pluginhost/scanner/` + `nota_pluginscanner`, out-of-process
+  `nota-scanworker`). Rendering dispatches Pass 1 leaf tracks across cores via a
+  lock-free thread pool with SIMD mixer summing, and each device sleeps its own
+  silent blocks via `hasTail`/`isIdle`/`wake`. Sounds identical; a single device
+  edit now recompiles one translation unit.
 - **What's New shows the release notes**: the window now shows each version's curated release
   notes, the same text as its GitHub release, instead of the raw working log from this file.
   A version without release notes (older ones, and builds between releases) still shows its

@@ -128,6 +128,8 @@ public partial class MainWindow
         B("roll.octaveUp", () => _editorRoll?.TransposeBy(12), Roll);
         B("roll.octaveDown", () => _editorRoll?.TransposeBy(-12), Roll);
         B("roll.fitNotes", () => _editorRoll?.FitToNotes(), Roll);
+        B("roll.editSelected", () => EditSelectedClips(),
+            _ => Need(Timeline.SelectedMidiClips().Count >= 2, "Select two or more MIDI clips"));
         B("roll.removeOutOfScale", () => _editorRoll?.RemoveOutOfScaleNotes(),
             c => Need(c.HasOpenMidiClip && _editorRoll?.HasOutOfScaleNotes == true, "No notes outside the scale"));
 
@@ -137,13 +139,14 @@ public partial class MainWindow
         {
             ("prefs.audio", "Audio"), ("prefs.midi", "MIDI"), ("prefs.gamepads", "Gamepads"), ("prefs.remote", "Remote"),
             ("prefs.plugins", "Plug-ins"), ("prefs.downloads", "Downloads"), ("prefs.library", "Library"),
-            ("prefs.appearance", "Appearance"), ("prefs.shortcuts", "Shortcuts"),
+            ("prefs.appearance", "Appearance"), ("prefs.shortcuts", "Shortcuts"), ("prefs.updates", "Updates"),
         })
             B(id, () => ShowPreferencesPage(page));
 
         // ---- Help
         B("help.docs", () => OnDocumentation(this, e));
         B("help.whatsNew", ShowWhatsNew);
+        B("help.checkUpdates", () => _ = CheckForUpdatesAsync());
         B("help.about", ShowAbout);
 
         // Every catalog command must have a handler — a missing one is a bug, not a quiet no-op.
@@ -193,11 +196,12 @@ public partial class MainWindow
 
     // The grid shortcuts act on the clip editor (piano roll or audio — they share one setting)
     // when the detail area (docked or floating) was used last and one is open in it; otherwise
-    // on the arrangement.
+    // on the arrangement. An audio editor whose current view follows no grid (ADSR, or an
+    // unwarped clip) passes them on to the arrangement, where the change can be seen (#114).
     private EditorKind GridTarget()
     {
         bool clipOpen = (_editorRoll is { } roll && _clipEditor is not null && roll.IsEffectivelyVisible)
-                        || _audioEditor is { IsEffectivelyVisible: true };
+                        || _audioEditor is { IsEffectivelyVisible: true, GridInert: false };
         bool detailLast = _detailWasLastFocused || _detailWindow?.IsActive == true;
         return clipOpen && detailLast ? EditorKind.PianoRoll : EditorKind.Arrangement;
     }
@@ -215,7 +219,7 @@ public partial class MainWindow
         var grids = EditorGrids.Shared;
         grids.Set(kind, step(grids.Get(kind)));
         var r = kind == EditorKind.Arrangement ? Timeline.SnapGridState
-            : _audioEditor is { IsEffectivelyVisible: true } audio ? audio.SnapGridState
+            : _audioEditor is { IsEffectivelyVisible: true, GridInert: false } audio ? audio.SnapGridState
             : _editorRoll?.SnapGridState ?? Timeline.SnapGridState;
         string label = r.SnapOn ? SnapGrid.Label(grids.Get(kind), r) : "Snap off";
         if (_vm is not null) _vm.StatusText = $"{(kind == EditorKind.PianoRoll ? "Clip editor" : "Arrangement")} grid: {label}";

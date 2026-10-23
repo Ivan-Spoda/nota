@@ -128,6 +128,7 @@ public sealed class BrowserView : UserControl
     }
 
     private const int TabCount = 8;   // Instr / FX / MIDI / Files / Preset / Proj / Map / History
+    private const int EffectsTab = 1; // Audio effects
     private const int FilesTab = 3;   // samples: the player auditions the file
     private const int PresetsTab = 4; // Instr / FX / MIDI / Files / Presets carry the player
     private const int MapTab = 6;     // MIDI-learn mappings — hosts a MidiMapView, not a list
@@ -187,6 +188,10 @@ public sealed class BrowserView : UserControl
     public event Action<BrowserItem>? CreateMultisampleRequested;
     /// <summary>Delete a project bundle (moves to Trash after confirmation).</summary>
     public event Action<BrowserItem>? DeleteProjectRequested;
+    /// <summary>Delete a saved preset file (moves to Trash after confirmation).</summary>
+    public event Action<BrowserItem>? DeletePresetRequested;
+    /// <summary>Open the user presets folder in the OS file manager (a Presets tab folder row).</summary>
+    public event Action? OpenPresetsFolderRequested;
     /// <summary>Open the tag editor. Item null = manage all tags; non-null = create a tag
     /// and assign it to that device.</summary>
     public event Action<BrowserItem?>? EditTagsRequested;
@@ -425,6 +430,15 @@ public sealed class BrowserView : UserControl
     public void ShowMidiMap() { SelectTab(MapTab); SetCollapsed(false, persist: true); }
     /// <summary>Opens the History tab (the project's versions).</summary>
     public void ShowHistory() { SelectTab(HistoryTab); SetCollapsed(false, persist: true); }
+    /// <summary>Unfolds the browser on Audio effects with the keyboard in its search, ready to
+    /// type (the device chain's "+", #97).</summary>
+    public void FocusEffectSearch()
+    {
+        SelectTab(EffectsTab);
+        SetCollapsed(false, persist: true);
+        // The search row was hidden while folded: focus it once it is laid out again.
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => { _search.Focus(); _search.SelectAll(); }, Avalonia.Threading.DispatcherPriority.Input);
+    }
 
     /// <summary>Fold the browser down to its icon rail, or unfold it.</summary>
     public void SetCollapsed(bool collapsed, bool persist)
@@ -712,13 +726,23 @@ public sealed class BrowserView : UserControl
     // A section header: caption, a hairline filling the gap, and the section's count.
     private Control GroupRow(BrowserItem item)
     {
+        // Device tabs' BUILT-IN / PLUG-INS headers fold their section on click (#230); a
+        // header without a key (other tabs) stays plain chrome.
+        bool foldable = item.Path.Length > 0;
         var label = new TextBlock
         {
             Text = NotaText.Label(item.Name),
             Classes = { "GroupLabel" },
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(10, 0, 0, 0),
         };
+        var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(foldable ? 6 : 10, 0, 0, 0) };
+        if (foldable)
+        {
+            var caret = new Glyph(item.IsExpanded ? GlyphKind.CaretDown : GlyphKind.CaretRight, 10) { VerticalAlignment = VerticalAlignment.Center };
+            caret.BindResource(Glyph.ForegroundProperty, "Brush.TextTertiary");
+            head.Children.Add(caret);
+        }
+        head.Children.Add(label);
         var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 7, 0) };
         rule.BindResource(Border.BackgroundProperty, "Brush.Rule");
         var count = new TextBlock
@@ -731,12 +755,23 @@ public sealed class BrowserView : UserControl
         count.Classes.Add("Mono");
         count.BindResource(TextBlock.ForegroundProperty, "Brush.TextDisabled");
 
-        var grid = new Grid { Height = GroupRowH, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        grid.Children.Add(label);
+        var grid = new Grid { Height = GroupRowH, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Background = Brushes.Transparent };
+        grid.Children.Add(head);
         Grid.SetColumn(rule, 1);
         grid.Children.Add(rule);
         Grid.SetColumn(count, 2);
         grid.Children.Add(count);
+        if (foldable)
+        {
+            grid.Cursor = new Cursor(StandardCursorType.Hand);
+            ToolTip.SetTip(grid, item.IsExpanded ? "Collapse" : "Expand");
+            grid.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(grid).Properties.IsLeftButtonPressed) return;
+                e.Handled = true;
+                _vm?.ToggleSection(item);
+            };
+        }
         return grid;
     }
 
@@ -1212,8 +1247,7 @@ public sealed class BrowserView : UserControl
         {
             var chip = item;
             var mi = new MenuItem { Header = chip.Label, ToggleType = MenuItemToggleType.CheckBox, IsChecked = chip.Active };
-            if (chip.ColorHex is not null)
-                mi.Icon = new Ellipse { Width = 10, Height = 10, Fill = BrushFromHex(chip.ColorHex) };
+            if (chip.ColorHex is not null) MenuKit.SetTrailing(mi, MenuKit.Swatch(BrushFromHex(chip.ColorHex)));
             mi.Click += (_, _) => chip.OnClick();
             flyout.Items.Add(mi);
         }
@@ -1477,7 +1511,30 @@ public sealed class BrowserView : UserControl
         e.Handled = true;
     }
 
+    // The row's menu with the item named at the top (spec 034).
     private MenuFlyout? BuildContextMenu(BrowserItem item)
+    {
+        var flyout = BuildContextMenuItems(item);
+        if (flyout is null || flyout.Items.Count == 0) return flyout;
+        flyout.Items.Insert(0, MenuKit.Header(item.Name, null, ItemKindLabel(item)));
+        flyout.Items.Insert(1, new Separator());
+        return flyout;
+    }
+
+    private static string ItemKindLabel(BrowserItem item) => item.Kind switch
+    {
+        BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument => "Instrument",
+        BrowserItemKind.BuiltinEffect or BrowserItemKind.PluginEffect => "Audio effect",
+        BrowserItemKind.BuiltinMidiEffect => "MIDI effect",
+        BrowserItemKind.Sample => "Sample",
+        BrowserItemKind.MidiFile => "MIDI file",
+        BrowserItemKind.Project => "Project",
+        BrowserItemKind.Preset => "Preset",
+        BrowserItemKind.Folder => "Folder",
+        _ => "",
+    };
+
+    private MenuFlyout? BuildContextMenuItems(BrowserItem item)
     {
         var flyout = new MenuFlyout();
 
@@ -1494,11 +1551,8 @@ public sealed class BrowserView : UserControl
             {
                 var tag = t;
                 bool assigned = _vm.IsTagAssigned(item, tag.Id);
-                var mi = new MenuItem
-                {
-                    Header = tag.Title, ToggleType = MenuItemToggleType.CheckBox, IsChecked = assigned,
-                    Icon = new Ellipse { Width = 10, Height = 10, Fill = BrushFromHex(tag.Color) },
-                };
+                var mi = new MenuItem { Header = tag.Title, ToggleType = MenuItemToggleType.CheckBox, IsChecked = assigned };
+                MenuKit.SetTrailing(mi, MenuKit.Swatch(BrushFromHex(tag.Color)));
                 mi.Click += (_, _) => _vm.AssignTag(item, tag.Id, !assigned);
                 tagsMenu.Items.Add(mi);
             }
@@ -1519,19 +1573,36 @@ public sealed class BrowserView : UserControl
             {
                 var similar = new MenuItem { Header = "Show similar sounds" };
                 similar.Click += (_, _) => ShowSimilar(item);
-                var reveal = new MenuItem { Header = "Reveal in Finder" };
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 flyout.Items.Add(similar);
                 flyout.Items.Add(reveal);
                 return flyout;
             }
-            case BrowserItemKind.Sample:
-            case BrowserItemKind.MidiFile:
-            // A saved preset file on disk. Synthetic rows (factory presets, drum kits)
-            // carry a scheme instead of a path and have nothing to reveal.
+            // A saved preset file on disk (#234). Synthetic rows (factory presets, drum kits)
+            // carry a scheme instead of a path: built in, nothing to reveal or delete.
             case BrowserItemKind.Preset when System.IO.Path.IsPathRooted(item.Path):
             {
-                var reveal = new MenuItem { Header = "Reveal in Finder" };
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
+                reveal.Click += (_, _) => RevealRequested?.Invoke(item);
+                flyout.Items.Add(reveal);
+                flyout.Items.Add(new Separator());
+                flyout.Items.Add(MenuKit.Danger("Delete…", GlyphKind.Trash, () => DeletePresetRequested?.Invoke(item)));
+                return flyout;
+            }
+            // The Presets tab's category / device rows group by what a preset holds; the files
+            // all sit in the one presets folder, so every row opens that.
+            case BrowserItemKind.Folder when _active == PresetsTab && item.Path.StartsWith("preset", StringComparison.Ordinal):
+            {
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
+                reveal.Click += (_, _) => OpenPresetsFolderRequested?.Invoke();
+                flyout.Items.Add(reveal);
+                return flyout;
+            }
+            case BrowserItemKind.Sample:
+            case BrowserItemKind.MidiFile:
+            {
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 flyout.Items.Add(reveal);
                 return flyout;
@@ -1541,7 +1612,7 @@ public sealed class BrowserView : UserControl
                 var multi = new MenuItem { Header = "Create multisample…" };
                 multi.Click += (_, _) => CreateMultisampleRequested?.Invoke(item);
                 ToolTip.SetTip(multi, "Map the folder's samples by their names into Nota Mosaic presets");
-                var reveal = new MenuItem { Header = "Reveal in Finder" };
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 flyout.Items.Add(multi);
                 flyout.Items.Add(reveal);
@@ -1551,10 +1622,9 @@ public sealed class BrowserView : UserControl
             {
                 var open = new MenuItem { Header = "Open" };
                 open.Click += (_, _) => ItemActivated?.Invoke(item, KeyModifiers.None);
-                var reveal = new MenuItem { Header = "Reveal in Finder" };
+                var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
-                var del = new MenuItem { Header = "Delete…" };
-                del.Click += (_, _) => DeleteProjectRequested?.Invoke(item);
+                var del = MenuKit.Danger("Delete…", GlyphKind.Trash, () => DeleteProjectRequested?.Invoke(item));
                 flyout.Items.Add(open);
                 flyout.Items.Add(reveal);
                 flyout.Items.Add(new Separator());

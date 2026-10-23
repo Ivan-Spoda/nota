@@ -60,11 +60,13 @@ public sealed class MiniFader : Control
     {
         // Left button only — right-click bubbles to the CV-modulate / MIDI Learn menu.
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        // Double-click resets to the default value (e.g. 0 dB for a track volume).
-        if (e.ClickCount == 2 && Default >= 0)
+        // Double-click resets to the default value (e.g. 0 dB for a track volume) — ValueEntry
+        // handles it first once attached; ⌥-click types a value there.
+        if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) && Default >= 0)
         {
-            double d = Math.Clamp(Default, 0, _max);
-            if (Math.Abs(d - _value) > 1e-6) { _value = d; InvalidateVisual(); ValueChanged?.Invoke(_value); }
+            GestureBegin?.Invoke();
+            SetValue(Default);
+            GestureEnd?.Invoke();
             e.Handled = true;
             return;
         }
@@ -104,6 +106,11 @@ public sealed class MiniFader : Control
         if (_drag) { _drag = false; GestureEnd?.Invoke(); InvalidateVisual(); }
         base.OnPointerCaptureLost(e);
     }
+
+    /// <summary>The fader as a typeable value; <paramref name="fmt"/> is its read-out at a value (0..max).</summary>
+    internal ValueField EntryField(string name, Func<double, string> fmt)
+        => new(name, () => _value / _max, n => fmt(n * _max), n => SetValue(n * _max),
+            () => GestureBegin?.Invoke(), () => GestureEnd?.Invoke(), Default >= 0 ? Math.Clamp(Default, 0, _max) / _max : null);
 
     private void SetValue(double raw)
     {

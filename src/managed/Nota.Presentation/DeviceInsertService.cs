@@ -51,7 +51,10 @@ public sealed record InsertResult
     /// <summary>A preset that landed: chain, device index, its name and factory id ("" for a user preset).</summary>
     public (int TrackId, PresetChain Chain, int Index, string Name, string FactoryId)? PresetLanded { get; init; }
 
-    public static InsertResult Fail(string status) => new() { Ok = false, Status = status };
+    /// <summary>The plug-in this insertion put on a track, for "Open plug-in window on insert"
+    /// (#250): DeviceIndex -1 is the track's instrument.</summary>
+    public (int TrackId, int DeviceIndex)? PluginAdded { get; init; }
+        public static InsertResult Fail(string status) => new() { Ok = false, Status = status };
 }
 
 public sealed class DeviceInsertService
@@ -70,6 +73,14 @@ public sealed class DeviceInsertService
     }
 
     private const string FactoryPrefix = "factory:", KitPrefix = "kit:", RhythmKitPrefix = "rhythmkit:";
+
+    /// <summary>Raised when an instrument lands on a track — a new track or a replaced
+    /// instrument — so the host can record it under "Add track ▸ Recent" (spec 034).</summary>
+    public event Action<BrowserItem>? InstrumentAdded;
+
+    /// <summary>Raised when an instrument preset lands on a track (in place, or on a new
+    /// track), with that track's id: the host records the instrument the track now plays.</summary>
+    public event Action<int>? InstrumentPresetApplied;
 
     // ---- what a track is --------------------------------------------------------------------
 
@@ -140,7 +151,7 @@ public sealed class DeviceInsertService
             };
             if (item.BuiltinKind == RhythmModel.Kind && _kits is not null) _kits.LoadInto(_engine, t, _kits.DefaultRhythmKit, out _);   // a Rhythm starts on a factory kit
         }
-        if (t > 0) _engine.AddMidiClip(t, beat, 4.0);
+        if (t > 0) { _engine.AddMidiClip(t, beat, 4.0); InstrumentAdded?.Invoke(item); }
         return t;
     }
 
@@ -155,6 +166,7 @@ public sealed class DeviceInsertService
         }
         else if (item.Kind == BrowserItemKind.PluginInstrument) _engine.SetTrackInstrumentPlugin(trackId, item.CatalogIndex);
         else return false;
+        InstrumentAdded?.Invoke(item);
         return true;
     }
 
@@ -184,14 +196,14 @@ public sealed class DeviceInsertService
     public InsertResult DropOnArrangement(BrowserItem item, int trackId, double beat)
     {
         if (item.Kind is BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument)
-            return Group(() =>
+            return TagPlugin(item, Group(() =>
             {
                 if (TryReplaceInstrument(item, trackId))
                     return new InsertResult { Ok = true, TrackId = trackId, InstrumentReplaced = true, Status = $"Changed instrument to {item.Name} (track {trackId})" };
                 int t = CreateInstrumentTrack(item, beat);
                 return t > 0 ? new InsertResult { Ok = true, TrackId = t, CreatedTrack = true, Status = $"Added {item.Name} (track {t})" }
                              : InsertResult.Fail($"Couldn't load {item.Name}.");
-            });
+            }));
         // A preset on a plain instrument track loads into its instrument, like a bare instrument.
         if (item.Kind == BrowserItemKind.Preset) return ApplyPreset(item, new InsertTarget(trackId, Beat: beat, InPlace: true));
         return Group(() => RouteToTrack(item, trackId));
@@ -202,7 +214,7 @@ public sealed class DeviceInsertService
     /// gap or in place of the card the target names, an instrument in place of the track's
     /// (a rack gets a chain / pad), presets and samples as usual. One undo step.</summary>
     public InsertResult Insert(BrowserItem item, InsertTarget target)
-        => Group(() => InsertCore(item, target));
+        => TagPlugin(item, Group(() => InsertCore(item, target)));
 
     private InsertResult InsertCore(BrowserItem item, InsertTarget target)
     {
@@ -314,7 +326,9 @@ public sealed class DeviceInsertService
     }
 
     /// <summary>An effect appended to a track, or a preset applied to it (was MainWindow.RouteToTrack).</summary>
-    public InsertResult RouteToTrack(BrowserItem item, int trackId)
+    public InsertResult RouteToTrack(BrowserItem item, int trackId) => TagPlugin(item, RouteToTrackCore(item, trackId));
+
+    private InsertResult RouteToTrackCore(BrowserItem item, int trackId)
     {
         // Presets first: an instrument preset spawns its own track, so it doesn't need a
         // target; an effect preset reports "Select a track first." itself.
@@ -331,6 +345,32 @@ public sealed class DeviceInsertService
                 return Done(trackId, $"Added {item.Name} to track {trackId}") with { ShowDevices = true };
         }
         return InsertResult.Fail($"{item.Name} can't go on a track.");
+    }
+
+    /// <summary>An effect activated with nothing to land on (no selected track, no instrument
+    /// track) starts its own audio track instead of failing quietly (#68); a MIDI effect can't,
+    /// so it says what it needs. One undo step.</summary>
+    public InsertResult EffectOnNewTrack(BrowserItem item) => Group(() =>
+    {
+        if (item.Kind == BrowserItemKind.BuiltinMidiEffect)
+            return InsertResult.Fail("MIDI effects need an instrument track: add an instrument first.");
+        int t = _engine.AddAudioTrack();
+        if (t <= 0) return InsertResult.Fail($"Couldn't add a track for {item.Name}.");
+        var r = RouteToTrack(item, t);
+        if (!r.Ok) { _engine.RemoveTrack(t); return r; }
+        return r with { CreatedTrack = true, Status = $"Added {item.Name} on a new audio track (track {t})" };
+    });
+
+    // Names the plug-in a successful insertion added (#250). Rack chains / pads are left out:
+    // their plug-ins aren't addressed by a track device index.
+    private InsertResult TagPlugin(BrowserItem item, InsertResult r)
+    {
+        if (!r.Ok || r.TrackId <= 0 || r.PluginAdded is not null) return r;
+        if (item.Kind == BrowserItemKind.PluginInstrument && (r.CreatedTrack || r.InstrumentReplaced))
+            return r with { PluginAdded = (r.TrackId, -1) };
+        if (item.Kind == BrowserItemKind.PluginEffect)
+            return r with { PluginAdded = (r.TrackId, r.Placed?.Final ?? _engine.TrackDeviceCount(r.TrackId) - 1) };
+        return r;
     }
 
     private int AddEffect(BrowserItem item, int t) => item.Kind switch
@@ -382,6 +422,7 @@ public sealed class DeviceInsertService
                 swapped = true;
             }
             string w = _factory.ApplyInPlace(_engine, factoryId, t, -1);
+            if (w.Length == 0) InstrumentPresetApplied?.Invoke(t);
             return new InsertResult
             {
                 Ok = w.Length == 0, TrackId = t, InstrumentReplaced = swapped, ShowDevices = true,
@@ -392,12 +433,15 @@ public sealed class DeviceInsertService
         // …and a preset file (a user preset, a Mosaic pack preset) the same way.
         if (fp is null && !target.NewTrack && target.InPlace && CanReplaceInstrument(t)
             && _presets?.ApplyInstrumentInPlace(_engine, item.Path, t, out bool fileSwapped) is { } fw)
+        {
+            if (fw.Length == 0) InstrumentPresetApplied?.Invoke(t);
             return new InsertResult
             {
                 Ok = fw.Length == 0, TrackId = t, InstrumentReplaced = fileSwapped, ShowDevices = true,
                 Status = fw.Length > 0 ? fw : $"Applied preset {item.Name}",
                 PresetLanded = (t, PresetChain.Instrument, -1, item.Name, ""),
             };
+        }
 
         // Apply doesn't say where the preset landed, so diff the chain around it: a new track
         // (instrument preset) or one more device / MIDI effect on the target (appended last).
@@ -409,6 +453,7 @@ public sealed class DeviceInsertService
         if (warn.Length > 0) return InsertResult.Fail(warn);
 
         int newTrack = TrackIds().FirstOrDefault(id => !before.Contains(id));
+        if (newTrack > 0) InstrumentPresetApplied?.Invoke(newTrack);
         if (newTrack > 0)
             return new InsertResult
             {

@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.56.1** (plus changes in development on `main`). This document describes what is
+**0.57.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -39,7 +39,8 @@ Contents
 
 Architecture: engine and DSP in C++20 (CMake + Ninja), UI in .NET 10 / Avalonia 12 (C#),
 with a C ABI + P/Invoke boundary between them. Plugin hosting is isolated in a separate
-JUCE module; the engine core is JUCE-free.
+JUCE module; the engine core is JUCE-free. A project too heavy for the audio thread renders
+on a pool of render threads, export and freeze use every core, and an idle engine uses no CPU.
 
 ---
 
@@ -59,7 +60,8 @@ JUCE module; the engine core is JUCE-free.
 - **Version history**: every save records a version inside the project. The browser's
   **History** tab draws them as a branching tree (the current one has an orange dot), each
   described by what it changed ("Added Bass · Tempo 120.00 → 124.00"); switch
-  to any version, open one as a copy, or name, note, star and delete versions. Saving on top
+  to any version, open one as a copy, or name, note, star and delete versions; a star button
+  in the tab's header lists starred versions only. Saving on top
   of an older version branches. **Save Version with Note…** (⌥⌘S). The tab's menu deletes all
   unnamed versions at once; Settings → Library turns history off (erasing it, after a warning). Versions share their
   audio, so each costs only what it adds; **Save As** carries the history along.
@@ -70,7 +72,8 @@ JUCE module; the engine core is JUCE-free.
   unsaved; Return saves (right in the dialog, then quits), Escape cancels.
 - **Project key** (KEY cell in the transport bar, saved with the project): loops dropped on
   the arrangement can be transposed to it.
-- **Transport**: play / stop / record, playhead position.
+- **Transport**: play / stop / record, playhead position. Click the position read-out to
+  switch it between bars and time; the arrangement and clip editor rulers follow it.
   - **Stop returns to the launch point** (a seek sets the start anchor).
   - **Pause** (⇧Space) — the playhead stays where it stopped and Play carries on from there.
   - **Follow** — the arrangement follows the cursor (playhead stays centred); scrolling away
@@ -109,6 +112,9 @@ track count and closes with Escape.
   recording into the arrangement (audio and MIDI); split at the cursor or across a
   selection (Cmd/Ctrl+E cuts every track in the selection); clip scrubbing on the ruler.
   ⌘A selects every clip; moving several selected clips is one undo step.
+  A selected time range (⇧-drag) copies, cuts, duplicates and deletes with ⌘C / ⌘X / ⌘D /
+  Delete — just the covered part of each track, cut at the range edges; ⌘V pastes clips or a
+  range at the playhead onto the track clicked last (a range replaces what it lands on).
   **Duplicate time** (⌘⇧D) copies a selected time range right after itself and **Insert
   silence** (⌘⇧I) opens a gap of its length, across the whole song — clips and automation
   after it move right, clips crossing it are cut (Edit menu and the range's right-click menu).
@@ -124,7 +130,8 @@ track count and closes with Escape.
   - **Resizable tracks and track list** — drag a track's bottom edge (header or lane) to
     set its height, 30–256 px, with a light snap to Compact / Standard / Large; a
     multi-selection resizes together, ⌥-drag resizes every track, double-click resets.
-    The track menu's **Track height** sets a size for the selection or all tracks. Headers
+    The track menu's **Height** keys (Compact · Standard · Large) size the selection in one
+    click; ⌥-click sizes every track. Headers
     fit their height: one line (name, M / S / arm) when short, input, fader and pan on rows
     of their own when tall. Drag the seam between headers and lanes to set the header
     width (160–480 px). Both are saved with the project.
@@ -147,7 +154,9 @@ track count and closes with Escape.
   roll's header chip open a menu with every option, as does the audio clip editor's header
   (trim brackets, warp markers and envelope points snap); ⌘1 / ⌘2 narrow / widen (in Auto,
   the density), ⌘3 triplets, ⌘4 snap on / off, ⌘5 Auto ↔ fixed (also Edit → Grid), acting
-  on the editor used last. Hold ⌥ to drag freely; clip edges still attract a dragged clip.
+  on the editor used last (the arrangement while the audio clip editor shows ADSR or an
+  unwarped clip, which follow no grid). Hold ⌥ to drag freely; clip edges still attract a
+  dragged clip.
 - **Session View** — a clip grid (tracks × scenes) with an inspector that the toolbar's
   **Inspector** key (the sidebar icon) shows or hides (remembered); on a narrow window the least-used
   toolbar controls fold into a **⋯** menu. Named, coloured clips with note / waveform
@@ -183,7 +192,9 @@ track count and closes with Escape.
 - **Adding a track**: the `+ Instrument` / `+ Audio` / `+ Return` buttons above the
   arrangement, or the context menu — right-click the empty space below the tracks, or use
   `Add track ▸` in a track's own menu (the new track goes right after that track, or inside
-  it when it is a group).
+  it when it is a group). `Add track ▸ Recent` (Arrangement and Session) lists the five
+  instruments added most recently — built-in or plug-in, however they were added — and
+  adds one in a click; the list is per user, and an uninstalled plug-in drops out of it.
 - **Several tracks at once**: ⇧-click headers to build a selection (or ⌘A with the headers
   focused); ⌘C / ⌘X / ⌘V / ⌘D and Delete copy, cut, paste, duplicate and delete the
   selected tracks, and right-clicking the selection groups, colours or freezes them all —
@@ -217,7 +228,8 @@ track count and closes with Escape.
     project.
   - **Send/Return** buses (sends to returns) with a return list.
 - **Level meters** (peak/RMS) on every channel and on the master, plus true peak.
-- **Device chain** per track: instrument + effects + MIDI effects, laid out in a row.
+- **Device chain** per track: instrument + effects + MIDI effects, laid out in a row. The
+  **+** at its end opens the browser on Audio effects with the cursor in the search.
   - Double-click a device's header (or Fold in its menu) to fold it into a narrow strip with
     its rotated name and on/off switch; double-click the strip to unfold. Saved with the project.
 
@@ -237,7 +249,10 @@ track count and closes with Escape.
   - **Playable keys**: click a key to hear it, ⇧-drag to glide, ⌘-click to select every note
     of that pitch; a vertical drag on the keys zooms the rows.
   - Click the roll's ruler to put the playhead there, or drag along it to scrub (snapped to
-    the grid); the roll shows the playhead while stopped too, where playback will start.
+    the grid, ⌥ free); the playhead line itself drags too, on the ruler or over empty grid.
+    The roll shows the playhead while stopped, where playback will start, and its ruler
+    reads the clip's arrangement position (a clip at bar 9 starts at 9). A Session slot
+    plays on its own loop clock, so its editor counts from the slot's start and doesn't seek.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
   - Notes replace the same-pitch notes they land on instead of stacking: moved, stretched,
@@ -262,6 +277,16 @@ track count and closes with Escape.
   - A MIDI clip trimmed in the arrangement mutes note tails at its boundary.
   - Live edits (moving a note, changing its length) reach the engine immediately, and a
     whole drag is a single undo step.
+  - **Several clips at once**: double-click one of two or more selected MIDI clips (one
+    track or several), or right-click → **Edit selected clips together** (also in the
+    command palette), to open them together on the arrangement's bars. Selecting, moving,
+    transposing, quantizing, deleting and clip tools work across clips, one undo for the
+    whole edit; a note moved past the seam into the next open clip of its track moves into
+    that clip. A **clip strip** under the ruler shows the open clips: click one to make it
+    the active clip (header, inspector and envelopes follow it; new notes go into it), or
+    click its lock to keep it as a dimmed, read-only reference. While the Clip tab is
+    open it follows the arrangement selection. ⌘D copies that run past a clip's end continue
+    into the next open clip; past the last one they are left out.
 - **Clip tools (generate and transform)**: a **Tools** rail beside the piano roll with
   fifteen tools that write or rewrite notes. Six **generators** — *Rhythm* (a pattern that
   leans on the strong beats), *Seed* (learns the clip's own intervals and rhythm, then
@@ -273,7 +298,9 @@ track count and closes with Escape.
     before deciding — and **Apply** keeps it as a single undo step. Backing out leaves no
     trace in the history.
   - A selection scopes the tool to those notes; with nothing selected it works the whole
-    clip. Output can **replace** what it was given or be **added** on top.
+    clip. Output can **replace** what it was given or be **added** on top. With several
+    clips open, the tool runs on each clip that has selected notes (or the active clip),
+    and what it writes stays in that clip.
   - Everything is **seeded**, so a result is repeatable and "New seed" re-rolls it.
   - Tools that think in pitch follow the roll's **Set Scale** key, so what they write
     stays in key.
@@ -373,7 +400,8 @@ track count and closes with Escape.
 - **Audio→MIDI** (right-click an audio clip → Convert). With the **basic-pitch** AI model
   installed (Settings → Downloads → AI Models), Melody and Harmony use it instead: every note,
   chords included, with velocities from the playing; Melody keeps the strongest note where notes
-  overlap. Without it they use the DSP below, and the Convert menu offers the model.
+  overlap. Without the model the Convert menu leaves Melody and Harmony out and offers the
+  model instead (the DSP converters below stay for the AI tools).
   - **Convert Melody** — monophonic pitch detection (YIN) → a new Nota Volt track.
   - **Convert Harmony** — polyphonic (STFT + spectral peak picking) → chords: overtones,
     chorus shimmer and slight detune don't add stray notes, held chords stay whole, and
@@ -427,7 +455,15 @@ track count and closes with Escape.
   editors' snap grid. Warping runs in the background (the track shows "Processing…" and a
   re-warped clip plays its previous version until the new one is ready), so long files
   don't stall the app. The clip editor redraws the visible waveform at screen resolution,
-  down to single samples, and its ruler thins or adds bars, beats and 16ths with the zoom.
+  down to single samples, and its ruler — in the clip's arrangement position, bars or time,
+  warped or not — thins or adds bars, beats and 16ths with the zoom. Click or drag the ruler,
+  or drag the playhead line, to move the playhead (snapped on a warped clip, ⌥ free); the
+  playhead shows while stopped too.
+  - **Tempo** next to the Warp switch: the tempo the audio was recorded at — drag it or type
+    it; **÷2** / **×2** fix a half- or double-time detection. Warp markers keep their relative
+    timing; on an unwarped clip a tempo turns Warp on. One undo step each.
+  - Dragging a warp marker (or a segment's BPM chip) stretches the waveform live; the clip is
+    re-warped once on release, and Esc during the drag puts it back.
 - **Changing the sample rate** does not break third-party plugins or warped clips — the
   caches are rebuilt once when the rate changes.
 
@@ -794,6 +830,13 @@ audio effects after it keep running and keep their settings; saved with the proj
   Amount, bipolar Feedback ±90 %, Width 0–200 %, Warmth (dark, saturated BBD line), Mix. Every voice's
   delay or detune over two cycles (drag for Amount), the voices' stereo field, the detune and delay
   ranges, and a status strip; 34 factory presets; MCP `read_chorus` / `set_chorus`.
+- **Nota Vocoder** (26) — a channel vocoder: the track it sits on is the voice (modulator, Mod gain,
+  key meter); the carrier is an internal Saw (at a Pitch, C0–C7 — a robot voice by default), Noise,
+  or another track picked on the card with its colour (Pre / Post tap; keeps feeding while muted),
+  with a Tilt. 8–32 bands between Low and High, Q, Formant ±12 st, Attack, Release; Unvoiced noise
+  for consonants, Hold, Mix, Gain. A live graph of each band's voice level and the carrier, with
+  draggable range edges; 7 factory presets; a carrier track is routed over MCP with
+  `set_device_sidechain`.
 - **Forge**, **Valve** and **Vintage** each carry an **OVERSAMPLE** selector
   (Off/2×/4×/8×) to suppress aliasing under heavy drive.
 
@@ -879,7 +922,10 @@ audio effects after it keep running and keep their settings; saved with the proj
 
 - **AU** (macOS) and **VST3** (all platforms) — instruments and effects.
 - **Scanning** and a catalogue of installed plugins (a separate `nota-scanworker`), scan
-  paths in Preferences, and Rescan.
+  paths in Preferences, and Rescan. Four plugins load at a time, each with a time limit
+  (a stuck one is retried alone, then skipped); progress shows as "312 of 1,000"; results
+  are saved as the scan goes; plugins that failed are skipped until they change or a Rescan;
+  each scan writes `logs/plugin-scan.log`.
 - **Downloads** (Settings → Downloads, formerly Get Plug-ins) — open-source VST3 plugins
   from the [Nota plugin registry](https://github.com/nota-daw/nota-plugins-registry)
   (Surge XT, Dexed, Dragonfly Reverb, CHOW Tape Model, Stochas …), installed, updated and
@@ -895,11 +941,14 @@ audio effects after it keep running and keep their settings; saved with the proj
   run on, which comes with the first model and goes with the last. Every asset is pinned to a
   URL, size and sha256 in the app; models install into Nota's data folder and run offline.
 - **Plugin device card** in two sizes: the small card shows vendor, format, parameter count
-  and latency with Open editor and Save preset; the full card adds every parameter as a knob
+  and latency with Open editor (a toggle: Close editor while the window is open; a window
+  that fails to open is reported in the status bar) and Save preset; the full card adds every parameter as a knob
   (with filter and pages, the plugin's own value text, double-click for its default) and a
   sidechain source where the plugin has one.
 - **Loading** into a track or rack chain, with the plugin's **native GUI** (an editor
-  window that opens on top and focused, and closes when the device is removed).
+  window that opens on top and focused, and closes when the device is removed). Adding a
+  plug-in by hand opens its window straight away (Preferences → Plug-ins → Open plug-in
+  window on insert, on by default); loading a project, undo and paste don't.
 - **State save and restore** in the project, and **bypass**.
 - **PDC** — plugin delay compensation (including a toggle in the Audio Effect Rack).
 - **Transport sync** — plugins receive tempo, position, play state and loop boundaries
@@ -991,7 +1040,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   filter chips in the header); favourited devices sort to the top of their section. The
   chips keep to one line — whatever does not fit collapses into a **+N** that opens the rest.
 - **Context menus**: Projects — Open / Reveal in Finder / Delete (to the Trash, with
-  confirmation); Files — Show similar sounds / Reveal in Finder; Presets — Reveal in Finder.
+  confirmation); Files — Show similar sounds / Reveal in Finder; Presets — Reveal in Finder
+  and Delete… (to the Trash) on a saved preset, Reveal in Finder on a folder row (opens the
+  presets folder).
+  On Windows and Linux the reveal item reads Show in Explorer / Show in file manager.
+- **Foldable sections**: the BUILT-IN and PLUG-INS headers of the device tabs collapse and
+  expand on click.
 - **Hints for empty tabs** — explaining what the tab is and how to add content to it.
 
 ---
@@ -1048,6 +1102,14 @@ audio effects after it keep running and keep their settings; saved with the proj
   knob or fader turns orange while you hover or drag it; mute is amber, solo blue,
   record-arm red; labels are in sentence case. Switching applies immediately, across every
   open window — including the custom-drawn arrangement, piano roll, mixer and device cards.
+- **Right-click menus, one system** — every context menu opens with the object it acts on
+  (name, colour, type and position: "Vocals · Audio · 3", "3 tracks", "MIDI clip") and lists
+  its commands in one order: properties → settings → actions → create / group → Copy · Cut ·
+  Paste · Duplicate → Delete, last and in red. Icons are neutral, a chosen option carries a
+  tick, a submenu shows its current value (Record input **Ext**, MIDI from **None**) and
+  shortcuts read ⌘G / ⌘⇧G on macOS, Ctrl+G elsewhere. The track menu sets the colour (27
+  shades and Auto) and the height in one click, and shows **Live freeze** as a switch —
+  on while the track is live-frozen, off to unfreeze.
 - **A single frameless window style**: centred title, drag by the header, the macOS
   traffic lights in a left inset (Windows gets its own title bar; Linux uses the system
   frame). **Full screen** — the macOS green button, or View → Toggle Full Screen (F11)
@@ -1056,12 +1118,17 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **What's New** — a window showing the release notes (`release-notes/X.Y.Z.en.md`, the GitHub
   release text; the CHANGELOG section for versions without them) newer than `LastSeenVersion`, once
   after the first launch on a new version; any time from Help ▸ What's New or the version
-  number in the status bar.
-- **Self-update** — the start screen's banner announces a newer GitHub release. **Update**
-  downloads the build for this platform (with progress, checked against the release's
-  sha256). **Restart now** installs it and relaunches, and **Later** installs it on quit.
-  This covers the macOS .app, the Windows installer (run silently) and the Linux AppImage.
-  Other copies fall back to a link to the release page.
+  number in the status bar. A release's notes give a summary, then All changes (Added /
+  Changed / Fixed, each item linked to its commit), then the contributors; links open in the
+  browser.
+- **Self-update** — Nota looks for a newer GitHub release on every launch and once a day while
+  it runs (Settings ▸ Updates turns that off), and on demand from Help ▸ Check for updates…
+  (also in the macOS app menu), which also says when you're up to date or couldn't check. A
+  newer release shows in the start screen's banner and in the status bar beside the version.
+  **Update** downloads the build for this platform (with progress, checked against the
+  release's sha256). **Restart now** installs it and relaunches, and **Later** installs it on
+  quit. This covers the macOS .app, the Windows installer (run silently) and the Linux
+  AppImage. Other copies fall back to a link to the release page.
 - **About** — the app and engine versions, the copyright notice, and a pointer to the
   third-party attribution notices (`LICENSES/THIRD-PARTY-NOTICES.md`).
 - **Settings** — a larger window with a sidebar grouped into Devices, Plug-ins and General
@@ -1075,8 +1142,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   detaches it (the selected clip's piano roll on top, the device chain below, both at
   once). The content moves across as-is: edits, meters and graphs all keep working live.
 - **Popup rack editors** (full UI / Params).
-- **Typed values** — double-click the number next to a slider in a device card, the clip
-  editor or a rack macro and type it: "−6", "1.5k", "250 ms", "L 30", "1/16".
+- **Typed values** — ⌥-click any knob, fader or slider (or double-click the number next to
+  it) and type the value: "−6", "1.5k", "250 ms", "L 30", "1/16". Double-click the control
+  itself resets it to the default.
 - **User manual** (EN / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
   opens it in the system language, the start window links to the first-track tutorial, and
   each device header menu's **Documentation** item opens that device's page.
@@ -1094,14 +1162,18 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Gamepads** (macOS): enable gamepad input (notes and mapped controls); the controller
   list updates on hot-plug, with a live activity indicator beside each pad that names the
   note played or the control driven.
-- **Plug-ins**: scan paths, Rescan.
+- **Plug-ins**: scan paths, Rescan, **Open plug-in window on insert**.
+- **Updates**: automatic update checks on/off, the last check and **Check now**.
 - **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
 - **Library**: library folders.
 - **Appearance**: **Colour theme** — **Dark**, **Light** or **Follow system** over two
   rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for
   dark mode and one for light mode, switched with the OS appearance; the choice applies
-  live and is remembered. Also **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
+  live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
+  interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
+  remembered; timeline, piano roll and audio editor zoom work on top of it. Also
+  **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Shortcuts**: the shortcut list.
 - Settings, logs and autosaves live in `~/Library/Application Support/Nota/` (macOS) and
@@ -1181,6 +1253,9 @@ Coverage:
 - **Release CI**: a GitHub Actions workflow builds and packages every target (x64 + arm64
   across macOS, Windows and Linux) on a `vX.Y.Z` release tag, and drafts the GitHub release
   with the matching `CHANGELOG.md` section as its body.
-- **Tests**: an engine smoke test after every build.
+- **Tests**: an engine smoke test after every build, and a performance gate on engine
+  pull requests: instruction counts (fails above 1%) and timing (above 15%) per scenario
+  against the base branch, plus an idle-CPU check on all three OSes
+  (`scripts/perf-gate.sh`).
 - **Third-party notices**: bundled/linked dependencies and their copyrights are recorded in
   [`LICENSES/THIRD-PARTY-NOTICES.md`](LICENSES/THIRD-PARTY-NOTICES.md).

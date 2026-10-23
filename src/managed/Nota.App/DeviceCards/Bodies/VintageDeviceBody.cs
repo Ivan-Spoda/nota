@@ -114,6 +114,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = engine.DeviceParamDefault(track, di, p), Width = 34, Height = 34 };
+            knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(v); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
@@ -229,7 +230,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
                 {
                     int iv = i;
                     var mi = new MenuItem { Header = Modes[i] };
-                    if (i == cur) mi.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brass };
+                    mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = i == cur;
                     mi.Click += (_, _) => { SetP(Mode, iv / 5f); RefreshAll(); };
                     fly.Items.Add(mi);
                 }

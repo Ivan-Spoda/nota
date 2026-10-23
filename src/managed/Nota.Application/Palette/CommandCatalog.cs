@@ -97,6 +97,7 @@ public static class CommandCatalog
         C("roll.octaveDown", "Transpose notes down an octave", "Piano roll", "", "pitch shift"),
         C("roll.removeOutOfScale", "Remove out-of-scale notes", "Piano roll", "", "key fix"),
         C("roll.fitNotes", "Fit to notes", "Piano roll", Shortcut.Shift('F'), "zoom vertical rows height"),
+        C("roll.editSelected", "Edit selected clips together", "Piano roll", "", "multi clip several open piano roll", view: "Arrangement"),
 
         // ---- Grid (the arrangement or the piano roll — whichever was used last) -----------
         C("grid.narrower", "Narrow grid", "Grid", Shortcut.Cmd('1'), "finer smaller snap"),
@@ -116,10 +117,12 @@ public static class CommandCatalog
         C("prefs.library", "Settings: Library", "Settings", "", "preferences folders"),
         C("prefs.appearance", "Settings: Appearance", "Settings", "", "preferences theme dark light"),
         C("prefs.shortcuts", "Settings: Shortcuts", "Settings", "", "preferences hotkeys keys keyboard"),
+        C("prefs.updates", "Settings: Updates", "Settings", "", "preferences update automatic check version"),
 
         // ---- Help -------------------------------------------------------------------------
         C("help.docs", "Documentation", "Help", "", "manual guide"),
         C("help.whatsNew", "What's new", "Help", "", "changelog release notes"),
+        C("help.checkUpdates", "Check for updates…", "Help", "", "update upgrade new version download install"),
         C("help.about", "About Nota", "Help", "", "version"),
     };
 

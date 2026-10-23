@@ -146,7 +146,7 @@ internal static class MacroPanel
         bool assigned = Mappings(s, m).Count > 0;
         string pid = RhythmModel.MacroId(m);
 
-        var knob = new Knob(Value(e, s, m), 1.0) { Accent = true, Default = 0.5, Width = Knob.SizeSecondary, Height = Knob.SizeSecondary, IsDim = !assigned };
+        var knob = new Knob(Value(e, s, m), 1.0) { Accent = true, Default = 0.5, Width = Knob.SizeSecondary, Height = Knob.SizeSecondary, IsDim = !assigned, Format = v => Pct((float)v) };
         var value = new TextBlock { Text = Pct(Value(e, s, m)), FontSize = 7, FontFamily = NotaFonts.MonoFamily, Foreground = assigned ? TextPrimary : TextDisabled, LineHeight = 9 };
         knob.ValueChanged += v =>
         {
@@ -162,6 +162,8 @@ internal static class MacroPanel
         };
         tick.Add(() => { if (!knob.Dragging) { float v = Value(e, s, m); if (Math.Abs(v - knob.Value) > 1e-4) { knob.Value = v; value.Text = Pct(v); } } });
         MidiLearn.Bind(knob, MidiTarget.PluginParam(track, di, pi), $"Macro {m + 1} · {s.MacroName(m)}");
+        // ⌥-click types, double-click resets; right-click stays the macro's own menu (the cell's).
+        ValueEntry.Attach(knob, $"Macro {m + 1}", value, menu: false);
 
         string name = s.MacroName(m);
         bool custom = name != $"Macro {m + 1}";
@@ -232,6 +234,8 @@ internal static class MacroPanel
     public static void ShowMenu(DeviceCardContext ctx, IMacroSurface s, Control anchor, int m, bool receivers = false)
     {
         var f = new MenuFlyout();
+        f.Items.Add(MenuKit.Header(s.MacroName(m), null, $"Macro · {m + 1}"));
+        f.Items.Add(new Separator());
         if (receivers)
         {
             // Where the card has no receivers panel (Rhythm), they open in a flyout.
@@ -244,16 +248,13 @@ internal static class MacroPanel
         var mapItem = new MenuItem { Header = "Map to" };
         foreach (var it in map.Items.ToList()) { map.Items.Remove(it); mapItem.Items.Add(it); }
         f.Items.Add(mapItem);
-        var rename = new MenuItem { Header = "Rename…" };
-        rename.Click += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => PromptRename(ctx, s, anchor, m));
-        f.Items.Add(rename);
+        f.Items.Add(MenuKit.Item("Rename…", GlyphKind.Edit, () => Avalonia.Threading.Dispatcher.UIThread.Post(() => PromptRename(ctx, s, anchor, m))));
         int n = Mappings(s, m).Count;
         if (n > 0)
         {
             f.Items.Add(new Separator());
-            var clear = new MenuItem { Header = $"Clear {n} mapping{(n == 1 ? "" : "s")}" };
-            clear.Click += (_, _) => { Clear(s, m); ctx.NotifyChanged(); ctx.RequestRebuild(); };
-            f.Items.Add(clear);
+            f.Items.Add(MenuKit.Danger($"Clear {n} mapping{(n == 1 ? "" : "s")}", GlyphKind.Trash,
+                () => { Clear(s, m); ctx.NotifyChanged(); ctx.RequestRebuild(); }));
         }
         f.ShowAt(anchor, showAtPointer: true);
     }
@@ -438,9 +439,8 @@ internal static class MacroPanel
             if (!e.GetCurrentPoint(g).Properties.IsRightButtonPressed) return;
             e.Handled = true;
             var f = new MenuFlyout();
-            var rm = new MenuItem { Header = "Remove this receiver" };
-            rm.Click += (_, _) => { s.RemoveMapping(index); ctx.NotifyChanged(); ctx.RequestRebuild(); };
-            f.Items.Add(rm);
+            f.Items.Add(MenuKit.Danger("Remove this receiver", GlyphKind.Trash,
+                () => { s.RemoveMapping(index); ctx.NotifyChanged(); ctx.RequestRebuild(); }));
             f.ShowAt(g, showAtPointer: true);
         };
         return g;
@@ -481,8 +481,8 @@ internal static class MacroPanel
     /// <summary>A menu item that maps <paramref name="macro"/> to one target.</summary>
     public static MenuItem Target(IMacroSurface s, string header, int macro, int slot, int device, int param, float lo, float hi, Action changed, bool mapped = false)
     {
-        var mi = new MenuItem { Header = header };
-        if (mapped) mi.Icon = new Ellipse { Width = 6, Height = 6, Fill = NotaPalette.Teal };
+        // A mapped target is ticked like any chosen item (the menu theme's accent check).
+        var mi = new MenuItem { Header = header, ToggleType = MenuItemToggleType.CheckBox, IsChecked = mapped };
         mi.Click += (_, _) => { Map(s, macro, slot, device, param, lo, hi); changed(); };
         return mi;
     }

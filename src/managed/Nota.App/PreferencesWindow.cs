@@ -75,8 +75,9 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("General", new[]
         {
             new Page("Library", "Content folders and version history", GlyphKind.Library),
-            new Page("Appearance", "Theme, waveforms and AI control", GlyphKind.Appearance),
+            new Page("Appearance", "Theme, scale, waveforms and AI control", GlyphKind.Appearance),
             new Page("Shortcuts", "Keyboard reference", GlyphKind.Shortcuts),
+            new Page("Updates", "New versions of Nota", GlyphKind.Update),
         }),
     };
 
@@ -124,6 +125,11 @@ public sealed partial class PreferencesWindow : NotaWindow
         Title = "Settings";
         Width = 880;
         Height = 640;
+        // The widest page (Appearance: two theme cards beside the labels) still fits; the
+        // interface scale multiplies this, so a live switch to 150 / 200 % grows the window
+        // instead of clipping it (spec 027).
+        MinWidth = 800;
+        MinHeight = 480;
         Background = Ground;
 
         var nav = new StackPanel { Spacing = 2, Margin = new Thickness(10, 12) };
@@ -265,6 +271,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         4 => PluginsPane(),
         6 => LibraryPane(),
         7 => AppearancePane(),
+        UpdatesIndex => UpdatesPane(),
         _ => ShortcutsPane(),
     };
 
@@ -701,13 +708,27 @@ public sealed partial class PreferencesWindow : NotaWindow
             rescanStatus.Text = $"Searching {folders} folder{(folders == 1 ? "" : "s")}";
             try
             {
-                int? n = await PluginScan.RescanAsync(_main);
-                rescanStatus.Text = n is { } c ? $"Found {c} plugin{(c == 1 ? "" : "s")}." : "Scanner worker not found.";
+                // An explicit Rescan also retries plugins that failed before.
+                var progress = new Progress<PluginScanProgress>(p => rescanStatus.Text = PluginScan.Describe(p));
+                int? n = await PluginScan.RescanAsync(_main, progress, retryFailed: true);
+                int failed = _catalog.FailedCount;
+                rescanStatus.Text = n is not { } c ? "Scanner worker not found."
+                    : $"Found {c:N0} plugin{(c == 1 ? "" : "s")}." +
+                      (failed > 0 ? $" {failed:N0} couldn't be loaded — see plugin-scan.log in Nota's logs folder." : "");
             }
             finally { rescan.IsEnabled = true; rescan.Content = "Rescan plugins"; }
         };
 
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var openOnInsert = SwitchRow("Open plug-in window on insert", settings.Current.OpenPluginWindowOnInsert, on =>
+        {
+            settings.Current.OpenPluginWindowOnInsert = on;
+            settings.Save();
+        });
+
         return Sections(
+            Section("Plug-in window", 10, openOnInsert,
+                Caption("Adding a plug-in from the browser, by drag and drop or from the palette opens its editor. Loading a project, undo and paste never do.")),
             Section("Plugin scan folders", 10,
                 well,
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { addBtn, removeBtn } },
@@ -968,6 +989,32 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
     }
 
+    // 75–200 % for the whole interface (spec 027, #38). Applies live — this window rescales
+    // under the pointer too — and is saved for the next launch.
+    private static Control ScalePicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(int Percent, ToggleButton Btn)>();
+        int current = InterfaceScale.Normalize(settings.Current.InterfaceScale);
+        foreach (var percent in InterfaceScale.Presets)
+        {
+            var p = percent;
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = $"{p}\u2009%", IsChecked = current == p };
+            btn.Click += (_, _) =>
+            {
+                foreach (var (bp, bb) in buttons) bb.IsChecked = bp == p;
+                if (settings.Current.InterfaceScale == p) return;
+                settings.Current.InterfaceScale = p;
+                settings.Save();
+                NotaUiScale.Set(p);
+            };
+            buttons.Add((p, btn));
+            strip.Children.Add(btn);
+        }
+        return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+    }
+
     private Control AppearancePane()
     {
         var settings = App.Services.GetService<ISettingsService>();
@@ -1055,7 +1102,9 @@ public sealed partial class PreferencesWindow : NotaWindow
                 TopRow("Colour theme", ThemePicker()),
                 Row("", Caption("Themes change colours only. Follow system switches between your dark-mode and light-mode theme with the OS appearance.")),
                 Row("Waveform", WaveformPicker()),
-                Row("", Caption("How audio clips draw on the arrangement, and samples in the browser's preview: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel."))),
+                Row("", Caption("How audio clips draw on the arrangement, and samples in the browser's preview: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel.")),
+                Row("Interface scale", ScalePicker()),
+                Row("", Caption("Makes the whole interface larger or smaller. Timeline, piano roll and audio editor zoom work on top of it."))),
             Section("AI control (MCP)", 12, enable, details));
     }
 
@@ -1106,6 +1155,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Right-click ruler", "Loop on / off · loop the selection · clear the loop region"),
             ("P", "Show playhead · scroll the Arrangement to it without moving it · picks up a paused Follow"),
             ("⌘⇧R", "Loop recording: Overdub (every pass adds) / Replace (keep the latest pass)"),
+            ("Click the position read-out", "Switch it between bars and time · every ruler follows"),
         }),
         ("Arrangement & editing", new[]
         {
@@ -1116,7 +1166,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Tab", "Cycle Devices / Pattern / Clip in the detail panel"),
             ("Esc", "Cancel the current gesture / clear the selection · close the patch-bay overlay"),
             ("⌘G   ⌘⇧G", "Group / ungroup selected tracks"),
-            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste clip (or automation range) · a clip copied in Session pastes here"),
+            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste clips, a time range or an automation range · pastes onto the track clicked last"),
             ("⌘⇧C", "Copy the selected clips to Session · the first scene row where they fit"),
             ("⌘⇧V", "Paste the last range as audio rendered through its devices"),
             ("⌘D", "Duplicate the selected clip(s) / range"),
@@ -1134,6 +1184,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘4", "Snap to grid on / off"),
             ("⌘5", "Switch between the adaptive (Auto) and a fixed grid"),
             ("⌥ while dragging", "Move freely, ignoring the grid"),
+            ("Audio clip editor on ADSR or an unwarped clip", "⌘1–⌘5 act on the Arrangement · that view follows no grid"),
         }),
         ("Tracks (after a click in the track headers)", new[]
         {
@@ -1172,15 +1223,26 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Delete", "Delete the selected notes"),
             ("Double-click empty grid", "Add a note with the length and velocity of the last note touched · on a note, delete it"),
             ("Drag note edge", "Change the note's start or end"),
-            ("Click · drag the ruler", "Move the playhead there · drag to scrub, snapped to the grid"),
+            ("Click · drag the ruler", "Move the playhead there · drag to scrub, snapped to the grid · ⌥ off the grid"),
+            ("Drag the playhead line", "Scrub the playhead · on the ruler or over empty grid"),
             ("Drag velocity stem", "Set velocity · selected notes move together · ⇧ adds a note"),
             ("Drag in the Bend / Pres / Slide lane", "Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it"),
             ("Double-click in an MPE lane", "Add a point · on a point, delete it · right-click to clear the curve"),
+            ("Click a clip in the clip strip", "Make it the active clip (several clips open) · its lock keeps it as a read-only reference"),
             ("⌘⌥ + wheel", "Zoom rows (vertical zoom)"),
             ("Click a key", "Play it on the track's instrument · ⇧-drag glides through the keys · ⌘-click selects every note of that pitch"),
             ("Drag on the keys", "Zoom rows · down taller, up shorter"),
             ("⌥ + pinch", "Zoom rows (trackpad)"),
             ("⇧F", "Fit to notes"),
+        }),
+        ("Audio clip editor", new[]
+        {
+            ("Click · drag the ruler", "Move the playhead there · drag to scrub · snapped to the grid on a warped clip, ⌥ off it"),
+            ("Drag the playhead line", "Scrub the playhead"),
+            ("Double-click the wave", "Add a warp marker · on a marker, delete it"),
+            ("Drag a warp marker", "Align the audio to the grid · the wave stretches as you drag"),
+            ("Esc", "While dragging a warp marker or a segment tempo: put it back"),
+            ("Drag · double-click Tempo", "Set the tempo the clip was recorded at · ÷2 / ×2 halve or double it"),
         }),
         ("Play notes (computer keyboard)", new[]
         {
@@ -1196,7 +1258,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Click waveform", "Play from that point"),
             ("Click WAVE / SPEC", "Switch the well between the waveform and a live spectrum"),
             ("Scroll on the track button", "Step through the demo tracks an effect preset is heard through"),
-            ("Double-click volume", "Reset the preview volume to 0\u2009dB"),
+            ("⌥-click volume", "Type the preview volume · double-click resets it to 0\u2009dB"),
         }),
         ("Gamepad (macOS)", new[]
         {
@@ -1209,16 +1271,17 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         ("Mouse", new[]
         {
-            ("Double-click clip", "Open in the clip editor"),
+            ("Double-click clip", "Open in the clip editor · on one of several selected MIDI clips, open them all together"),
             ("Double-click a browser instrument", "Swap it onto the selected instrument track · clips and effects stay · no track selected starts one"),
             ("⌥ + double-click a browser instrument", "Always start a new track with it"),
             ("Right-click the metronome", "Count-in before Play / Record: off · 1 · 2 · 4 bars"),
             ("Drag an audio clip's ADSR handle", "Shape attack · decay + sustain · release (top corners and the dot on hover) · double-click resets the stage"),
             ("⇧-click track header", "Add the track to the selection · again to remove it"),
-            ("Right-click track headers", "A multi-selection gets its own menu: group, colour, track height, freeze, copy, duplicate, delete"),
+            ("Right-click track headers", "A multi-selection gets its own menu: colour, height, freeze, group, copy, duplicate, delete"),
             ("Drag a track's bottom edge", "Resize the track (header or lane) · snaps to compact / standard / large · a multi-selection resizes together"),
             ("Drag a track's bottom edge + ⌥", "Resize every track at once"),
             ("Double-click a track's bottom edge", "Back to the standard height"),
+            ("⌥-click a height key in the track menu", "Set every track to Compact · Standard · Large"),
             ("Drag the track-list edge", "Widen or narrow the track headers · double-click resets"),
             ("Drag sections lane", "Mark a new section over the dragged bars"),
             ("Click section", "Jump the playhead to its start"),
@@ -1235,8 +1298,10 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag clip + ⌥", "Position freely, ignoring the grid for this drag (the magnet in the transport latches the same thing)"),
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
             ("Drag slider", "Left / right (or up / down) changes the value · hold ⌘ or ⇧ for fine steps"),
-            ("Double-click knob", "Reset the value to its default"),
-            ("Double-click a slider's value", "Type a value (units like k, ms, dB, L / R work) · Return sets it, Esc cancels"),
+            ("⌥-click a knob, fader or slider", "Type a value (units like k, ms, dB, L / R work) · double-click its value does the same"),
+            ("Return · Esc · Tab / ⇧Tab (typing a value)", "Set it · cancel · set it and type the next / previous value on the card"),
+            ("Double-click a knob, fader or slider", "Reset the value to its default"),
+            ("Right-click a knob, fader or slider", "Type value… · Reset to default"),
             ("Drag jack → jack", "Patch a cable in Nota Consort · ⌥-click a jack to pull its cables"),
             ("Click · ⇧ · ⌥ a Rhythm step", "Step on / off · accent · quiet step — drag across to paint, up / down (or scroll) for its velocity"),
             ("Click a Rhythm voice", "Select and play it · drop a file on it to load a sample"),

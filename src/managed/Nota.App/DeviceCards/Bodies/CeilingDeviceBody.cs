@@ -138,6 +138,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(N(p), 1.0) { Accent = true, Default = DefN(p), Width = 34, Height = 34 };
+            knob.Format = v => fmt(FromN(p, v));   // read-out at any value: typing searches it
             knob.ValueChanged += v => { SetN(p, v); val.Text = fmt(P(p)); RefreshAll(); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
@@ -239,7 +240,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                 foreach (var (label, cur, pick) in items())
                 {
                     var mi = new MenuItem { Header = label };
-                    if (cur) mi.Icon = new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brass };
+                    mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = cur;
                     var pk = pick;
                     mi.Click += (_, _) => { pk(); RefreshAll(); };
                     fly.Items.Add(mi);
