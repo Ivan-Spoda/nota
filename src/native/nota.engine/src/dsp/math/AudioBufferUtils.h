@@ -31,7 +31,9 @@ inline void scaleStereoMeter(float* scratch, int32_t frames, float gl, float gr,
     int32_t i = 0;
 
 #if defined(NOTA_SIMD_NEON)
-    const float32x4_t vgains = {gl, gr, gl, gr};
+    // Loaded from memory: MSVC ARM64 has no brace-init for NEON vector types.
+    alignas(16) const float gainArr[4] = {gl, gr, gl, gr};
+    const float32x4_t vgains = vld1q_f32(gainArr);
     for (; i + 4 <= frames; i += 4) {
         float32x4_t s0 = vmulq_f32(vld1q_f32(scratch + i * 2), vgains);
         float32x4_t s1 = vmulq_f32(vld1q_f32(scratch + i * 2 + 4), vgains);
@@ -81,7 +83,9 @@ inline void addStereoScaledMeterMap(float* dest, const float* src, int32_t frame
     int32_t i = 0;
 
 #if defined(NOTA_SIMD_NEON)
-    const float32x4_t vgains = {gl, gr, gl, gr};
+    // Loaded from memory: MSVC ARM64 has no brace-init for NEON vector types.
+    alignas(16) const float gainArr[4] = {gl, gr, gl, gr};
+    const float32x4_t vgains = vld1q_f32(gainArr);
     for (; i + 4 <= frames; i += 4) {
         float32x4_t s0 = vmulq_f32(vld1q_f32(src + i * 2), vgains);
         float32x4_t s1 = vmulq_f32(vld1q_f32(src + i * 2 + 4), vgains);

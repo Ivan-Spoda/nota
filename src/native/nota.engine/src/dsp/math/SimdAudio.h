@@ -193,7 +193,9 @@ inline void peakAndSumSquares(const float* src, int32_t count, float& outPeak, d
 inline void scaleStereo(float* dst, const float* src, float gl, float gr, int32_t frames) noexcept {
     int32_t i = 0;
 #if defined(NOTA_SIMD_NEON)
-    const float32x4_t vgains = {gl, gr, gl, gr};
+    // Loaded from memory: MSVC ARM64 has no brace-init for NEON vector types.
+    alignas(16) const float gainArr[4] = {gl, gr, gl, gr};
+    const float32x4_t vgains = vld1q_f32(gainArr);
     for (; i + 4 <= frames; i += 4) {
         float32x4_t s0 = vmulq_f32(vld1q_f32(src + i * 2), vgains);
         float32x4_t s1 = vmulq_f32(vld1q_f32(src + i * 2 + 4), vgains);
@@ -227,7 +229,9 @@ inline void scaleStereo(float* dst, const float* src, float gl, float gr, int32_
 inline void addStereoScaled(float* dst, const float* src, float gl, float gr, int32_t frames) noexcept {
     int32_t i = 0;
 #if defined(NOTA_SIMD_NEON)
-    const float32x4_t vgains = {gl, gr, gl, gr};
+    // Loaded from memory: MSVC ARM64 has no brace-init for NEON vector types.
+    alignas(16) const float gainArr[4] = {gl, gr, gl, gr};
+    const float32x4_t vgains = vld1q_f32(gainArr);
     for (; i + 4 <= frames; i += 4) {
         float32x4_t s0 = vmulq_f32(vld1q_f32(src + i * 2), vgains);
         float32x4_t s1 = vmulq_f32(vld1q_f32(src + i * 2 + 4), vgains);
