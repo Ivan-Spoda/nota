@@ -88,3 +88,60 @@ Mid / Side and glides. `BiquadCascade` gains `bank(int)` for that. Output is unc
 EQ-8 x8 4.40 ms (develop 9.86, 0.56.1 4.79); instructions retired per second of audio
 (`/usr/bin/time -l`, whole process) 111 M vs develop 133 M; silent-32 653 vs 656 M,
 sparse-32 1688 vs 1716 M.
+
+## Addendum — the remaining rows on the release PR (#285)
+
+After #287 the develop → main gate still failed 18 rows (x86 CI: Strata +27 %, Reverb
++12 %, Crush +10 %, Keys +10 %, Delay +9.6 %, Auto Filter +9 %, Flanger +9 %, Phaser,
+Chorus, Utility, Synth, Compressor, Consort, Shutter, Pentad, EQ-3 +1–6 %). Callgrind with
+`-g` on both builds (Linux arm64 container, `scripts/perf-gate.sh origin/main`), compared
+per function and per source line, showed two causes, neither the one guessed above:
+
+- **Lost inlining, the same as `SvfFilter`.** #212 moved per-sample methods out of headers:
+  `DelayLine` (push / read / readLinear / readHermite4p / processAllpass), `LadderFilter::process`,
+  `TruePeakMeter::push/detect`, `BleOscillator::tick/polyBlep`, `LfoGenerator::tick`, the
+  three envelopes' `tick`/`process`, `OnePoleSmoother::tick` and `VoiceExpr::tick` (every
+  voice of every instrument, from other TUs). They are inline in their headers again.
+  Device helpers that were in-class (implicitly inline) before and became plain members in
+  the device's `.cpp` lost the hint and GCC stopped inlining them: `Reverb::readPre`
+  (200 M of Reverb's 800 M instructions), `Flanger::readLine`, `Chorus::readLine`,
+  `Phaser::chain`, `Crush::shape`, `Utility::truePeak`, `Consort::readLine` — now `inline`.
+- **Per-sample peaks for the idle sleep.** Strata kept a running output peak, Flanger a
+  feed peak, Phaser and Crush a feed/crushed-path peak, on every sample of every block.
+  Strata checks its output with one SIMD pass after the loop, only when everything else is
+  quiet; Flanger reads back the block's writes to its line with the new
+  `simd_audio::peakAbs`; Phaser and Crush measure only in silent-input blocks (a loud block
+  resets the quiet count anyway, and the decayed peak still guards the tail).
+- Smaller: Keys' `renderVoice` took the expression offsets by pointer (stores to `mono[]`
+  could alias them, so `VoiceExpr::tick` reloaded them per sample) and recomputed the
+  pickup's dist/model terms per sample — it copies the offsets locally and precomputes
+  `keys::PickupShape` (same operations, same order). Compressor computed `dbToLin` twice per
+  sample in linked mode, where both channels' reductions are equal — the right channel
+  reuses the left's gain.
+
+Results (arm64 container, instructions, effect's own share vs `main` 0.56.1): everything
+that failed is within 1 % or faster except Strata (+4.4 %: ~1 instruction per sample on a
+~25-instruction loop that is now line-for-line the 0.56.1 loop; the cost is the idle
+skip's silence check, which is what makes `silent-32` 70 % cheaper) and Flanger (+2.0 %,
+code generation of the unchanged Hermite read). Delay is 24 % below 0.56.1, Compressor 9 %, Reverb 2 %,
+Keys 0.6 %. x86 numbers come from the gate on the PR.
+
+Null test (`tests/perf` scenarios rendered 2 s each through the C ABI, develop vs this
+fix, Apple Silicon): same-build renders bit-identical; 45 of 52 scenarios bit-identical;
+Auto Filter, Prism and the `mix-*` scenarios differ at −105 dBFS peak or below (FMA
+contraction across the newly inlined calls).
+
+## Addendum — Volt on x86 (PR #288 gate)
+
+The x86 gate (develop → this fix) passed every row except Volt (+6.0 %) and the `mix-*`
+scenarios built from Volt tracks (+2.6 %). Reproduced under Valgrind in an amd64 container:
+with `VoiceExpr::tick` now inline, `VoltSynth::render` hit GCC's function-growth budget
+and stopped inlining `VoltSynth::osc` (6.6 M instructions as a call); marking `osc` inline
+pushed `svf` out instead. `osc`, `svf` and `advanceEnv` — in-class (implicitly inline)
+before #212, inlined by develop — are `NOTA_ALWAYS_INLINE`. x86 instructions vs develop:
+Volt 100.9 M → 98.7 M, `mix-4` 557.4 M → 539.1 M, Synth 46.4 M → 44.0 M. Volt renders
+bit-identical to develop.
+
+The same push hardens `AudioThreadPool` (review on #288): a worker whose epoch view lags
+could combine fields from two generations of a reused slot. Workers now snapshot all four
+fields, fence (acquire) and re-check `epoch_`; the publisher's field stores are release.
