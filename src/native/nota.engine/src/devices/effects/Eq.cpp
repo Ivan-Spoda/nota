@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota EQ-8 implementation . Audio path: shared
-// dsp::BiquadCascade sections in 64-sample blocks (routing branch hoisted),
+// dsp::BiquadCascade sections run sample-major (all bands per frame, in double),
 // FastMath pitch/dB mapping, auto-sleep on silent stretches. Everything else
 // (params, analyzer, blob-irrelevant text) is verbatim.
 
@@ -247,15 +247,54 @@ void Eq::process(float* buf, int32_t frames) {
         ++w;
     }
 
-    // Bands in series, each in 64-sample blocks; gliding bands rebuild every kCtrl.
-    for (int b = 0; b < kBands; ++b) {
-        if (!on[b]) continue;
-        if (!glMoving_[b]) {
-            bands_[b].processBlock(buf, frames, routing(ch[b]));
-            continue;
+    // Bands in series, sample-major: every frame runs through all active bands before
+    // the next, so the out-of-order core overlaps the bands' recurrences across frames
+    // (band-major passes are each bound by one biquad's latency). Gliding bands rebuild
+    // their coefficients every kCtrl frames.
+    int act[kBands], nAct = 0;
+    dsp::BiquadChannel rt[kBands];
+    for (int b = 0; b < kBands; ++b)
+        if (on[b]) {
+            rt[b] = routing(ch[b]);
+            act[nAct++] = b;
         }
-        for (int32_t off = 0; off < frames; off += kCtrl) {
-            const int32_t m = off + kCtrl <= frames ? kCtrl : frames - off;
+    bool flat = !moving;
+    for (int a = 0; a < nAct && flat; ++a) flat = rt[act[a]] == dsp::BiquadChannel::Stereo;
+    if (flat) {
+        // Common case — every active band Stereo and none gliding: the bands in series are
+        // one chain of sections. Run it from a contiguous copy, then store the state back.
+        dsp::BiquadSection chL[kBands * kMaxSec], chR[kBands * kMaxSec];
+        int n = 0;
+        for (int a = 0; a < nAct; ++a) {
+            dsp::BiquadCascade& bc = bands_[act[a]];
+            for (int k = 0; k < bc.stages(); ++k, ++n) {
+                chL[n] = bc.bank(0)[k];
+                chR[n] = bc.bank(1)[k];
+            }
+        }
+        for (int32_t i = 0; i < frames; ++i) {
+            double l = buf[i * 2], r = buf[i * 2 + 1];
+            for (int k = 0; k < n; ++k) {
+                l = chL[k].run(l);
+                r = chR[k].run(r);
+            }
+            buf[i * 2] = static_cast<float>(l);
+            buf[i * 2 + 1] = static_cast<float>(r);
+        }
+        n = 0;
+        for (int a = 0; a < nAct; ++a) {
+            dsp::BiquadCascade& bc = bands_[act[a]];
+            for (int k = 0; k < bc.stages(); ++k, ++n) {
+                bc.bank(0)[k] = chL[n];
+                bc.bank(1)[k] = chR[n];
+            }
+        }
+    }
+    for (int32_t off = 0; off < frames && !flat; off += kCtrl) {
+        const int32_t m = off + kCtrl <= frames ? kCtrl : frames - off;
+        for (int a = 0; a < nAct; ++a) {
+            const int b = act[a];
+            if (!glMoving_[b]) continue;
             glF_[b] = settle(glF_[b] + (tF[b] - glF_[b]) * glideC, tF[b], 1e-5);
             glG_[b] = settle(glG_[b] + (tG[b] - glG_[b]) * glideC, tG[b], 1e-4);
             glQ_[b] = settle(glQ_[b] + (tQ[b] - glQ_[b]) * glideC, tQ[b], 1e-5);
@@ -264,10 +303,16 @@ void Eq::process(float* buf, int32_t frames) {
                 cb, ty[b], sl[b], sr, fast_math::exp2f((float)glF_[b]), glG_[b], fast_math::exp2f((float)glQ_[b]));
             bands_[b].setStages(n);
             for (int k = 0; k < n; ++k) bands_[b].setSection(k, cb[k]);
-            bands_[b].processBlock(buf + off * 2, m, routing(ch[b]));
+            glMoving_[b] = glF_[b] != tF[b] || glG_[b] != tG[b] || glQ_[b] != tQ[b];
+            moving = moving || glMoving_[b];
         }
-        glMoving_[b] = glF_[b] != tF[b] || glG_[b] != tG[b] || glQ_[b] != tQ[b];
-        moving = moving || glMoving_[b];
+        float* p = buf + off * 2;
+        for (int32_t i = 0; i < m; ++i) {
+            double l = p[i * 2], r = p[i * 2 + 1];
+            for (int a = 0; a < nAct; ++a) bands_[act[a]].processFrame(l, r, rt[act[a]]);
+            p[i * 2] = static_cast<float>(l);
+            p[i * 2 + 1] = static_cast<float>(r);
+        }
     }
     (void)moving;
 
