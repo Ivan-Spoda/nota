@@ -56,7 +56,8 @@ class RackCore {
         std::atomic<int32_t> chokeGroup{0}; // 0 = none, 1..8 choke group
         std::atomic<int32_t> tune{0};       // pad transpose, semitones (-48..+48)
         std::atomic<float> decay{1.0f};     // pad decay 0..1 (1 = sustain / no shaping)
-        float ampEnv = 0.0f;                // audio-thread only: pad decay VCA state
+        std::atomic<float> ampEnv{0.0f};    // pad decay VCA state: written on the audio thread only;
+                                            // relaxed so a rack fork can carry it over
         bool retrig = false;                // audio-thread only: noteOn asks for an env kick
     };
 
@@ -165,7 +166,9 @@ class RackCore {
     int32_t chainDeviceCount(int32_t chain) const;
     int32_t addChainDevice(int32_t chain, int32_t deviceKind);
     // Adds a pre-built device (e.g. a hosted plugin the engine instantiated) to a chain.
-    int32_t addChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev);
+    // prepare = false: the device is already prepared at this rack's rate and may be playing
+    // (moved in by wrapDeviceInRack), so it isn't reset.
+    int32_t addChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev, bool prepare = true);
     bool removeChainDevice(int32_t chain, int32_t dev);
     bool moveChainDevice(int32_t chain, int32_t from, int32_t to);
     Device* chainDeviceAt(int32_t chain, int32_t dev) const;
@@ -310,6 +313,14 @@ class RackCore {
         RackState* st = live();
         return (st && i >= 0 && i < static_cast<int32_t>(st->mappings.size())) ? st->mappings[i].curve : 0;
     }
+
+    // ---- undoable edits ---------------------------------------------------
+    // Take over another rack's content (#236). The engine edits a copy of the rack instead
+    // of the rack itself, so the graph snapshot on the undo stack keeps the old rack intact:
+    // the same chain children (shared, so DSP and voice state survive the edit), fresh chain
+    // controls holding the same values, the same mappings, macros and rack settings.
+    // Message thread, on a fresh rack that nothing renders yet.
+    void forkFrom(const RackCore& o);
 
     // ---- persistence blob (shared format; instKind -1 = no instrument) ----
     std::vector<uint8_t> serialize() const;

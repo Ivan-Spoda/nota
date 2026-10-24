@@ -237,10 +237,12 @@ internal sealed class VintageDeviceBody : IDeviceBody
                 fly.ShowAt(box);
                 e.Handled = true;
             };
-            box.PointerWheelChanged += (_, e) =>
+            box.PointerWheelChanged += (wt, e) =>
             {
-                int m = Math.Clamp(Sel(Mode, 6) + (e.Delta.Y < 0 ? 1 : -1), 0, 5);
-                SetP(Mode, m / 5f); RefreshAll(); e.Handled = true;
+                if (WheelInput.Step(e, wt) is not { } s) return;
+                e.Handled = true; if (s == 0) return;
+                int m = Math.Clamp(Sel(Mode, 6) - s, 0, 5);
+                SetP(Mode, m / 5f); RefreshAll();
             };
             return box;
         }
